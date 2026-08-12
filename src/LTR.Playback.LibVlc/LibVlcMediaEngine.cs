@@ -89,21 +89,32 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         if (!_mediaPlayer.Play(media))
         {
             SetState(PlaybackState.Failed, "LibVLC refused to start playback.");
-            throw new InvalidOperationException($"LibVLC refused to open {request.DisplayName}.");
+            throw new PlaybackFailedException($"LibVLC refused to open {request.DisplayName}.", request);
         }
 
         using var registration = cancellationToken.Register(
             static state => ((TaskCompletionSource<bool>)state!).TrySetCanceled(),
             completion);
 
-        // Resolves on the first Playing or EncounteredError event.
-        var opened = await completion.Task.ConfigureAwait(false);
+        bool opened;
+
+        try
+        {
+            // Resolves on the first Playing or EncounteredError event.
+            opened = await completion.Task.ConfigureAwait(false);
+        }
+        finally
+        {
+            // Cleared so a later event cannot resolve this attempt's completion source.
+            _openCompletion = null;
+        }
 
         if (!opened)
         {
-            throw new InvalidOperationException(
-                $"LibVLC could not play {request.DisplayName}. The channel may be offline, or the "
-                + "provider may have refused the connection.");
+            throw new PlaybackFailedException(
+                $"Could not play {request.DisplayName}. The channel may be offline, or the provider "
+                + "may have refused the connection.",
+                request);
         }
     }
 

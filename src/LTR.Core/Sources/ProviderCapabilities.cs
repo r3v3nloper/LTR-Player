@@ -31,7 +31,13 @@ public sealed class ProviderCapabilities
     /// Whether live URLs need the <c>/live/</c> path segment. Older panels serve
     /// <c>/{user}/{pass}/{id}.ts</c> and 404 on the prefixed form.
     /// </summary>
-    public bool RequiresLivePathSegment { get; set; }
+    /// <remarks>
+    /// Defaults to <see langword="true"/>, unlike the other flags here, because this one is used
+    /// before a probe has run — when adding a source, and by the headless resolver. Current panels
+    /// serve the prefixed form, so the default has to be the prefixed form; the CLR's <c>false</c>
+    /// would silently build the legacy shape that modern panels reject.
+    /// </remarks>
+    public bool RequiresLivePathSegment { get; set; } = true;
 
     public DateTimeOffset? ProbedAtUtc { get; set; }
 

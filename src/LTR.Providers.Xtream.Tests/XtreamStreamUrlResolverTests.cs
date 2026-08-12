@@ -66,6 +66,24 @@ public sealed class XtreamStreamUrlResolverTests
     }
 
     [Fact]
+    public void ResolveLive_ForAnUnprobedSource_UsesThePrefixedFormThatCurrentPanelsServe()
+    {
+        // Arrange: resolving happens before any probe when adding a source and from the CLI, so the
+        // default must be the shape modern panels actually serve rather than the CLR's false.
+        var resolver = new XtreamStreamUrlResolver();
+        var source = new XtreamSourceBuilder()
+            .WithCredentials("alice", "secret")
+            .WithCapabilities(new ProviderCapabilities())
+            .Build();
+
+        // Act
+        var request = resolver.ResolveLive(source, SampleChannel);
+
+        // Assert
+        request.Url.AbsoluteUri.ShouldBe("http://panel.example:8080/live/alice/secret/4711.ts");
+    }
+
+    [Fact]
     public void ChooseStreamFormat_WhenTheSourceHasNotBeenProbed_KeepsThePreference()
     {
         // Arrange: guessing against an unknown panel is worse than honouring the user's choice.
