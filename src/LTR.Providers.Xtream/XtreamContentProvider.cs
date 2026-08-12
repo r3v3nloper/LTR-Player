@@ -71,7 +71,8 @@ internal sealed class XtreamContentProvider : IContentProvider
         var dtos = await _client.GetLiveStreamsAsync(_source, cancellationToken).ConfigureAwait(false);
 
         var channels = new List<Channel>(dtos.Count);
-        var skipped = 0;
+        var skippedWithoutId = 0;
+        var skippedSeparators = 0;
         var sortOrder = 0;
 
         foreach (var dto in dtos)
@@ -79,16 +80,30 @@ internal sealed class XtreamContentProvider : IContentProvider
             // Without a stream identifier no playable URL can be built, so the entry is useless.
             if (string.IsNullOrWhiteSpace(dto.StreamId))
             {
-                skipped++;
+                skippedWithoutId++;
+                continue;
+            }
+
+            // Decorative grouping rows carry a valid stream id but nothing to play. Dropped here so
+            // they never reach the channel list. If they are ever wanted as group headings, this
+            // becomes a flag on the entity and a schema change rather than a filter.
+            if (ChannelNaming.IsSeparatorLabel(dto.Name))
+            {
+                skippedSeparators++;
                 continue;
             }
 
             channels.Add(MapChannel(dto, sortOrder++));
         }
 
-        if (skipped > 0)
+        if (skippedWithoutId > 0)
         {
-            XtreamLog.SkippedChannelsWithoutStreamId(_logger, skipped, _source.Name);
+            XtreamLog.SkippedChannelsWithoutStreamId(_logger, skippedWithoutId, _source.Name);
+        }
+
+        if (skippedSeparators > 0)
+        {
+            XtreamLog.SkippedSeparatorRows(_logger, skippedSeparators, _source.Name);
         }
 
         return channels;

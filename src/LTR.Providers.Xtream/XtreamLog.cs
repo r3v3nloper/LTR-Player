@@ -47,6 +47,13 @@ internal static partial class XtreamLog
     public static partial void SkippedChannelsWithoutStreamId(ILogger logger, int count, string source);
 
     [LoggerMessage(
+        EventId = 1006,
+        Level = LogLevel.Information,
+        Message = "Dropped {Count} decorative separator rows from {Source}; they carry a stream id but "
+            + "nothing playable.")]
+    public static partial void SkippedSeparatorRows(ILogger logger, int count, string source);
+
+    [LoggerMessage(
         EventId = 1005,
         Level = LogLevel.Information,
         Message = "Probed {Source}; supported: {Capabilities}")]

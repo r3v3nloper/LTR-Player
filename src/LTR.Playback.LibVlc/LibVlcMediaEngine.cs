@@ -181,7 +181,15 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
             _ => [],
         };
 
-        return [.. descriptions.Select(description => ToMediaTrack(description, kind))];
+        // LibVLC prepends a synthetic "Disable" entry with a negative id, meant as a menu command for
+        // switching the track off rather than as a track. Passing it on would offer "Disable" as a
+        // selectable audio language.
+        return
+        [
+            .. descriptions
+                .Where(description => description.Id >= 0)
+                .Select(description => ToMediaTrack(description, kind)),
+        ];
     }
 
     public void SelectTrack(MediaTrackKind kind, int trackId)

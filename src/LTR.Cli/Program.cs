@@ -47,7 +47,11 @@ static ServiceProvider BuildServiceProvider(bool verbose)
 
     services.AddLogging(logging => logging.ClearProviders().AddSerilog(dispose: true));
     services.AddXtreamProvider();
-    services.AddLibVlcPlayback();
+
+    // No window exists here, so video output is switched off. It would otherwise open a window of
+    // LibVLC's own and fail to allocate Direct3D decoder buffers, which buries the actual result of
+    // the test under h264 errors. Audio and stream metadata are unaffected.
+    services.AddLibVlcPlayback(options => options.DisableVideoOutput = true);
 
     services.AddSingleton<ProbeCommandHandler>();
     services.AddSingleton<ChannelsCommandHandler>();

@@ -24,6 +24,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly IEnumerable<IStreamUrlResolver> _resolvers;
     private readonly IPlaybackSession _session;
     private readonly ILogger<MainViewModel> _logger;
+    private readonly List<Channel> _channels = [];
 
     private PlaylistSource? _source;
 
@@ -69,21 +70,22 @@ public sealed partial class MainViewModel : ObservableObject
         _session = session;
         _logger = logger;
 
-        ChannelView = new CollectionViewSource { Source = Channels }.View;
+        ChannelView = new CollectionViewSource { Source = _channels }.View;
         ChannelView.Filter = MatchesFilter;
 
         _session.StateChanged += OnPlaybackStateChanged;
     }
 
-    /// <summary>Every channel of the active source, in the provider's order.</summary>
-    public ObservableCollection<Channel> Channels { get; } = [];
-
     /// <summary>
-    /// Filtered view over <see cref="Channels"/>.
+    /// Filtered view over the loaded channels, and the only collection the UI binds to.
     /// </summary>
     /// <remarks>
-    /// A view rather than a second collection, so filtering a list of many thousands of channels does
-    /// not rebuild it on every keystroke.
+    /// The backing store is a plain list, deliberately not an observable collection. A real
+    /// subscription lists tens of thousands of channels, and adding them one at a time to an
+    /// observable collection raises one change notification each — every one of them walked through
+    /// the view and the list box, freezing the UI thread for seconds. The list is replaced wholesale
+    /// and the view refreshed once, which is a single reset regardless of size. Virtualisation does
+    /// not help here: it governs rendering, not population.
     /// </remarks>
     public ICollectionView ChannelView { get; }
 
@@ -247,14 +249,11 @@ public sealed partial class MainViewModel : ObservableObject
 
         var stored = await context.GetLiveChannelsAsync(_source.Id, cancellationToken).ConfigureAwait(true);
 
-        Channels.Clear();
+        _channels.Clear();
+        _channels.AddRange(stored);
+        ChannelView.Refresh();
 
-        foreach (var channel in stored)
-        {
-            Channels.Add(channel);
-        }
-
-        Status = $"{Channels.Count} channels. Pick one to start playback.";
+        Status = $"{_channels.Count} channels. Pick one to start playback.";
     }
 
     private bool MatchesFilter(object item)

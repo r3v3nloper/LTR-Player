@@ -33,6 +33,17 @@ public sealed class LibVlcOptions
 
     public HardwareDecoding HardwareDecoding { get; set; } = HardwareDecoding.Automatic;
 
+    /// <summary>
+    /// Suppresses video output entirely, leaving audio and stream metadata intact.
+    /// </summary>
+    /// <remarks>
+    /// For hosts with no window to render into, such as the verification CLI. Without this LibVLC
+    /// opens a window of its own, and on Windows the Direct3D11 output then fails to allocate decoder
+    /// buffers — producing a stream of h264 errors that look like a broken stream but are only a
+    /// missing surface.
+    /// </remarks>
+    public bool DisableVideoOutput { get; set; }
+
     /// <summary>Raises LibVLC's own log verbosity, for diagnosing playback failures.</summary>
     public bool VerboseLogging { get; set; }
 
@@ -61,6 +72,11 @@ public sealed class LibVlcOptions
         };
 
         arguments.Add($"--avcodec-hw={ToAvcodecHwValue(HardwareDecoding)}");
+
+        if (DisableVideoOutput)
+        {
+            arguments.Add("--no-video");
+        }
 
         if (VerboseLogging)
         {

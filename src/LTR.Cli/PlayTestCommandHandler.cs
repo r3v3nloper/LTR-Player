@@ -15,6 +15,11 @@ namespace LTR.Cli;
 /// </remarks>
 internal sealed class PlayTestCommandHandler
 {
+    /// <summary>How many times to ask the panel whether the connection has been released.</summary>
+    private const int ConnectionCheckAttempts = 5;
+
+    private static readonly TimeSpan ConnectionCheckDelay = TimeSpan.FromSeconds(5);
+
     private readonly IEnumerable<IStreamUrlResolver> _resolvers;
     private readonly IPlaybackSession _session;
     private readonly IMediaEngine _engine;
@@ -114,21 +119,47 @@ internal sealed class PlayTestCommandHandler
     }
 
     /// <summary>
-    /// Asks the panel how many connections it still counts as open.
+    /// Waits for the panel to report the connection as closed, and says plainly whether it did.
     /// </summary>
     /// <remarks>
-    /// This is the actual proof of correct teardown. A non-zero count moments after releasing means
-    /// the connection leaked, which is what eventually locks the account out.
+    /// This is the actual proof of correct teardown. It polls rather than asking once, because panels
+    /// track connections on their own schedule and take seconds to notice a client has gone. Reading
+    /// that lag as a leak would condemn correct code; not distinguishing the two at all would leave
+    /// the only question that matters unanswered.
     /// </remarks>
     private async Task ReportRemainingConnectionsAsync(XtreamSource source, CancellationToken cancellationToken)
     {
         var provider = _providerFactory.Create(source);
-        var account = await provider.AuthenticateAsync(cancellationToken).ConfigureAwait(false);
 
+        for (var attempt = 1; attempt <= ConnectionCheckAttempts; attempt++)
+        {
+            var account = await provider.AuthenticateAsync(cancellationToken).ConfigureAwait(false);
+
+            if (account.ActiveConnections == 0)
+            {
+                Console.WriteLine(
+                    attempt == 1
+                        ? "The panel reports no open connections. Teardown is clean."
+                        : $"The panel reports no open connections after {attempt} checks. Teardown is "
+                            + "clean; the panel simply needed a moment to notice.");
+
+                return;
+            }
+
+            Console.WriteLine(
+                $"  check {attempt}/{ConnectionCheckAttempts}: the panel still counts "
+                + $"{account.ActiveConnections} open connection(s).");
+
+            if (attempt < ConnectionCheckAttempts)
+            {
+                await Task.Delay(ConnectionCheckDelay, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        Console.WriteLine();
         Console.WriteLine(
-            account.ActiveConnections == 0
-                ? "The panel reports no open connections. Teardown is clean."
-                : $"Warning: the panel still counts {account.ActiveConnections} open connection(s). "
-                    + "Providers often need a moment to notice; re-run probe to confirm.");
+            "The connection was still counted as open throughout. Either this player leaked it, or "
+            + "another device is using the subscription. Check that nothing else is streaming, then "
+            + "re-run probe.");
     }
 }
