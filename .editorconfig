@@ -1,0 +1,63 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+[*.{json,yml,yaml,xml,csproj,props,targets}]
+indent_size = 2
+
+[*.{md,markdown}]
+trim_trailing_whitespace = false
+
+[*.cs]
+
+# Allman brace style throughout (CLAUDE.md §2.11)
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+
+# Braces are mandatory even for single-statement bodies (§2.11)
+csharp_prefer_braces = true:error
+
+# Explicit accessibility modifiers on everything that can carry them. Interface members are
+# excluded because C# gives them public access implicitly and spelling it out is noise.
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:error
+
+# var only when the type is apparent from the right-hand side (§3.4)
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+
+# Collection expressions over repeating the declared type (§3.4)
+dotnet_style_prefer_collection_expression = when_types_loosely_match:suggestion
+
+# Guard clauses and early returns keep nesting shallow (§2.10)
+csharp_style_prefer_pattern_matching = true:suggestion
+csharp_style_conditional_delegate_call = true:suggestion
+
+csharp_using_directive_placement = outside_namespace:error
+csharp_style_namespace_declarations = file_scoped:suggestion
+
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# Unused parameters in interface implementations and event handlers are normal.
+dotnet_code_quality_unused_parameters = non_public:suggestion
+
+[*.{Designer.cs}]
+generated_code = true
+
+# EF Core scaffolds migrations; its output must not fail TreatWarningsAsErrors builds.
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_analyzer_diagnostic.severity = none

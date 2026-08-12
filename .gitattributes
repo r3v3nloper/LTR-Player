@@ -1,0 +1,20 @@
+# Normalise text files to LF inside the repository and check them out with the platform's own
+# convention. Without this, line endings depend on each machine's core.autocrlf setting and whole
+# files show up as changed when someone with different settings touches them.
+* text=auto
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.jpg binary
+*.ico binary
+*.dll binary
+*.exe binary
+*.pdb binary
+*.gz binary
+*.zip binary
+
+# Note: .ts is deliberately NOT marked binary. In this repository it means TypeScript, for the
+# planned web frontend — not an MPEG transport stream.
+
+# Generated EF Core migrations, so review tooling stops offering to diff them line by line.
+src/*/Migrations/*.cs linguist-generated=true

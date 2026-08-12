@@ -1,0 +1,46 @@
+<Project>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      CA1873 flags method calls passed as logging arguments. Our logging goes through
+      [LoggerMessage] source-generated methods and the costly arguments — credential-stripped URLs —
+      are already wrapped in ILogger.IsEnabled checks, but the analyser cannot see the guard through
+      the generated wrapper and reports every call site regardless. Suppressed rather than worked
+      around, because the alternative is either logging credentials or deleting the diagnostics.
+    -->
+    <NoWarn>$(NoWarn);CA1873</NoWarn>
+  </PropertyGroup>
+
+  <!--
+    Abstractions projects intentionally drop the "Abstractions" segment from their namespace
+    (LTR.Core.Abstractions -> LTR.Core) so that consumers see one coherent namespace while the
+    assembly boundary still separates contracts from implementations.
+  -->
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Abstractions'))">
+    <RootNamespace>$(MSBuildProjectName.Replace('.Abstractions', ''))</RootNamespace>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!--
+      CA1707 forbids underscores in member names. Test methods are named
+      Method_Scenario_ExpectedOutcome, which is the convention that makes a failing test report
+      readable without opening the file, so the rule is off here and on everywhere else.
+    -->
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <!--
+    Deliberately free of any media-engine dependency: the LibVLC-specific video-surface seam
+    lives in LTR.Playback.LibVlc so that this contract stays engine-agnostic.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\LTR.Core\LTR.Core.csproj" />
+  </ItemGroup>
+
+</Project>

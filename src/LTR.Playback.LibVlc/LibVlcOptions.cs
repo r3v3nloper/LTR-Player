@@ -1,0 +1,83 @@
+using System.Globalization;
+
+namespace LTR.Playback.LibVlc;
+
+/// <summary>
+/// Startup options handed to LibVLC.
+/// </summary>
+/// <remarks>
+/// The defaults are chosen for IPTV rather than for local files. Live MPEG-TS from a provider
+/// routinely carries discontinuous or plainly wrong timestamps, and LibVLC's default clock handling
+/// reacts to that by stuttering or dropping the stream. Every value here is configurable because the
+/// right setting differs per provider.
+/// </remarks>
+public sealed class LibVlcOptions
+{
+    /// <summary>
+    /// Buffer held before playback starts, in milliseconds. Higher values survive jittery providers
+    /// at the cost of slower channel changes.
+    /// </summary>
+    public int NetworkCachingMilliseconds { get; set; } = 1000;
+
+    /// <summary>
+    /// Clock jitter tolerance in microseconds. Zero disables jitter correction, which is what makes
+    /// streams with broken timestamps playable instead of stuttering.
+    /// </summary>
+    public int ClockJitterMicroseconds { get; set; }
+
+    /// <summary>
+    /// Whether to synchronise against the stream's clock. Disabled by default because IPTV streams
+    /// frequently misreport it.
+    /// </summary>
+    public bool ClockSynchronisation { get; set; }
+
+    public HardwareDecoding HardwareDecoding { get; set; } = HardwareDecoding.Automatic;
+
+    /// <summary>Raises LibVLC's own log verbosity, for diagnosing playback failures.</summary>
+    public bool VerboseLogging { get; set; }
+
+    /// <summary>
+    /// Directory holding the native LibVLC binaries. Left unset, the loader searches next to the
+    /// executable, which is where the VideoLAN.LibVLC.Windows package puts them.
+    /// </summary>
+    public string? NativeLibraryDirectory { get; set; }
+
+    /// <summary>
+    /// Renders these options as LibVLC command line arguments.
+    /// </summary>
+    public string[] ToArguments()
+    {
+        var arguments = new List<string>
+        {
+            FormattableString.Invariant($"--network-caching={NetworkCachingMilliseconds}"),
+            FormattableString.Invariant($"--clock-jitter={ClockJitterMicroseconds}"),
+            $"--clock-synchro={(ClockSynchronisation ? 1 : 0).ToString(CultureInfo.InvariantCulture)}",
+
+            // The player draws its own overlay, so LibVLC must not paint a title over the video.
+            "--no-video-title-show",
+
+            // No playlist semantics are wanted: one media at a time, controlled by the session.
+            "--no-sub-autodetect-file",
+        };
+
+        arguments.Add($"--avcodec-hw={ToAvcodecHwValue(HardwareDecoding)}");
+
+        if (VerboseLogging)
+        {
+            arguments.Add("--verbose=2");
+        }
+
+        return [.. arguments];
+    }
+
+    private static string ToAvcodecHwValue(HardwareDecoding hardwareDecoding)
+    {
+        return hardwareDecoding switch
+        {
+            HardwareDecoding.Automatic => "any",
+            HardwareDecoding.Direct3D11 => "d3d11va",
+            HardwareDecoding.Disabled => "none",
+            _ => "any",
+        };
+    }
+}

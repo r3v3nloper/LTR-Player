@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LTR.Cli/LTR.Cli.csproj" />
+    <Project Path="src/LTR.Core.Abstractions/LTR.Core.Abstractions.csproj" />
+    <Project Path="src/LTR.Core.Tests/LTR.Core.Tests.csproj" />
+    <Project Path="src/LTR.Core/LTR.Core.csproj" />
+    <Project Path="src/LTR.Persistence.Tests/LTR.Persistence.Tests.csproj" />
+    <Project Path="src/LTR.Persistence/LTR.Persistence.csproj" />
+    <Project Path="src/LTR.Playback.Abstractions/LTR.Playback.Abstractions.csproj" />
+    <Project Path="src/LTR.Playback.LibVlc/LTR.Playback.LibVlc.csproj" />
+    <Project Path="src/LTR.Playback.Tests/LTR.Playback.Tests.csproj" />
+    <Project Path="src/LTR.Playback/LTR.Playback.csproj" />
+    <Project Path="src/LTR.Player.Wpf/LTR.Player.Wpf.csproj" />
+    <Project Path="src/LTR.Providers.Abstractions/LTR.Providers.Abstractions.csproj" />
+    <Project Path="src/LTR.Providers.Xtream.Tests/LTR.Providers.Xtream.Tests.csproj" />
+    <Project Path="src/LTR.Providers.Xtream/LTR.Providers.Xtream.csproj" />
+  </Folder>
+</Solution>

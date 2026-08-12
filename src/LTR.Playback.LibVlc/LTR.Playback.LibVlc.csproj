@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LibVLCSharp" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <!--
+    References the engine-neutral policy project so this assembly can offer one registration call
+    that wires the engine together with the session guarding the connection limit. The direction is
+    LibVlc -> Playback -> Playback.Abstractions, so nothing engine-specific leaks downwards.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\LTR.Playback\LTR.Playback.csproj" />
+  </ItemGroup>
+
+</Project>
