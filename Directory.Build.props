@@ -8,8 +8,14 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <Deterministic>true</Deterministic>
-    <InvariantGlobalization>true</InvariantGlobalization>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!--
+      InvariantGlobalization is deliberately NOT enabled. WPF's binding engine resolves the default
+      xml:lang through XmlLanguage.GetSpecificCulture, which throws without real culture data — every
+      binding in the application fails and the window comes up inert. Beyond that, channel names
+      arrive in Cyrillic, Arabic and Greek, so proper casing and collation are needed anyway.
+    -->
   </PropertyGroup>
 
   <PropertyGroup>

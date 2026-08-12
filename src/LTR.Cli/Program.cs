@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Globalization;
 using LTR.Cli;
 using LTR.Playback;
 using LTR.Playback.LibVlc;
@@ -39,7 +40,7 @@ static ServiceProvider BuildServiceProvider(bool verbose)
     // core and reported by the command, and printing both duplicates the message.
     Log.Logger = new LoggerConfiguration()
         .MinimumLevel.Is(verbose ? Serilog.Events.LogEventLevel.Debug : Serilog.Events.LogEventLevel.Error)
-        .WriteTo.Console()
+        .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
         .CreateLogger();
 
     var services = new ServiceCollection();
