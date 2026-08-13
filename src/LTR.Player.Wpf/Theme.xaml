@@ -144,13 +144,20 @@
               </ToggleButton.Template>
             </ToggleButton>
 
-            <!-- Not hit-testable, so clicking the text still opens the drop-down. -->
+            <!--
+              Not hit-testable, so clicking the text still opens the drop-down.
+
+              ContentTemplate comes from ItemTemplate, not from SelectionBoxItemTemplate. The latter
+              does not resolve in a hand-written template when the display comes from
+              DisplayMemberPath, leaving ContentTemplate null — at which point WPF renders ToString(),
+              which for a record prints every property. Every ComboBox here therefore declares an
+              explicit ItemTemplate rather than a DisplayMemberPath.
+            -->
             <ContentPresenter IsHitTestVisible="False"
                               Margin="9,0,28,0"
                               VerticalAlignment="Center"
                               Content="{TemplateBinding SelectionBoxItem}"
-                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
-                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}" />
+                              ContentTemplate="{TemplateBinding ItemTemplate}" />
 
             <Popup Placement="Bottom"
                    AllowsTransparency="True"

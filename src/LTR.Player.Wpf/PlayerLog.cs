@@ -15,6 +15,12 @@ internal static partial class PlayerLog
     public static partial void UsingDatabase(ILogger logger, string databasePath);
 
     [LoggerMessage(
+        EventId = 3004,
+        Level = LogLevel.Error,
+        Message = "The stored catalogue for {Source} could not be read.")]
+    public static partial void CatalogueLoadFailed(ILogger logger, Exception exception, string source);
+
+    [LoggerMessage(
         EventId = 3002,
         Level = LogLevel.Information,
         Message = "Loaded {SourceCount} configured source(s).")]

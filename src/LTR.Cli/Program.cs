@@ -1,6 +1,10 @@
 using System.CommandLine;
 using System.Globalization;
 using LTR.Cli;
+using LTR.Core;
+using LTR.Core.Security;
+using LTR.Persistence;
+using Microsoft.EntityFrameworkCore;
 using LTR.Playback;
 using LTR.Playback.LibVlc;
 using LTR.Providers;
@@ -33,6 +37,7 @@ rootCommand.Subcommands.Add(BuildProbeCommand(serviceProvider, sourceOptions));
 rootCommand.Subcommands.Add(BuildChannelsCommand(serviceProvider, sourceOptions));
 rootCommand.Subcommands.Add(BuildResolveCommand(serviceProvider, sourceOptions));
 rootCommand.Subcommands.Add(BuildPlayTestCommand(serviceProvider, sourceOptions));
+rootCommand.Subcommands.Add(BuildSourcesCommand(serviceProvider));
 
 return await rootCommand.Parse(args).InvokeAsync().ConfigureAwait(false);
 
@@ -57,12 +62,68 @@ static ServiceProvider BuildServiceProvider(bool verbose)
     // the test under h264 errors. Audio and stream metadata are unaffected.
     services.AddLibVlcPlayback(options => options.DisableVideoOutput = true);
 
+    // The same database the desktop player uses, resolved from the one place that decides it.
+    services.AddDbContext<LtrDbContext>(options => options.UseSqlite(LtrDatabaseLocation.ConnectionString));
+    services.AddSingleton<ICredentialProtector, PassThroughCredentialProtector>();
+
+    services.AddScoped<SourcesCommandHandler>();
     services.AddSingleton<ProbeCommandHandler>();
     services.AddSingleton<ChannelsCommandHandler>();
     services.AddSingleton<ResolveCommandHandler>();
     services.AddSingleton<PlayTestCommandHandler>();
 
     return services.BuildServiceProvider();
+}
+
+static Command BuildSourcesCommand(IServiceProvider services)
+{
+    var command = new Command("sources", "Lists, adds or removes sources in the local catalogue.");
+
+    var listCommand = new Command("list", "Shows the configured sources and which database holds them.");
+    listCommand.SetAction((_, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithScope(services, handler => handler.ListAsync(cancellationToken))));
+
+    var addressArgument = new Argument<string>("address")
+    {
+        Description = "Playlist URL, or the full path to a local .m3u file.",
+    };
+
+    var nameOption = new Option<string?>("--name")
+    {
+        Description = "Display name for the source. Defaults to the host or file name.",
+    };
+
+    var addCommand = new Command("add-playlist", "Adds an M3U playlist and imports its catalogue.");
+    addCommand.Arguments.Add(addressArgument);
+    addCommand.Options.Add(nameOption);
+    addCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithScope(services, handler => handler.AddPlaylistAsync(
+            parseResult.GetValue(addressArgument) ?? string.Empty,
+            parseResult.GetValue(nameOption),
+            cancellationToken))));
+
+    var idArgument = new Argument<int>("id") { Description = "Source id, as shown by 'sources list'." };
+
+    var removeCommand = new Command("remove", "Removes a source together with its catalogue.");
+    removeCommand.Arguments.Add(idArgument);
+    removeCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithScope(services, handler => handler.RemoveAsync(parseResult.GetValue(idArgument), cancellationToken))));
+
+    command.Subcommands.Add(listCommand);
+    command.Subcommands.Add(addCommand);
+    command.Subcommands.Add(removeCommand);
+
+    return command;
+}
+
+/// <summary>
+/// Runs a database command inside its own scope, because the context is scoped and these commands are
+/// the only ones that touch it.
+/// </summary>
+static async Task<int> WithScope(IServiceProvider services, Func<SourcesCommandHandler, Task<int>> action)
+{
+    await using var scope = services.CreateAsyncScope();
+    return await action(scope.ServiceProvider.GetRequiredService<SourcesCommandHandler>()).ConfigureAwait(false);
 }
 
 static Command BuildProbeCommand(IServiceProvider services, SourceOptions sourceOptions)

@@ -75,7 +75,7 @@ public partial class App : Application
         services.AddSingleton<ICredentialProtector, PassThroughCredentialProtector>();
 
         services.AddDbContext<LtrDbContext>(options =>
-            options.UseSqlite($"Data Source={AppPaths.DatabaseFile}"));
+            options.UseSqlite(LtrDatabaseLocation.ConnectionString));
 
         services.AddProviderRegistry();
         services.AddXtreamProvider();

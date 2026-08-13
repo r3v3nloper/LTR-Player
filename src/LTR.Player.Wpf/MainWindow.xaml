@@ -39,8 +39,13 @@
         <ComboBox Grid.Column="0"
                   ItemsSource="{Binding Sources}"
                   SelectedItem="{Binding SelectedSource}"
-                  DisplayMemberPath="Name"
-                  VerticalAlignment="Center" />
+                  VerticalAlignment="Center">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
 
         <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
           <Button Content="↻" ToolTip="Refresh the catalogue"
@@ -109,8 +114,13 @@
 
         <ComboBox Grid.Row="0"
                   ItemsSource="{Binding Categories}"
-                  SelectedItem="{Binding SelectedCategory}"
-                  DisplayMemberPath="Name" />
+                  SelectedItem="{Binding SelectedCategory}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
 
         <TextBox Grid.Row="1"
                  Text="{Binding ChannelFilterText, UpdateSourceTrigger=PropertyChanged, Delay=200}"

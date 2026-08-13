@@ -66,6 +66,8 @@ public sealed partial class MainViewModel : ObservableObject
     private bool _isAddingSource = true;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RefreshCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveSourceCommand))]
     private PlaylistSource? _selectedSource;
 
     [ObservableProperty]
@@ -183,7 +185,23 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        _ = LoadCatalogueAsync(value, CancellationToken.None);
+        // A property setter cannot await, so the load is started and its failure reported explicitly.
+        // Left as a bare fire-and-forget, an exception here would be an unobserved task exception:
+        // the list would simply stay empty with nothing said about why.
+        _ = LoadCatalogueSafelyAsync(value);
+    }
+
+    private async Task LoadCatalogueSafelyAsync(PlaylistSource source)
+    {
+        try
+        {
+            await LoadCatalogueAsync(source, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception exception)
+        {
+            PlayerLog.CatalogueLoadFailed(_logger, exception, source.Name);
+            Status = $"The stored catalogue for {source.Name} could not be read.";
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanConnect))]
