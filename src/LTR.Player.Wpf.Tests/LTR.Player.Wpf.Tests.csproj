@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+
+    <!--
+      UseWPF, because the view model binds a CollectionView and that type lives in the WPF assemblies.
+      No window is created: these tests exercise command enabling and filtering, which is logic rather
+      than presentation.
+    -->
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Shouldly" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LTR.Player.Wpf\LTR.Player.Wpf.csproj" />
+  </ItemGroup>
+
+</Project>
