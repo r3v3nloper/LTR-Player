@@ -39,10 +39,22 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
         return Task.FromResult<IReadOnlyList<PlaylistSource>>(Sources);
     }
 
-    public Task<IReadOnlyList<Channel>> GetLiveChannelsAsync(int sourceId, CancellationToken cancellationToken)
+    /// <summary>
+    /// When set, loading channels blocks until cancelled, standing in for the seventeen thousand rows a real
+    /// subscription makes the shell wait for.
+    /// </summary>
+    public bool BlockChannelLoad { get; set; }
+
+    public async Task<IReadOnlyList<Channel>> GetLiveChannelsAsync(
+        int sourceId,
+        CancellationToken cancellationToken)
     {
-        return Task.FromResult<IReadOnlyList<Channel>>(
-            [.. Channels.Where(channel => channel.SourceId == sourceId)]);
+        if (BlockChannelLoad)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+        }
+
+        return [.. Channels.Where(channel => channel.SourceId == sourceId)];
     }
 
     public Task<IReadOnlyList<Category>> GetLiveCategoriesAsync(int sourceId, CancellationToken cancellationToken)

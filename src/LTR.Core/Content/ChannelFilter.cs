@@ -32,22 +32,39 @@ public sealed record ChannelFilter(
     /// <summary>
     /// Whether a channel satisfies every criterion.
     /// </summary>
-    /// <remarks>
-    /// Ordered cheapest test first. The name comparison is the only one that inspects a string, and
-    /// running it after the two flag checks avoids it entirely for most channels once a category or
-    /// the favourites filter is in play.
-    /// </remarks>
     public bool Matches(Channel channel)
     {
         ArgumentNullException.ThrowIfNull(channel);
+        return Matches(channel.Name, channel.CategoryExternalId, channel.IsFavorite);
+    }
 
-        if (FavoritesOnly && !channel.IsFavorite)
+    /// <summary>
+    /// Whether the three things a filter looks at satisfy every criterion.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Stated over values rather than only over an entity so that a caller holding the favourite flag
+    /// somewhere else can use the same rules. That is what lets the channel list's row objects own their
+    /// own favourite state instead of writing it back into the database entity to keep the filter agreeing
+    /// with what the row displays.
+    /// </para>
+    /// <para>
+    /// Ordered cheapest test first. The name comparison is the only one that inspects a string, and
+    /// running it after the two flag checks avoids it entirely for most channels once a category or
+    /// the favourites filter is in play.
+    /// </para>
+    /// </remarks>
+    public bool Matches(string name, string? categoryExternalId, bool isFavorite)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+
+        if (FavoritesOnly && !isFavorite)
         {
             return false;
         }
 
         if (CategoryExternalId is not null
-            && !string.Equals(channel.CategoryExternalId, CategoryExternalId, StringComparison.Ordinal))
+            && !string.Equals(categoryExternalId, CategoryExternalId, StringComparison.Ordinal))
         {
             return false;
         }
@@ -57,6 +74,6 @@ public sealed record ChannelFilter(
             return true;
         }
 
-        return channel.Name.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase);
+        return name.Contains(SearchText.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 }

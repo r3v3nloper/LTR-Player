@@ -124,6 +124,35 @@ public sealed class SqliteDatabaseFileTests : IDisposable
         File.Exists(databasePath).ShouldBeFalse();
     }
 
+    /// <summary>
+    /// A locked write-ahead log must not undo the quarantine. The database has already been moved by then,
+    /// so the free path the caller needs is there — throwing would turn a recoverable startup back into a
+    /// failed one.
+    /// </summary>
+    [Fact]
+    public void Quarantine_WhenACompanionCannotBeMoved_StillFreesTheDatabasePath()
+    {
+        // Arrange: the write-ahead log held open without share-delete, which is what a foreign process
+        // holding it looks like.
+        var databasePath = Path.Combine(_directory, "catalogue.db");
+        File.WriteAllText(databasePath, "not a database");
+        File.WriteAllText(databasePath + "-wal", "write ahead log");
+
+        using var holdOpen = new FileStream(
+            databasePath + "-wal",
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read);
+
+        // Act
+        var quarantined = SqliteDatabaseFile.Quarantine(databasePath, SixPm);
+
+        // Assert
+        quarantined.ShouldNotBeNull();
+        File.Exists(databasePath).ShouldBeFalse("a fresh database has to be creatable at this path");
+        File.Exists(databasePath + "-wal").ShouldBeTrue("the log stayed put, and that is tolerated");
+    }
+
     [Fact]
     public void IsCorruption_RecognisesAnUnreadableDatabase()
     {

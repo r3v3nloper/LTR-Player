@@ -7,11 +7,18 @@ namespace LTR.Player.Wpf;
 /// One row of the channel list.
 /// </summary>
 /// <remarks>
+/// <para>
 /// A wrapper exists because the favourite marker has to update in place when toggled, and that needs
 /// change notification. Putting <see cref="System.ComponentModel.INotifyPropertyChanged"/> on
 /// <see cref="Core.Content.Channel"/> would push a presentation concern into the domain and into the
 /// database entity. One wrapper per channel costs a couple of megabytes at twenty thousand channels,
 /// which is the cheaper of the two prices.
+/// </para>
+/// <para>
+/// The favourite flag lives here and nowhere else. It used to be written back into the entity as well, so
+/// that the filter — which read the entity — agreed with what the row displayed; the filter now reads the
+/// row, and the entity is left as the provider's record of the channel.
+/// </para>
 /// </remarks>
 public sealed partial class ChannelItemViewModel : ObservableObject
 {
@@ -45,6 +52,9 @@ public sealed partial class ChannelItemViewModel : ObservableObject
 
     public string Name => Channel.Name;
 
+    /// <summary>The provider category this row belongs to, which the filter narrows by.</summary>
+    public string? CategoryExternalId => Channel.CategoryExternalId;
+
     /// <summary>
     /// Catch-up availability, shown so the user can see which channels the provider retains.
     /// </summary>
@@ -63,12 +73,6 @@ public sealed partial class ChannelItemViewModel : ObservableObject
         NowTimes = slice?.Now is { } now ? $"{Local(now.StartUtc)}–{Local(now.StopUtc)}" : string.Empty;
         NowProgress = slice?.Now is { } running ? ProgressThrough(running, atUtc) : 0;
         NextTitle = slice?.Next is { } next ? $"then {next.Title}" : string.Empty;
-    }
-
-    partial void OnIsFavoriteChanged(bool value)
-    {
-        // Kept in step so the filter, which reads the entity, agrees with what the row displays.
-        Channel.IsFavorite = value;
     }
 
     private static double ProgressThrough(EpgEntry entry, DateTimeOffset atUtc)

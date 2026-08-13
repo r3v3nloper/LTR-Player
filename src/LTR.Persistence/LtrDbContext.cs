@@ -91,24 +91,45 @@ public sealed partial class LtrDbContext : DbContext
     }
 
     /// <summary>
-    /// Persists the capability probe result for a source.
+    /// Persists what a probe established about a source: its capabilities, and the guide address it turned
+    /// out to declare.
     /// </summary>
-    public async Task UpdateCapabilitiesAsync(
-        int sourceId,
-        ProviderCapabilities capabilities,
-        CancellationToken cancellationToken)
+    /// <remarks>
+    /// <para>
+    /// Both are written on every import, not only on the first. A source row is otherwise never rewritten,
+    /// so a refresh used to probe the panel and discard the answer — leaving an installation created before
+    /// a capability existed permanently unaware of it, and re-reading an M3U playlist on every guide import
+    /// to rediscover an address it had already been told.
+    /// </para>
+    /// <para>
+    /// <paramref name="declaredGuideUrl"/> is only ever added, never cleared. It is the provider's
+    /// discovery, and a playlist that stops declaring a guide is not a reason to forget where one was.
+    /// </para>
+    /// </remarks>
+    /// <param name="probed">
+    /// The instance the probe filled in. Passed whole rather than field by field so that deciding which
+    /// fields a probe owns stays here, with the rest of the storage model, instead of the application layer
+    /// having to know that an M3U source has a guide address and an Xtream source does not.
+    /// </param>
+    public async Task UpdateProbeResultAsync(PlaylistSource probed, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(capabilities);
+        ArgumentNullException.ThrowIfNull(probed);
 
-        var source = await Sources.FirstOrDefaultAsync(entity => entity.Id == sourceId, cancellationToken)
+        var stored = await Sources.FirstOrDefaultAsync(entity => entity.Id == probed.Id, cancellationToken)
             .ConfigureAwait(false);
 
-        if (source is null)
+        if (stored is null)
         {
             return;
         }
 
-        source.Capabilities = capabilities;
+        stored.Capabilities = probed.Capabilities;
+
+        if (stored is M3uSource storedPlaylist && probed is M3uSource probedPlaylist)
+        {
+            storedPlaylist.EpgUrl ??= probedPlaylist.EpgUrl;
+        }
+
         await SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 

@@ -85,15 +85,37 @@ public static class SqliteDatabaseFile
 
         foreach (var suffix in CompanionSuffixes)
         {
-            var companion = databasePath + suffix;
-
-            if (File.Exists(companion))
-            {
-                File.Move(companion, target + suffix);
-            }
+            MoveCompanionIfPossible(databasePath + suffix, target + suffix);
         }
 
         return target;
+    }
+
+    /// <summary>
+    /// Moves a companion file, and gives up on it rather than on the whole quarantine.
+    /// </summary>
+    /// <remarks>
+    /// The database itself has already been moved by this point, so the caller's goal — a free path to
+    /// create a fresh database at — is met. Letting a locked write-ahead log throw here would turn a
+    /// recoverable startup back into a failed one, and leave the file it did move stranded under a
+    /// quarantine name nobody reported.
+    /// </remarks>
+    private static void MoveCompanionIfPossible(string companionPath, string targetPath)
+    {
+        if (!File.Exists(companionPath))
+        {
+            return;
+        }
+
+        try
+        {
+            File.Move(companionPath, targetPath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Left where it is. A stale log beside a database that no longer exists is inert: SQLite
+            // matches a log to its database by a salt in the header and discards one that does not.
+        }
     }
 
     /// <summary>

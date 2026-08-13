@@ -48,12 +48,10 @@ public sealed class LtrDbContextTests
         // Act
         await using (var context = database.CreateContext())
         {
-            var sourceId = await context.AddSourceAsync(source, cancellationToken);
+            await context.AddSourceAsync(source, cancellationToken);
 
-            await context.UpdateCapabilitiesAsync(
-                sourceId,
-                new ProviderCapabilities { SupportsLive = true, ProbedAtUtc = RefreshedAt },
-                cancellationToken);
+            source.Capabilities = new ProviderCapabilities { SupportsLive = true, ProbedAtUtc = RefreshedAt };
+            await context.UpdateProbeResultAsync(source, cancellationToken);
         }
 
         // Assert
@@ -159,31 +157,30 @@ public sealed class LtrDbContextTests
     }
 
     [Fact]
-    public async Task UpdateCapabilitiesAsync_PersistsTheProbeResult()
+    public async Task UpdateProbeResultAsync_PersistsTheProbeResult()
     {
         // Arrange
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var database = await SqliteTestDatabase.CreateAsync(cancellationToken: cancellationToken);
-        int sourceId;
+        var source = CreateXtreamSource();
 
         await using (var context = database.CreateContext())
         {
-            sourceId = await context.AddSourceAsync(CreateXtreamSource(), cancellationToken);
+            await context.AddSourceAsync(source, cancellationToken);
         }
 
         // Act
         await using (var context = database.CreateContext())
         {
-            await context.UpdateCapabilitiesAsync(
-                sourceId,
-                new ProviderCapabilities
-                {
-                    SupportsLive = true,
-                    SupportsMpegTs = true,
-                    RequiresLivePathSegment = true,
-                    ProbedAtUtc = RefreshedAt,
-                },
-                cancellationToken);
+            source.Capabilities = new ProviderCapabilities
+            {
+                SupportsLive = true,
+                SupportsMpegTs = true,
+                RequiresLivePathSegment = true,
+                ProbedAtUtc = RefreshedAt,
+            };
+
+            await context.UpdateProbeResultAsync(source, cancellationToken);
         }
 
         // Assert
@@ -431,6 +428,81 @@ public sealed class LtrDbContextTests
 
         firstChannels.ShouldHaveSingleItem().Name.ShouldBe("From first");
         secondChannels.ShouldHaveSingleItem().Name.ShouldBe("From second");
+    }
+
+    /// <summary>
+    /// A playlist that declares its own guide has that address adopted, so the guide import does not have to
+    /// re-download several megabytes of playlist to rediscover it.
+    /// </summary>
+    [Fact]
+    public async Task UpdateProbeResultAsync_AdoptsAGuideAddressThePlaylistDeclared()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTestDatabase.CreateAsync(cancellationToken: cancellationToken);
+
+        var source = new M3uSource
+        {
+            Name = "Playlist",
+            PlaylistUrl = new Uri("http://host/list.m3u", UriKind.Absolute),
+            CreatedUtc = RefreshedAt,
+        };
+
+        await using (var context = database.CreateContext())
+        {
+            await context.AddSourceAsync(source, cancellationToken);
+        }
+
+        // Act: what a probe does after parsing the header line.
+        await using (var context = database.CreateContext())
+        {
+            source.EpgUrl = new Uri("http://host/guide.xml.gz", UriKind.Absolute);
+            await context.UpdateProbeResultAsync(source, cancellationToken);
+        }
+
+        // Assert
+        await using var verifyContext = database.CreateContext();
+        var stored = (await verifyContext.GetSourcesAsync(cancellationToken)).ShouldHaveSingleItem();
+
+        stored.ShouldBeOfType<M3uSource>().EpgUrl
+            .ShouldBe(new Uri("http://host/guide.xml.gz", UriKind.Absolute));
+    }
+
+    /// <summary>
+    /// A playlist that stops declaring a guide is not a reason to forget one the user is relying on.
+    /// </summary>
+    [Fact]
+    public async Task UpdateProbeResultAsync_DoesNotClearAGuideAddressAlreadyStored()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTestDatabase.CreateAsync(cancellationToken: cancellationToken);
+
+        var source = new M3uSource
+        {
+            Name = "Playlist",
+            PlaylistUrl = new Uri("http://host/list.m3u", UriKind.Absolute),
+            EpgUrl = new Uri("http://host/guide.xml.gz", UriKind.Absolute),
+            CreatedUtc = RefreshedAt,
+        };
+
+        await using (var context = database.CreateContext())
+        {
+            await context.AddSourceAsync(source, cancellationToken);
+        }
+
+        // Act
+        await using (var context = database.CreateContext())
+        {
+            source.EpgUrl = null;
+            await context.UpdateProbeResultAsync(source, cancellationToken);
+        }
+
+        // Assert
+        await using var verifyContext = database.CreateContext();
+        var stored = (await verifyContext.GetSourcesAsync(cancellationToken)).ShouldHaveSingleItem();
+
+        stored.ShouldBeOfType<M3uSource>().EpgUrl.ShouldNotBeNull();
     }
 
     private static async Task<int> AddSourceAsync(

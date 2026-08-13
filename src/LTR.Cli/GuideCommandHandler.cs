@@ -63,7 +63,7 @@ internal sealed class GuideCommandHandler
 
             case GuideImportOutcome.NotDue:
                 Console.WriteLine(
-                    $"The stored guide was imported at {Format(source.LastGuideImportedUtc)} and is still "
+                    $"The stored guide was imported at {ConsoleText.FormatUtc(source.LastGuideImportedUtc)} and is still "
                     + "fresh. Pass --force to fetch it anyway.");
                 return 0;
 
@@ -97,7 +97,7 @@ internal sealed class GuideCommandHandler
         var summary = await _catalogue.GetGuideSummaryAsync(source.Id, cancellationToken).ConfigureAwait(false);
 
         Console.WriteLine($"Source     {source.Name}");
-        Console.WriteLine($"Imported   {Format(source.LastGuideImportedUtc)}");
+        Console.WriteLine($"Imported   {ConsoleText.FormatUtc(source.LastGuideImportedUtc)}");
 
         await ReportAsync(source, summary, cancellationToken).ConfigureAwait(false);
         return 0;
@@ -114,7 +114,7 @@ internal sealed class GuideCommandHandler
         }
 
         Console.WriteLine($"Guide      {summary.GuideChannelCount} channels, {summary.ProgrammeCount} programmes");
-        Console.WriteLine($"Coverage   until {Format(summary.CoverageUntilUtc)}");
+        Console.WriteLine($"Coverage   until {ConsoleText.FormatUtc(summary.CoverageUntilUtc)}");
         Console.WriteLine(
             $"Matched    {summary.MatchedChannelCount} of {summary.TotalChannelCount} channels "
             + $"({Percentage(summary.MatchedChannelCount, summary.TotalChannelCount)})");
@@ -146,15 +146,15 @@ internal sealed class GuideCommandHandler
         }
 
         Console.WriteLine();
-        Console.WriteLine($"On air at {Format(now)}:");
+        Console.WriteLine($"On air at {ConsoleText.FormatUtc(now)}:");
 
         foreach (var slice in running)
         {
             var name = namesById.TryGetValue(slice.ChannelId, out var channelName) ? channelName : "?";
 
             Console.WriteLine(
-                $"  {Truncate(name, 30),-30} {Time(slice.Now!.StartUtc)}-{Time(slice.Now.StopUtc)} "
-                + $"{Truncate(slice.Now.Title, 40)}");
+                $"  {ConsoleText.Truncate(name, 30),-30} {ConsoleText.FormatUtcTimeOfDay(slice.Now!.StartUtc)}-{ConsoleText.FormatUtcTimeOfDay(slice.Now.StopUtc)} "
+                + $"{ConsoleText.Truncate(slice.Now.Title, 40)}");
         }
     }
 
@@ -174,7 +174,7 @@ internal sealed class GuideCommandHandler
         foreach (var channel in unmatched.Take(UnmatchedSampleSize))
         {
             var guideId = string.IsNullOrWhiteSpace(channel.EpgChannelId) ? "no guide id" : channel.EpgChannelId;
-            Console.WriteLine($"  {Truncate(channel.Name, 40),-40} ({guideId})");
+            Console.WriteLine($"  {ConsoleText.Truncate(channel.Name, 40),-40} ({guideId})");
         }
     }
 
@@ -196,22 +196,5 @@ internal sealed class GuideCommandHandler
         return total == 0
             ? "n/a"
             : ((double)part / total).ToString("P0", CultureInfo.InvariantCulture);
-    }
-
-    private static string Format(DateTimeOffset? instant)
-    {
-        return instant is null
-            ? "never"
-            : instant.Value.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
-    }
-
-    private static string Time(DateTimeOffset instant)
-    {
-        return instant.ToString("HH:mm", CultureInfo.InvariantCulture);
-    }
-
-    private static string Truncate(string value, int maxLength)
-    {
-        return value.Length <= maxLength ? value : string.Concat(value.AsSpan(0, maxLength - 1), "…");
     }
 }

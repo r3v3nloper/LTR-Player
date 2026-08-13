@@ -90,6 +90,12 @@ internal sealed class SourceImportService : ISourceImportService
             ? await context.AddSourceAsync(source, cancellationToken).ConfigureAwait(false)
             : source.Id;
 
+        // Written on every import, not only the first. A source row is otherwise never rewritten, so a
+        // refresh used to probe the panel and throw the answer away — an installation kept whatever
+        // capabilities it was created with, and an M3U source re-read its playlist on every guide import to
+        // rediscover a guide address the probe had already found.
+        await context.UpdateProbeResultAsync(source, cancellationToken).ConfigureAwait(false);
+
         await context.ReconcileLiveCatalogueAsync(
                 sourceId,
                 categories,

@@ -109,10 +109,10 @@ public sealed partial class SourceManagementViewModel : ObservableObject
             return;
         }
 
-        // A property setter cannot await, so the load is started and left to report its own failure.
-        // The coordinator swallows everything except cancellation, and nothing here cancels, so this
-        // cannot become an unobserved task exception: the list would otherwise simply stay empty with
-        // nothing said about why.
+        // A property setter cannot await, so the load is started and left to report its own failure. The
+        // coordinator swallows everything, cancellation included — which it has to, precisely because this
+        // call is not awaited and an escaping exception would go unobserved. The list would otherwise
+        // simply stay empty with nothing said about why.
         _ = Coordinator.ShowCatalogueAsync(value, CancellationToken.None);
     }
 

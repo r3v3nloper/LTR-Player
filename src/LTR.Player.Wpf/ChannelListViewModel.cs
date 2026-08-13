@@ -255,9 +255,15 @@ public sealed partial class ChannelListViewModel : ObservableObject
     /// Tests one row against the filter built for the current refresh.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The filter is deliberately not constructed here. This runs once per channel per refresh, so at
     /// a realistic catalogue size building it inside meant tens of thousands of allocations for every
     /// keystroke in the search box.
+    /// </para>
+    /// <para>
+    /// Tested against the row rather than the entity behind it, which is what allows the row to own its
+    /// favourite state instead of mirroring it into the entity to keep the two agreeing.
+    /// </para>
     /// </remarks>
     private bool MatchesCurrentFilter(object item)
     {
@@ -266,6 +272,6 @@ public sealed partial class ChannelListViewModel : ObservableObject
             return false;
         }
 
-        return _activeFilter.Matches(channel.Channel);
+        return _activeFilter.Matches(channel.Name, channel.CategoryExternalId, channel.IsFavorite);
     }
 }

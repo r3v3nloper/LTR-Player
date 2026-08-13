@@ -173,7 +173,7 @@ internal sealed class GuideImportService : IGuideImportService
     private async Task PruneAsync(int sourceId, DateTimeOffset cutoffUtc, CancellationToken cancellationToken)
     {
         var prunedProgrammes = await _database
-            .RunAsync(context => context.PruneGuideProgrammesAsync(cutoffUtc, cancellationToken))
+            .RunAsync(context => context.PruneGuideProgrammesAsync(sourceId, cutoffUtc, cancellationToken))
             .ConfigureAwait(false);
 
         var prunedChannels = await _database

@@ -13,6 +13,11 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <!-- Linked rather than copied: one test clock for every test project that needs one. -->
+  <ItemGroup>
+    <Compile Include="../TestSupport/TestClock.cs" Link="TestClock.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="Shouldly" />

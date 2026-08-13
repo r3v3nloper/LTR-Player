@@ -56,7 +56,7 @@ internal sealed class ChannelsCommandHandler
                     : "-";
 
             Console.WriteLine(
-                $"{channel.ExternalId,-12} {Truncate(channel.Name, 42),-42} {Truncate(category, 24),-24} "
+                $"{channel.ExternalId,-12} {ConsoleText.Truncate(channel.Name, 42),-42} {ConsoleText.Truncate(category, 24),-24} "
                 + $"{(channel.HasArchive ? $"{channel.ArchiveDurationDays ?? 0}d" : "-")}");
         }
 
@@ -78,10 +78,5 @@ internal sealed class ChannelsCommandHandler
         }
 
         return 0;
-    }
-
-    private static string Truncate(string value, int maxLength)
-    {
-        return value.Length <= maxLength ? value : string.Concat(value.AsSpan(0, maxLength - 1), "…");
     }
 }

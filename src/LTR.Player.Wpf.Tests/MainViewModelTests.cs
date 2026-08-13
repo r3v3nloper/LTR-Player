@@ -1,6 +1,5 @@
 using LTR.Core.Content;
 using LTR.Core.Sources;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LTR.Player.Wpf;
 
@@ -22,13 +21,12 @@ namespace LTR.Player.Wpf;
 /// </remarks>
 public sealed class MainViewModelTests
 {
-    private static readonly DateTimeOffset SixPm = new(2026, 8, 12, 18, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public void ConnectCommand_IsDisabledUntilTheXtreamFieldsAreFilled()
     {
         // Arrange
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         var viewModel = context.Build();
 
         // Act & Assert: each field in turn, because the guard reads all three.
@@ -60,7 +58,7 @@ public sealed class MainViewModelTests
     public void ConnectCommand_AnnouncesThatItsGuardChanged_WhenAFieldItReadsChanges(string propertyName)
     {
         // Arrange
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         var viewModel = context.Build();
 
         var announcements = 0;
@@ -77,7 +75,7 @@ public sealed class MainViewModelTests
     public async Task RefreshAndRemove_AnnounceThatTheirGuardChanged_WhenTheSelectedSourceChanges()
     {
         // Arrange: both stayed disabled in a shipped build for exactly this reason.
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource(id: 1));
         var viewModel = context.Build();
 
@@ -98,7 +96,7 @@ public sealed class MainViewModelTests
     public async Task ChannelCommands_AnnounceThatTheirGuardChanged_WhenTheSelectionChanges()
     {
         // Arrange
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource(id: 1));
         context.Store.Channels.Add(CreateChannel(1, 10, "101", "Erste"));
 
@@ -151,7 +149,7 @@ public sealed class MainViewModelTests
     public void ConnectCommand_ForAPlaylistNeedsOnlyTheAddress()
     {
         // Arrange: a playlist has no credentials, so requiring them would make it unaddable.
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         var viewModel = context.Build();
 
         // Act
@@ -167,7 +165,7 @@ public sealed class MainViewModelTests
     {
         // Arrange: filling the Xtream fields must not leave Connect enabled for a playlist with no
         // address entered.
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         var viewModel = context.Build();
 
         viewModel.SourceManagement.PanelUrl = "http://panel.example:8080";
@@ -187,7 +185,7 @@ public sealed class MainViewModelTests
     {
         // Arrange: both were permanently disabled in a shipped build, because their guard reads
         // SelectedSource and SelectedSource did not notify them.
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource(id: 1));
         var viewModel = context.Build();
 
@@ -206,7 +204,7 @@ public sealed class MainViewModelTests
     public async Task InitializeAsync_WithNoSources_ShowsTheAddForm()
     {
         // Arrange
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         var viewModel = context.Build();
 
         // Act
@@ -220,7 +218,7 @@ public sealed class MainViewModelTests
     public async Task InitializeAsync_WithAStoredSource_LandsInTheChannelList()
     {
         // Arrange: a restart should not ask for the subscription again.
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource(id: 1));
         context.Store.Channels.Add(CreateChannel(1, 10, "101", "Erste"));
         context.Store.Categories.Add(CreateCategory(1, "10", "Sport"));
@@ -241,7 +239,7 @@ public sealed class MainViewModelTests
     {
         // Arrange: a collection view refresh raises a reset and the list box drops its selection, which
         // disabled the favourite command while a channel was still playing.
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource(id: 1));
         context.Store.Channels.Add(CreateChannel(1, 10, "101", "FR: TF1 HD"));
         context.Store.Channels.Add(CreateChannel(1, 11, "102", "DE: ZDF HD"));
@@ -265,7 +263,7 @@ public sealed class MainViewModelTests
     public async Task ChangingTheFilter_DropsTheSelectionWhenItNoLongerQualifies()
     {
         // Arrange: the counterpart. Keeping a row selected that the filter excludes would be worse.
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource(id: 1));
         context.Store.Channels.Add(CreateChannel(1, 10, "101", "FR: TF1 HD"));
 
@@ -284,7 +282,7 @@ public sealed class MainViewModelTests
     public async Task TheCategoryFilter_NarrowsTheListAndCombinesWithTheSearchText()
     {
         // Arrange
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource(id: 1));
         context.Store.Categories.Add(CreateCategory(1, "10", "France"));
         context.Store.Channels.Add(CreateChannel(1, 10, "101", "FR: TF1 HD", "10"));
@@ -308,7 +306,7 @@ public sealed class MainViewModelTests
     public async Task ToggleFavorite_PersistsTheChangeAndUpdatesTheRow()
     {
         // Arrange
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource(id: 1));
         context.Store.Channels.Add(CreateChannel(1, 10, "101", "Erste"));
 
@@ -328,7 +326,7 @@ public sealed class MainViewModelTests
     public async Task ShowingOnlyFavourites_HidesTheRest()
     {
         // Arrange
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource(id: 1));
         context.Store.Channels.Add(CreateChannel(1, 10, "101", "Favourite", isFavorite: true));
         context.Store.Channels.Add(CreateChannel(1, 11, "102", "Ordinary"));
@@ -345,11 +343,73 @@ public sealed class MainViewModelTests
             .Name.ShouldBe("Favourite");
     }
 
+    /// <summary>
+    /// The interaction the row used to mirror its favourite flag into the entity for: with the favourites
+    /// filter on, un-favouriting has to remove the row, which only happens if the filter reads what the row
+    /// now says rather than what the entity says.
+    /// </summary>
+    [Fact]
+    public async Task UnFavouriting_WhileShowingOnlyFavourites_RemovesTheRow()
+    {
+        // Arrange
+        var context = new MainViewModelHarness();
+        context.Store.Sources.Add(CreateSource(id: 1));
+        context.Store.Channels.Add(CreateChannel(1, 10, "101", "Favourite", isFavorite: true));
+        context.Store.Channels.Add(CreateChannel(1, 11, "102", "Also favourite", isFavorite: true));
+
+        var viewModel = context.Build();
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        viewModel.Channels.ShowFavoritesOnly = true;
+        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>()
+            .Single(row => row.Name == "Favourite");
+
+        // Act
+        await viewModel.Channels.ToggleFavoriteCommand.ExecuteAsync(null);
+
+        // Assert
+        viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>()
+            .ShouldHaveSingleItem()
+            .Name.ShouldBe("Also favourite");
+
+        context.Store.FavoriteWrites.ShouldHaveSingleItem().ShouldBe((10, false));
+    }
+
+    /// <summary>
+    /// Closing the window has to abandon a catalogue load in flight. Loading seventeen thousand channels is
+    /// the longest thing the shell does, and it used to be started with a token nothing could cancel — so
+    /// closing meant waiting for it.
+    /// </summary>
+    [Fact]
+    public async Task Shutdown_AbandonsACatalogueLoadStillRunning()
+    {
+        // Arrange: a refresh, because that is the path that awaits the catalogue load and therefore the one
+        // that would keep the window from closing.
+        var context = new MainViewModelHarness();
+        context.Store.Sources.Add(CreateSource(id: 1));
+
+        var viewModel = context.Build();
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        context.Store.BlockChannelLoad = true;
+        var refresh = viewModel.SourceManagement.RefreshCommand.ExecuteAsync(null);
+
+        refresh.IsCompleted.ShouldBeFalse("the reload is deliberately still in flight");
+
+        // Act
+        await viewModel.ShutdownAsync();
+
+        // Assert: it ended. Bounded, because the failure being guarded against is a load that never ends —
+        // without the limit this test would hang rather than fail.
+        await refresh.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        refresh.IsCompletedSuccessfully.ShouldBeTrue("a cancelled reload is not a failure");
+    }
+
     [Fact]
     public async Task RemoveSource_StopsPlaybackBeforeDeleting()
     {
         // Arrange: the stream in flight belongs to the source about to disappear.
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource(id: 1));
         context.Store.Channels.Add(CreateChannel(1, 10, "101", "Erste"));
 
@@ -369,7 +429,7 @@ public sealed class MainViewModelTests
     public async Task Connect_WhenTheAccountIsRejected_ReportsItAndStaysOnTheForm()
     {
         // Arrange
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Import.Account = ProviderAccount.Unauthenticated;
         var viewModel = context.Build();
 
@@ -390,7 +450,7 @@ public sealed class MainViewModelTests
     public async Task Connect_WithAnInvalidPanelAddress_ExplainsWhatWasExpected()
     {
         // Arrange: "host:8080" parses as an absolute URI, so it used to be accepted and fail later.
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         var viewModel = context.Build();
 
         viewModel.SourceManagement.PanelUrl = "panel.example:8080";
@@ -409,7 +469,7 @@ public sealed class MainViewModelTests
     public async Task PlaySelected_HandsTheResolvedAddressToPlayback()
     {
         // Arrange
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource(id: 1));
         context.Store.Channels.Add(CreateChannel(1, 10, "101", "Erste"));
 
@@ -430,7 +490,7 @@ public sealed class MainViewModelTests
     {
         // Arrange: zapping cancels the open still in flight. Unhandled, that surfaced as an error dialog
         // for an ordinary key press.
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource(id: 1));
         context.Store.Channels.Add(CreateChannel(1, 10, "101", "Erste"));
         context.Session.SwitchException = new OperationCanceledException();
@@ -505,41 +565,5 @@ public sealed class MainViewModelTests
             StartUtc = startUtc,
             StopUtc = startUtc + (duration ?? TimeSpan.FromHours(1)),
         };
-    }
-
-    /// <summary>
-    /// Assembles a view model over fakes, so each test states only what it cares about.
-    /// </summary>
-    private sealed class TestContextBuilder
-    {
-        public FakeCatalogueStore Store { get; } = new();
-
-        public FakeSourceImportService Import { get; } = new();
-
-        public FakePlaybackSession Session { get; } = new();
-
-        public FakeGuideImportService GuideImport { get; } = new();
-
-        /// <summary>
-        /// A fixed clock, so a test can place programmes around a known "now" instead of around whenever
-        /// it happens to run.
-        /// </summary>
-        public FixedTimeProvider Time { get; } = new(SixPm);
-
-        public MainViewModel Build()
-        {
-            // One status line for all of them, exactly as the container hands it out.
-            var status = new StatusLine();
-
-            return new MainViewModel(
-                new SourceManagementViewModel(Store, Import, status, NullLogger<SourceManagementViewModel>.Instance),
-                new ChannelListViewModel(Store, Time, status, NullLogger<ChannelListViewModel>.Instance),
-                new GuideViewModel(Store, Time),
-                status,
-                new StubProviderRegistry(),
-                Session,
-                GuideImport,
-                NullLogger<MainViewModel>.Instance);
-        }
     }
 }

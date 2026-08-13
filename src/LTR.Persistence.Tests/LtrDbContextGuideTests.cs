@@ -322,7 +322,7 @@ public sealed class LtrDbContextGuideTests
 
         await using (var context = database.CreateContext())
         {
-            pruned = await context.PruneGuideProgrammesAsync(SixPm.AddHours(-6), cancellationToken);
+            pruned = await context.PruneGuideProgrammesAsync(sourceId, SixPm.AddHours(-6), cancellationToken);
         }
 
         // Assert
@@ -331,6 +331,47 @@ public sealed class LtrDbContextGuideTests
         await using var verifyContext = database.CreateContext();
         var remaining = await verifyContext.EpgEntries.AsNoTracking().SingleAsync(cancellationToken);
         remaining.Title.ShouldBe("Tonight");
+    }
+
+    /// <summary>
+    /// Importing one source's guide must not touch another's. The retention rule is the same for both, but a
+    /// per-source operation reaching across sources is a side effect nobody would expect from the call site.
+    /// </summary>
+    [Fact]
+    public async Task PruneGuideProgrammesAsync_LeavesOtherSourcesAlone()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTestDatabase.CreateAsync(cancellationToken: cancellationToken);
+
+        var firstSourceId = await AddSourceAsync(database, cancellationToken);
+        var secondSourceId = await AddSourceAsync(database, cancellationToken);
+
+        var firstGuide = await SeedGuideChannelsAsync(database, firstSourceId, cancellationToken);
+        var secondGuide = await SeedGuideChannelsAsync(database, secondSourceId, cancellationToken);
+
+        await using (var context = database.CreateContext())
+        {
+            await context.AppendGuideProgrammesAsync(
+                [
+                    Entry(firstGuide["tf1.fr"], "First source, yesterday", SixPm.AddDays(-1)),
+                    Entry(secondGuide["tf1.fr"], "Second source, yesterday", SixPm.AddDays(-1)),
+                ],
+                [],
+                cancellationToken);
+        }
+
+        // Act
+        await using (var context = database.CreateContext())
+        {
+            (await context.PruneGuideProgrammesAsync(firstSourceId, SixPm.AddHours(-6), cancellationToken))
+                .ShouldBe(1);
+        }
+
+        // Assert
+        await using var verifyContext = database.CreateContext();
+        var remaining = await verifyContext.EpgEntries.AsNoTracking().SingleAsync(cancellationToken);
+        remaining.Title.ShouldBe("Second source, yesterday");
     }
 
     /// <summary>

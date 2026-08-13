@@ -1,4 +1,3 @@
-using System.Globalization;
 using LTR.Catalogue;
 using LTR.Core.Sources;
 using LTR.Persistence;
@@ -46,9 +45,9 @@ internal sealed class SourcesCommandHandler
                 .ConfigureAwait(false);
 
             Console.WriteLine(
-                $"{source.Id,-4} {Truncate(source.Name, 28),-28} {DescribeProtocol(source),-10} "
+                $"{source.Id,-4} {ConsoleText.Truncate(source.Name, 28),-28} {DescribeProtocol(source),-10} "
                 + $"{channels.Count,-9} {channels.Count(channel => channel.IsFavorite),-11} "
-                + $"{Describe(source.LastRefreshedUtc)}");
+                + $"{ConsoleText.FormatUtc(source.LastRefreshedUtc)}");
         }
 
         return 0;
@@ -111,17 +110,5 @@ internal sealed class SourcesCommandHandler
             M3uSource => "m3u",
             _ => "unknown",
         };
-    }
-
-    private static string Describe(DateTimeOffset? refreshedUtc)
-    {
-        return refreshedUtc is null
-            ? "never"
-            : refreshedUtc.Value.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
-    }
-
-    private static string Truncate(string value, int maxLength)
-    {
-        return value.Length <= maxLength ? value : string.Concat(value.AsSpan(0, maxLength - 1), "…");
     }
 }

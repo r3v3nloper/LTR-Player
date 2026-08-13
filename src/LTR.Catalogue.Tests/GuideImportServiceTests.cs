@@ -4,6 +4,7 @@ using LTR.Core.Security;
 using LTR.Core.Sources;
 using LTR.Persistence;
 using LTR.Providers;
+using LTR.TestSupport;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,7 +44,7 @@ public sealed class GuideImportServiceTests : IAsyncDisposable
     private static readonly DateTimeOffset SixPm = new(2026, 8, 12, 18, 0, 0, TimeSpan.Zero);
 
     private readonly SqliteConnection _connection = new("Filename=:memory:");
-    private readonly AdjustableTimeProvider _time = new(SixPm);
+    private readonly TestClock _time = new(SixPm);
     private ServiceProvider? _services;
 
     [Fact]

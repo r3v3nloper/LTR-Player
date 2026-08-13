@@ -1,7 +1,6 @@
 using LTR.Catalogue;
 using LTR.Core.Content;
 using LTR.Core.Sources;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LTR.Player.Wpf;
 
@@ -16,7 +15,6 @@ namespace LTR.Player.Wpf;
 /// </remarks>
 public sealed class GuideViewModelTests
 {
-    private static readonly DateTimeOffset SixPm = new(2026, 8, 12, 18, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task LoadingACatalogue_PutsWhatIsOnNowOnTheRows()
@@ -146,8 +144,8 @@ public sealed class GuideViewModelTests
         await viewModel.ToggleGuideCommand.ExecuteAsync(null);
 
         // Assert
-        viewModel.Guide.Timeline.StartUtc.ShouldBeLessThanOrEqualTo(SixPm);
-        viewModel.Guide.Timeline.EndUtc.ShouldBeGreaterThan(SixPm);
+        viewModel.Guide.Timeline.StartUtc.ShouldBeLessThanOrEqualTo(MainViewModelHarness.Now);
+        viewModel.Guide.Timeline.EndUtc.ShouldBeGreaterThan(MainViewModelHarness.Now);
         viewModel.Guide.IsNowVisible.ShouldBeTrue("the marker has to be inside the window it just opened");
     }
 
@@ -197,7 +195,7 @@ public sealed class GuideViewModelTests
     public async Task ToggleGuide_WithNoGuideData_SaysWhyItIsEmpty()
     {
         // Arrange
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource());
         context.Store.Channels.Add(new Channel { Id = 10, SourceId = 1, ExternalId = "101", Name = "Erste" });
 
@@ -226,7 +224,7 @@ public sealed class GuideViewModelTests
     public async Task ToggleGuide_AfterAnImportThatFollowedTheCatalogueLoad_StillFindsTheChannels()
     {
         // Arrange: a catalogue on screen with no guide yet, which is the state every first run is in.
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource());
         context.Store.Channels.Add(new Channel { Id = 10, SourceId = 1, ExternalId = "101", Name = "Erste" });
 
@@ -236,7 +234,7 @@ public sealed class GuideViewModelTests
         // Act: the import lands. It writes the link and the programmes into the store, and touches nothing
         // the view layer is holding.
         context.Store.GuideLinks[10] = 100;
-        context.Store.Programmes.Add(Programme(100, "Running", SixPm.AddMinutes(-30)));
+        context.Store.Programmes.Add(Programme(100, "Running", MainViewModelHarness.Now.AddMinutes(-30)));
 
         viewModel.ImportGuideCommand.Execute(null);
         await viewModel.GuideImportCompletion;
@@ -316,7 +314,7 @@ public sealed class GuideViewModelTests
     {
         // Arrange: the guide arrives after the channel list is already on screen, so something has to put
         // it there.
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource());
         context.Store.Channels.Add(new Channel
         {
@@ -335,7 +333,7 @@ public sealed class GuideViewModelTests
         row.NowTitle.ShouldBeEmpty("nothing has been imported yet");
 
         // Act: the import lands, and only then does the store have programmes in it.
-        context.Store.Programmes.Add(Programme(100, "Running", SixPm.AddMinutes(-30)));
+        context.Store.Programmes.Add(Programme(100, "Running", MainViewModelHarness.Now.AddMinutes(-30)));
         viewModel.ImportGuideCommand.Execute(null);
         await viewModel.GuideImportCompletion;
 
@@ -367,6 +365,33 @@ public sealed class GuideViewModelTests
         viewModel.Status.Text.ShouldContain("matched none");
     }
 
+    /// <summary>
+    /// The stages the import reports have to reach the status line, or a download of tens of megabytes looks
+    /// like nothing happening.
+    /// </summary>
+    [Fact]
+    public async Task ImportGuide_ReportsItsProgressInTheStatusLine()
+    {
+        // Arrange
+        var context = Arrange();
+        context.GuideImport.ReportProgress = true;
+        context.GuideImport.BlockUntilReleased = true;
+
+        var viewModel = context.Build();
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        var reported = new List<string>();
+        viewModel.Status.PropertyChanged += (_, _) => reported.Add(viewModel.Status.Text);
+
+        // Act
+        viewModel.ImportGuideCommand.Execute(null);
+        context.GuideImport.Release();
+        await viewModel.GuideImportCompletion;
+
+        // Assert
+        reported.ShouldContain(text => text.Contains("Reading the programme guide", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task ImportGuide_WhenTheSourceHasNoGuide_SaysSo()
     {
@@ -393,7 +418,7 @@ public sealed class GuideViewModelTests
     public async Task Connect_StartsAStaleGuideImportInTheBackground()
     {
         // Arrange
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         var viewModel = context.Build();
 
         viewModel.SourceManagement.PanelUrl = "http://panel.example:8080";
@@ -466,9 +491,9 @@ public sealed class GuideViewModelTests
         viewModel.IsImportingGuide.ShouldBeFalse();
     }
 
-    private static TestContextBuilder Arrange()
+    private static MainViewModelHarness Arrange()
     {
-        var context = new TestContextBuilder();
+        var context = new MainViewModelHarness();
         context.Store.Sources.Add(CreateSource());
 
         context.Store.Channels.Add(new Channel
@@ -482,8 +507,8 @@ public sealed class GuideViewModelTests
         context.Store.GuideLinks[10] = 100;
 
         // Half an hour in, so the progress assertion has a value it can state exactly.
-        context.Store.Programmes.Add(Programme(100, "Running", SixPm.AddMinutes(-30)));
-        context.Store.Programmes.Add(Programme(100, "Next", SixPm.AddMinutes(30)));
+        context.Store.Programmes.Add(Programme(100, "Running", MainViewModelHarness.Now.AddMinutes(-30)));
+        context.Store.Programmes.Add(Programme(100, "Next", MainViewModelHarness.Now.AddMinutes(30)));
 
         return context;
     }
@@ -511,36 +536,5 @@ public sealed class GuideViewModelTests
             StartUtc = startUtc,
             StopUtc = startUtc.AddHours(1),
         };
-    }
-
-    /// <summary>
-    /// Assembles a view model over fakes, so each test states only what it cares about.
-    /// </summary>
-    private sealed class TestContextBuilder
-    {
-        public FakeCatalogueStore Store { get; } = new();
-
-        public FakeSourceImportService Import { get; } = new();
-
-        public FakePlaybackSession Session { get; } = new();
-
-        public FakeGuideImportService GuideImport { get; } = new();
-
-        public FixedTimeProvider Time { get; } = new(SixPm);
-
-        public MainViewModel Build()
-        {
-            var status = new StatusLine();
-
-            return new MainViewModel(
-                new SourceManagementViewModel(Store, Import, status, NullLogger<SourceManagementViewModel>.Instance),
-                new ChannelListViewModel(Store, Time, status, NullLogger<ChannelListViewModel>.Instance),
-                new GuideViewModel(Store, Time),
-                status,
-                new StubProviderRegistry(),
-                Session,
-                GuideImport,
-                NullLogger<MainViewModel>.Instance);
-        }
     }
 }

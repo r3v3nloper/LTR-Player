@@ -93,6 +93,11 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
 - **A view model that reads the clock must be given a `TimeProvider`.** `DateTimeOffset.UtcNow` in
   `ToggleGuideAsync` opened the timeline on a window that could not contain the guide's own "now" marker;
   the test caught it only because the test clock differs from the real one.
+- **`ShowCatalogueAsync` swallows cancellation as well as failure.** Source management starts it without
+  awaiting when the selection changes, so anything escaping becomes an unobserved task exception. That only
+  became reachable once the shell gained a lifetime token to cancel.
+- **`Progress<T>` delivers through a synchronisation context.** In a test with none, a stage message can land
+  after the result message an assertion is reading. The guide-import fake reports progress only when asked.
 
 ## Verifying
 

@@ -27,6 +27,13 @@ internal sealed class FakeGuideImportService : IGuideImportService
     /// </summary>
     public bool BlockUntilReleased { get; set; }
 
+    /// <summary>
+    /// Whether to report a stage. Off by default, and deliberately so: <see cref="Progress{T}"/> delivers
+    /// through a synchronisation context, and a test with none can see the stage message land after the
+    /// result message it is asserting on. Only the test that cares about progress turns it on.
+    /// </summary>
+    public bool ReportProgress { get; set; }
+
     public Task<GuideImportResult> ImportAsync(
         PlaylistSource source,
         IProgress<GuideImportStage>? progress,
@@ -54,7 +61,10 @@ internal sealed class FakeGuideImportService : IGuideImportService
         IProgress<GuideImportStage>? progress,
         CancellationToken cancellationToken)
     {
-        progress?.Report(GuideImportStage.Reading);
+        if (ReportProgress)
+        {
+            progress?.Report(GuideImportStage.Reading);
+        }
 
         if (BlockUntilReleased)
         {

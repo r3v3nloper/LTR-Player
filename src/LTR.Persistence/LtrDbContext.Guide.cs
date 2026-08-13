@@ -176,16 +176,21 @@ public sealed partial class LtrDbContext
     }
 
     /// <summary>
-    /// Deletes programmes that ended before <paramref name="cutoffUtc"/>.
+    /// Deletes a source's programmes that ended before <paramref name="cutoffUtc"/>.
     /// </summary>
     /// <remarks>
     /// Guides commonly carry several days of history that no view here shows. Without this the table
-    /// grows on every import and never shrinks.
+    /// grows on every import and never shrinks. Scoped to the source being imported: the retention rule is
+    /// the same for every guide, but reaching into another source's data from one source's import is a
+    /// side effect nobody reading the call site would expect.
     /// </remarks>
-    public Task<int> PruneGuideProgrammesAsync(DateTimeOffset cutoffUtc, CancellationToken cancellationToken)
+    public Task<int> PruneGuideProgrammesAsync(
+        int sourceId,
+        DateTimeOffset cutoffUtc,
+        CancellationToken cancellationToken)
     {
         return EpgEntries
-            .Where(entry => entry.StopUtc < cutoffUtc)
+            .Where(entry => entry.GuideChannel!.SourceId == sourceId && entry.StopUtc < cutoffUtc)
             .ExecuteDeleteAsync(cancellationToken);
     }
 

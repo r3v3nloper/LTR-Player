@@ -25,13 +25,15 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     private readonly ILogger<MainViewModel> _logger;
 
     /// <summary>
-    /// Cancels a guide import when the window closes.
+    /// Cancelled when the window closes, and linked into everything the shell starts.
     /// </summary>
     /// <remarks>
-    /// An import runs for minutes and writes to the database throughout. Left running past shutdown it
-    /// would write into a disposed container, and the process would not exit while it did.
+    /// Two things need it. A guide import runs for minutes and writes to the database throughout: left
+    /// running past shutdown it would write into a disposed container, and the process would not exit while
+    /// it did. And loading a catalogue of seventeen thousand channels takes long enough that a user who
+    /// closes the window mid-load should not be made to wait for it.
     /// </remarks>
-    private readonly CancellationTokenSource _guideImportLifetime = new();
+    private readonly CancellationTokenSource _shellLifetime = new();
 
     /// <summary>
     /// The import in flight, so a second one is not started alongside it and so shutdown can wait for it
@@ -94,9 +96,10 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     /// <summary>
     /// Loads the configured sources, so a restart lands straight in the channel list.
     /// </summary>
-    public Task InitializeAsync(CancellationToken cancellationToken)
+    public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        return SourceManagement.InitializeAsync(cancellationToken);
+        using var lifetime = LinkedToShellLifetime(cancellationToken);
+        await SourceManagement.InitializeAsync(lifetime.Token).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -112,9 +115,14 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
         try
         {
-            await Channels.RefreshGuideAsync(CancellationToken.None).ConfigureAwait(true);
+            await Channels.RefreshGuideAsync(_shellLifetime.Token).ConfigureAwait(true);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            // The window is closing. Raised from a timer tick, so an unhandled one would crash the process
+            // on the way out.
+        }
+        catch (Exception exception)
         {
             // A failed periodic refresh must not put a dialog in front of someone watching television.
             PlayerLog.GuideRefreshFailed(_logger, exception);
@@ -125,25 +133,37 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     /// Hands the provider connection back before the window goes away.
     /// </summary>
     /// <remarks>
-    /// Not a command, because it is not a user action and must not be cancellable: a subscription
-    /// permitting a single connection is unusable for minutes if the player exits still holding one.
+    /// Not a command, because it is not a user action. The playback release itself is deliberately not
+    /// cancellable — a subscription permitting a single connection is unusable for minutes if the player
+    /// exits still holding one — but everything else the shell has in flight is abandoned first, so closing
+    /// the window does not wait on a catalogue load or a guide download.
     /// </remarks>
-    public Task ShutdownAsync()
+    public async Task ShutdownAsync()
     {
-        return ReleasePlaybackAsync(CancellationToken.None);
+        await _shellLifetime.CancelAsync().ConfigureAwait(true);
+        await ReleasePlaybackAsync(CancellationToken.None).ConfigureAwait(true);
     }
 
     async Task ISourceCoordinator.ShowCatalogueAsync(PlaylistSource? source, CancellationToken cancellationToken)
     {
+        // Linked, rather than taken as given. The caller is often a property setter that has no token to
+        // offer, and loading seventeen thousand channels is the longest thing the shell does — a user
+        // closing the window mid-load must not be made to wait for it.
+        using var lifetime = LinkedToShellLifetime(cancellationToken);
+
         try
         {
-            await Channels.ShowAsync(source, cancellationToken).ConfigureAwait(true);
+            await Channels.ShowAsync(source, lifetime.Token).ConfigureAwait(true);
             Guide.Attach(source, Channels.VisibleChannels);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (OperationCanceledException)
         {
-            // Cancellation is excluded on purpose: a cancelled refresh has its own wording, and it is
-            // not a failure of the stored catalogue.
+            // Swallowed rather than rethrown, and that matters: source management starts this without
+            // awaiting it when the selection changes, so anything escaping here becomes an unobserved task
+            // exception. It only became reachable once the shell gained a lifetime token to cancel.
+        }
+        catch (Exception exception)
+        {
             PlayerLog.CatalogueLoadFailed(_logger, exception, source?.Name ?? string.Empty);
             Status.Text = $"The stored catalogue for {source?.Name} could not be read.";
         }
@@ -272,21 +292,21 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         {
             var result = onlyWhenStale
                 ? await _guideImport
-                    .ImportIfStaleAsync(source, progress, _guideImportLifetime.Token)
+                    .ImportIfStaleAsync(source, progress, _shellLifetime.Token)
                     .ConfigureAwait(true)
                 : await _guideImport
-                    .ImportAsync(source, progress, _guideImportLifetime.Token)
+                    .ImportAsync(source, progress, _shellLifetime.Token)
                     .ConfigureAwait(true);
 
             Status.Text = Describe(result, source);
 
             if (result.Succeeded)
             {
-                await Channels.RefreshGuideAsync(_guideImportLifetime.Token).ConfigureAwait(true);
+                await Channels.RefreshGuideAsync(_shellLifetime.Token).ConfigureAwait(true);
 
                 if (Guide.IsVisible)
                 {
-                    await Guide.LoadAsync(_guideImportLifetime.Token).ConfigureAwait(true);
+                    await Guide.LoadAsync(_shellLifetime.Token).ConfigureAwait(true);
                 }
             }
         }
@@ -340,6 +360,14 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     }
 
     /// <summary>
+    /// Combines a caller's token with the shell's, so anything the shell starts ends when the window does.
+    /// </summary>
+    private CancellationTokenSource LinkedToShellLifetime(CancellationToken cancellationToken)
+    {
+        return CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shellLifetime.Token);
+    }
+
+    /// <summary>
     /// Keeps commands that guard on state they do not own current.
     /// </summary>
     /// <remarks>
@@ -386,7 +414,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        await _guideImportLifetime.CancelAsync().ConfigureAwait(false);
+        await _shellLifetime.CancelAsync().ConfigureAwait(false);
 
         try
         {
@@ -398,6 +426,6 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             PlayerLog.GuideImportFailed(_logger, exception, string.Empty);
         }
 
-        _guideImportLifetime.Dispose();
+        _shellLifetime.Dispose();
     }
 }
