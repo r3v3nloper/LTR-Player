@@ -6,6 +6,7 @@
   <local:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibility" />
   <local:StringPresenceToVisibilityConverter x:Key="NonEmptyStringToVisibility" VisibleWhenPresent="True" />
   <local:StringPresenceToVisibilityConverter x:Key="EmptyStringToVisibility" VisibleWhenPresent="False" />
+  <local:EnumMatchConverter x:Key="EnumMatch" />
 
   <!-- A video player is used in a dark room, so the chrome stays dark and low-contrast against the
        picture rather than competing with it. -->
@@ -15,6 +16,7 @@
   <SolidColorBrush x:Key="TextBrush" Color="#E6E8EE" />
   <SolidColorBrush x:Key="MutedTextBrush" Color="#8B93A5" />
   <SolidColorBrush x:Key="AccentBrush" Color="#4C8DFF" />
+  <SolidColorBrush x:Key="FavoriteBrush" Color="#F0C24B" />
 
   <Style TargetType="TextBlock">
     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />

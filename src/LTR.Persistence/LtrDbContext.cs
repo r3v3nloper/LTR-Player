@@ -182,6 +182,21 @@ public sealed class LtrDbContext : DbContext
     }
 
     /// <summary>
+    /// Removes a source together with its catalogue.
+    /// </summary>
+    /// <remarks>
+    /// The categories and channels go with it through the cascade configured on their relationships,
+    /// so no explicit cleanup is needed and none can be forgotten.
+    /// </remarks>
+    public async Task DeleteSourceAsync(int sourceId, CancellationToken cancellationToken)
+    {
+        await Sources
+            .Where(source => source.Id == sourceId)
+            .ExecuteDeleteAsync(cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Marks or unmarks a channel as a favourite.
     /// </summary>
     public async Task SetFavoriteAsync(int channelId, bool isFavorite, CancellationToken cancellationToken)

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -14,21 +15,27 @@ using Microsoft.Extensions.Logging;
 namespace LTR.Player.Wpf;
 
 /// <summary>
-/// Drives the main window: source setup, the channel list and starting playback.
+/// Drives the main window.
 /// </summary>
+/// <remarks>
+/// This now carries three responsibilities — managing sources, presenting the channel list, and
+/// starting playback — and is a candidate for splitting along those lines. It is left whole for the
+/// moment because the three share the selected-source state that would otherwise have to be threaded
+/// between them, and the filtering rules, which are the part with real logic, already live in
+/// <see cref="ChannelFilter"/> where they can be tested.
+/// </remarks>
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
     private readonly ILogger<MainViewModel> _logger;
-    private readonly List<Channel> _channels = [];
+    private readonly List<ChannelItemViewModel> _channels = [];
 
-    private PlaylistSource? _source;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
+    private NewSourceProtocol _newSourceProtocol = NewSourceProtocol.Xtream;
 
-    // Each field the Connect command guards on must re-evaluate that guard when it changes. Without
-    // NotifyCanExecuteChangedFor the generated command evaluates CanConnect once, at construction
-    // time when every field is still empty, and the button stays disabled no matter what is typed.
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
     private string _panelUrl = string.Empty;
@@ -42,20 +49,38 @@ public sealed partial class MainViewModel : ObservableObject
     private string _password = string.Empty;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
+    private string _playlistUrl = string.Empty;
+
+    [ObservableProperty]
     private string _status = "Add a subscription to begin.";
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RefreshCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveSourceCommand))]
     private bool _isBusy;
 
+    /// <summary>Whether the add-a-source form is showing instead of the channel list.</summary>
     [ObservableProperty]
-    private bool _hasSource;
+    private bool _isAddingSource = true;
 
     [ObservableProperty]
-    private string _channelFilter = string.Empty;
+    private PlaylistSource? _selectedSource;
 
     [ObservableProperty]
-    private Channel? _selectedChannel;
+    private CategoryChoice _selectedCategory = CategoryChoice.All;
+
+    [ObservableProperty]
+    private string _channelFilterText = string.Empty;
+
+    [ObservableProperty]
+    private bool _showFavoritesOnly;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PlaySelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleFavoriteCommand))]
+    private ChannelItemViewModel? _selectedChannel;
 
     [ObservableProperty]
     private string _nowPlaying = string.Empty;
@@ -72,26 +97,29 @@ public sealed partial class MainViewModel : ObservableObject
         _logger = logger;
 
         ChannelView = new CollectionViewSource { Source = _channels }.View;
-        ChannelView.Filter = MatchesFilter;
+        ChannelView.Filter = MatchesCurrentFilter;
 
         _session.StateChanged += OnPlaybackStateChanged;
     }
+
+    public ObservableCollection<PlaylistSource> Sources { get; } = [];
+
+    public ObservableCollection<CategoryChoice> Categories { get; } = [CategoryChoice.All];
 
     /// <summary>
     /// Filtered view over the loaded channels, and the only collection the UI binds to.
     /// </summary>
     /// <remarks>
     /// The backing store is a plain list, deliberately not an observable collection. A real
-    /// subscription lists tens of thousands of channels, and adding them one at a time to an
-    /// observable collection raises one change notification each — every one of them walked through
-    /// the view and the list box, freezing the UI thread for seconds. The list is replaced wholesale
-    /// and the view refreshed once, which is a single reset regardless of size. Virtualisation does
-    /// not help here: it governs rendering, not population.
+    /// subscription lists tens of thousands of channels, and adding them one at a time to an observable
+    /// collection raises one change notification each, freezing the UI thread for seconds. The list is
+    /// replaced wholesale and the view refreshed once. Virtualisation does not help here: it governs
+    /// rendering, not population.
     /// </remarks>
     public ICollectionView ChannelView { get; }
 
     /// <summary>
-    /// Loads an already configured source, so a restart lands straight in the channel list.
+    /// Loads the configured sources, so a restart lands straight in the channel list.
     /// </summary>
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
@@ -100,22 +128,60 @@ public sealed partial class MainViewModel : ObservableObject
 
         var sources = await context.GetSourcesAsync(cancellationToken).ConfigureAwait(true);
 
-        // Single-source for now; M2 introduces switching between several.
-        if (sources.Count == 0)
+        Sources.Clear();
+
+        foreach (var source in sources)
+        {
+            Sources.Add(source);
+        }
+
+        if (Sources.Count == 0)
         {
             return;
         }
 
-        _source = sources[0];
+        IsAddingSource = false;
 
-        HasSource = true;
-        PanelUrl = _source.Endpoint.AbsoluteUri;
-        await LoadChannelsFromStoreAsync(context, cancellationToken).ConfigureAwait(true);
+        // Assigning this triggers the catalogue load through OnSelectedSourceChanged.
+        SelectedSource = Sources[0];
     }
 
-    partial void OnChannelFilterChanged(string value)
+    /// <summary>
+    /// Hands the provider connection back before the window goes away.
+    /// </summary>
+    /// <remarks>
+    /// Not a command, because it is not a user action and must not be cancellable: a subscription
+    /// permitting a single connection is unusable for minutes if the player exits still holding one.
+    /// </remarks>
+    public async Task ShutdownAsync()
+    {
+        await _session.StopAsync(CancellationToken.None).ConfigureAwait(true);
+        NowPlaying = string.Empty;
+    }
+
+    partial void OnChannelFilterTextChanged(string value)
     {
         ChannelView.Refresh();
+    }
+
+    partial void OnSelectedCategoryChanged(CategoryChoice value)
+    {
+        ChannelView.Refresh();
+    }
+
+    partial void OnShowFavoritesOnlyChanged(bool value)
+    {
+        ChannelView.Refresh();
+    }
+
+    partial void OnSelectedSourceChanged(PlaylistSource? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        _ = LoadCatalogueAsync(value, CancellationToken.None);
     }
 
     [RelayCommand(CanExecute = nameof(CanConnect))]
@@ -125,20 +191,12 @@ public sealed partial class MainViewModel : ObservableObject
 
         try
         {
-            if (!Uri.TryCreate(PanelUrl, UriKind.Absolute, out var baseUrl))
+            var source = BuildNewSource();
+
+            if (source is null)
             {
-                Status = "That is not a valid address. Expected something like http://host:8080";
                 return;
             }
-
-            var source = new XtreamSource
-            {
-                Name = baseUrl.Host,
-                BaseUrl = baseUrl,
-                Username = Username,
-                Password = Password,
-                CreatedUtc = DateTimeOffset.UtcNow,
-            };
 
             Status = "Checking the subscription...";
             var provider = _providers.CreateProvider(source);
@@ -150,7 +208,7 @@ public sealed partial class MainViewModel : ObservableObject
                 return;
             }
 
-            Status = "Reading what the panel supports...";
+            Status = "Reading what the source supports...";
             source.Capabilities = await _providers.GetCapabilityProbe(source)
                 .ProbeAsync(source, cancellationToken)
                 .ConfigureAwait(true);
@@ -172,11 +230,14 @@ public sealed partial class MainViewModel : ObservableObject
                     cancellationToken)
                 .ConfigureAwait(true);
 
-            _source = source;
-            HasSource = true;
-            Password = string.Empty;
-
-            await LoadChannelsFromStoreAsync(context, cancellationToken).ConfigureAwait(true);
+            ClearNewSourceForm();
+            Sources.Add(source);
+            IsAddingSource = false;
+            SelectedSource = source;
+        }
+        catch (OperationCanceledException)
+        {
+            Status = "Cancelled.";
         }
         finally
         {
@@ -186,10 +247,152 @@ public sealed partial class MainViewModel : ObservableObject
 
     private bool CanConnect()
     {
-        return !IsBusy
-            && !string.IsNullOrWhiteSpace(PanelUrl)
-            && !string.IsNullOrWhiteSpace(Username)
-            && !string.IsNullOrWhiteSpace(Password);
+        if (IsBusy)
+        {
+            return false;
+        }
+
+        return NewSourceProtocol switch
+        {
+            NewSourceProtocol.Xtream => !string.IsNullOrWhiteSpace(PanelUrl)
+                && !string.IsNullOrWhiteSpace(Username)
+                && !string.IsNullOrWhiteSpace(Password),
+            NewSourceProtocol.M3uPlaylist => !string.IsNullOrWhiteSpace(PlaylistUrl),
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// Re-fetches the selected source's catalogue.
+    /// </summary>
+    /// <remarks>
+    /// Goes through the same reconciliation as the initial import, which is what preserves the user's
+    /// favourites while refreshing everything the provider owns.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanOperateOnSelectedSource))]
+    private async Task RefreshAsync(CancellationToken cancellationToken)
+    {
+        if (SelectedSource is not { } source)
+        {
+            return;
+        }
+
+        IsBusy = true;
+
+        try
+        {
+            Status = "Refreshing the catalogue...";
+
+            var provider = _providers.CreateProvider(source);
+            var categories = await provider.FetchCategoriesAsync(ContentKind.Live, cancellationToken)
+                .ConfigureAwait(true);
+            var channels = await provider.FetchLiveChannelsAsync(cancellationToken).ConfigureAwait(true);
+
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
+
+            await context.ReconcileLiveCatalogueAsync(
+                    source.Id,
+                    categories,
+                    channels,
+                    DateTimeOffset.UtcNow,
+                    cancellationToken)
+                .ConfigureAwait(true);
+
+            await LoadCatalogueAsync(source, cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            Status = "Refresh cancelled.";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanOperateOnSelectedSource))]
+    private async Task RemoveSourceAsync(CancellationToken cancellationToken)
+    {
+        if (SelectedSource is not { } source)
+        {
+            return;
+        }
+
+        IsBusy = true;
+
+        try
+        {
+            // Stopped first: the stream in flight belongs to the source about to disappear.
+            await _session.StopAsync(CancellationToken.None).ConfigureAwait(true);
+            NowPlaying = string.Empty;
+
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
+            await context.DeleteSourceAsync(source.Id, cancellationToken).ConfigureAwait(true);
+
+            Sources.Remove(source);
+            SelectedSource = Sources.Count > 0 ? Sources[0] : null;
+
+            if (SelectedSource is null)
+            {
+                _channels.Clear();
+                ChannelView.Refresh();
+                IsAddingSource = true;
+                Status = "Add a subscription to begin.";
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanOperateOnSelectedSource()
+    {
+        return !IsBusy && SelectedSource is not null;
+    }
+
+    [RelayCommand]
+    private void ShowAddSource()
+    {
+        ClearNewSourceForm();
+        IsAddingSource = true;
+    }
+
+    [RelayCommand]
+    private void CancelAddSource()
+    {
+        ClearNewSourceForm();
+
+        // Only dismissable when there is something to go back to.
+        IsAddingSource = Sources.Count == 0;
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelectedChannel))]
+    private async Task ToggleFavoriteAsync(CancellationToken cancellationToken)
+    {
+        if (SelectedChannel is not { } channel)
+        {
+            return;
+        }
+
+        channel.IsFavorite = !channel.IsFavorite;
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
+        await context.SetFavoriteAsync(channel.Id, channel.IsFavorite, cancellationToken).ConfigureAwait(true);
+
+        // Only the filtered view needs rebuilding, and only when the change can move the row out of it.
+        if (ShowFavoritesOnly)
+        {
+            ChannelView.Refresh();
+        }
+    }
+
+    private bool HasSelectedChannel()
+    {
+        return SelectedChannel is not null;
     }
 
     /// <remarks>
@@ -198,16 +401,16 @@ public sealed partial class MainViewModel : ObservableObject
     /// be silently ignored — and the playback session's supersession handling, which exists precisely
     /// to make rapid channel changes safe, would never be reachable from the UI.
     /// </remarks>
-    [RelayCommand(AllowConcurrentExecutions = true)]
+    [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(HasSelectedChannel))]
     private async Task PlaySelectedAsync(CancellationToken cancellationToken)
     {
-        if (SelectedChannel is null || _source is null)
+        if (SelectedChannel is not { } item || SelectedSource is not { } source)
         {
             return;
         }
 
-        var request = _providers.GetStreamUrlResolver(_source).ResolveLive(_source, SelectedChannel);
-        NowPlaying = SelectedChannel.Name;
+        var request = _providers.GetStreamUrlResolver(source).ResolveLive(source, item.Channel);
+        NowPlaying = item.Name;
 
         try
         {
@@ -216,8 +419,8 @@ public sealed partial class MainViewModel : ObservableObject
         catch (PlaybackFailedException exception)
         {
             // Expected in daily use: providers take channels offline without notice.
-            PlayerLog.ChannelUnplayable(_logger, exception, SelectedChannel.Name);
-            Status = $"{SelectedChannel.Name} could not be played. The channel may be offline.";
+            PlayerLog.ChannelUnplayable(_logger, exception, item.Name);
+            Status = $"{item.Name} could not be played. The channel may be offline.";
             NowPlaying = string.Empty;
         }
         catch (OperationCanceledException)
@@ -235,55 +438,130 @@ public sealed partial class MainViewModel : ObservableObject
         NowPlaying = string.Empty;
     }
 
-    /// <summary>
-    /// Hands the provider connection back before the window goes away.
-    /// </summary>
-    /// <remarks>
-    /// Not a command, because it is not a user action and must not be cancellable: a subscription
-    /// permitting a single connection is unusable for minutes if the player exits still holding one.
-    /// </remarks>
-    public async Task ShutdownAsync()
-    {
-        await _session.StopAsync(CancellationToken.None).ConfigureAwait(true);
-        NowPlaying = string.Empty;
-    }
-
     private static string DescribeUnusableAccount(ProviderAccount account)
     {
         return account.Status switch
         {
-            AccountStatus.AuthenticationFailed => "The panel rejected these credentials.",
+            AccountStatus.AuthenticationFailed =>
+                "The source rejected these details, or its playlist could not be retrieved.",
             AccountStatus.Expired => "This subscription has expired.",
             AccountStatus.Banned => "This subscription has been disabled by the provider.",
-            _ => "The panel replied, but reported a status this player does not recognise.",
+            _ => "The source replied, but reported a status this player does not recognise.",
         };
     }
 
-    private async Task LoadChannelsFromStoreAsync(LtrDbContext context, CancellationToken cancellationToken)
+    private PlaylistSource? BuildNewSource()
     {
-        if (_source is null)
+        if (NewSourceProtocol == NewSourceProtocol.M3uPlaylist)
         {
-            return;
+            if (!TryParseSourceAddress(PlaylistUrl, out var playlistUrl))
+            {
+                Status = "That is not a valid playlist address. Expected a URL or a file path.";
+                return null;
+            }
+
+            return new M3uSource
+            {
+                Name = DescribeAddress(playlistUrl),
+                PlaylistUrl = playlistUrl,
+                CreatedUtc = DateTimeOffset.UtcNow,
+            };
         }
 
-        var stored = await context.GetLiveChannelsAsync(_source.Id, cancellationToken).ConfigureAwait(true);
+        if (!Uri.TryCreate(PanelUrl.Trim(), UriKind.Absolute, out var baseUrl))
+        {
+            Status = "That is not a valid address. Expected something like http://host:8080";
+            return null;
+        }
 
-        _channels.Clear();
-        _channels.AddRange(stored);
-        ChannelView.Refresh();
-
-        Status = $"{_channels.Count} channels. Pick one to start playback.";
+        return new XtreamSource
+        {
+            Name = baseUrl.Host,
+            BaseUrl = baseUrl,
+            Username = Username.Trim(),
+            Password = Password,
+            CreatedUtc = DateTimeOffset.UtcNow,
+        };
     }
 
-    private bool MatchesFilter(object item)
+    /// <summary>
+    /// Accepts either a URL or a local path, since a playlist arrives as both.
+    /// </summary>
+    private static bool TryParseSourceAddress(string value, out Uri address)
     {
-        if (string.IsNullOrWhiteSpace(ChannelFilter))
+        var trimmed = value.Trim();
+
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed))
         {
+            address = parsed;
             return true;
         }
 
-        return item is Channel channel
-            && channel.Name.Contains(ChannelFilter, StringComparison.OrdinalIgnoreCase);
+        // A bare Windows path is not an absolute URI, but it is what a user pastes.
+        if (Path.IsPathFullyQualified(trimmed) && File.Exists(trimmed))
+        {
+            address = new Uri(trimmed);
+            return true;
+        }
+
+        address = null!;
+        return false;
+    }
+
+    private static string DescribeAddress(Uri address)
+    {
+        return address.IsFile ? Path.GetFileName(address.LocalPath) : address.Host;
+    }
+
+    private void ClearNewSourceForm()
+    {
+        PanelUrl = string.Empty;
+        Username = string.Empty;
+        Password = string.Empty;
+        PlaylistUrl = string.Empty;
+    }
+
+    private async Task LoadCatalogueAsync(PlaylistSource source, CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
+
+        var storedChannels = await context.GetLiveChannelsAsync(source.Id, cancellationToken)
+            .ConfigureAwait(true);
+        var storedCategories = await context.GetLiveCategoriesAsync(source.Id, cancellationToken)
+            .ConfigureAwait(true);
+
+        _channels.Clear();
+        _channels.AddRange(storedChannels.Select(channel => new ChannelItemViewModel(channel)));
+
+        Categories.Clear();
+        Categories.Add(CategoryChoice.All);
+
+        foreach (var category in storedCategories)
+        {
+            Categories.Add(new CategoryChoice(category.Name, category.ExternalId));
+        }
+
+        // Reset rather than preserved: a category from the previous source means nothing here.
+        SelectedCategory = CategoryChoice.All;
+        ChannelView.Refresh();
+
+        var favorites = _channels.Count(channel => channel.IsFavorite);
+
+        Status = favorites > 0
+            ? $"{_channels.Count} channels, {favorites} favourites."
+            : $"{_channels.Count} channels. Pick one to start playback.";
+    }
+
+    private bool MatchesCurrentFilter(object item)
+    {
+        if (item is not ChannelItemViewModel channel)
+        {
+            return false;
+        }
+
+        var filter = new ChannelFilter(ChannelFilterText, SelectedCategory?.ExternalId, ShowFavoritesOnly);
+        return filter.Matches(channel.Channel);
     }
 
     private void OnPlaybackStateChanged(object? sender, PlaybackStateChangedEventArgs e)
