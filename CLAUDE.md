@@ -21,7 +21,9 @@ LTR.Playback[.Abstractions]    Engine-neutral playback policy
 LTR.Playback.LibVlc            LibVLC engine
 LTR.Security.Dpapi             Windows credential protection, kept out of Core on purpose
 LTR.Cli                        Headless verification of everything below the UI (§2.12)
-LTR.Player.Wpf                 The only project that references WPF
+LTR.Player.Wpf                 The only project that references WPF. MainViewModel composes
+                               SourceManagementViewModel and ChannelListViewModel and is their
+                               ISourceCoordinator; the two halves never reference each other
 ```
 
 Dependency direction: apps → Catalogue/Providers/Playback → *.Abstractions → Core. Core knows nobody.
@@ -56,7 +58,9 @@ strip `FR: ` and `HD`/`FHD`/`4K` but keep `+1`, which is a different channel.
   window over the WPF tree; a sibling element is invisible behind the video.
 - **Every command guard needs `[NotifyCanExecuteChangedFor]` on every property it reads.** Three
   defects came from omitting it. Note that `CanExecute` invokes the guard directly and therefore passes
-  even with the bug — tests must assert the *notification*.
+  even with the bug — tests must assert the *notification*. The attribute cannot cross an object
+  boundary: `PlaySelectedCommand` lives on `MainViewModel` and guards on `ChannelListViewModel`'s
+  selection, so that one notification is wired by hand from a `PropertyChanged` subscription.
 - **`InvariantGlobalization` must stay off.** WPF's binding engine throws from
   `XmlLanguage.GetSpecificCulture` without culture data, and every binding in the window fails while it
   still looks fine.

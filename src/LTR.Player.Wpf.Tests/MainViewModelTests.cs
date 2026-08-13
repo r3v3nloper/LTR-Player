@@ -13,6 +13,12 @@ namespace LTR.Player.Wpf;
 /// Connect stayed disabled whatever was typed, Refresh and Remove stayed disabled once a source existed,
 /// and a filter refresh silently dropped the selection. None of that is presentation — it is logic with
 /// no test behind it, found by a person looking at a window.
+/// <para>
+/// Everything is exercised through the composed <see cref="MainViewModel"/> rather than through the two
+/// halves on their own. The coordination between them — a selection loading a catalogue, a removal
+/// releasing the stream first, a guard notified across an object boundary — is where this class earns
+/// its keep, and only the composition has it.
+/// </para>
 /// </remarks>
 public sealed class MainViewModelTests
 {
@@ -24,16 +30,16 @@ public sealed class MainViewModelTests
         var viewModel = context.Build();
 
         // Act & Assert: each field in turn, because the guard reads all three.
-        viewModel.ConnectCommand.CanExecute(null).ShouldBeFalse("nothing entered yet");
+        viewModel.SourceManagement.ConnectCommand.CanExecute(null).ShouldBeFalse("nothing entered yet");
 
-        viewModel.PanelUrl = "http://panel.example:8080";
-        viewModel.ConnectCommand.CanExecute(null).ShouldBeFalse("no username yet");
+        viewModel.SourceManagement.PanelUrl = "http://panel.example:8080";
+        viewModel.SourceManagement.ConnectCommand.CanExecute(null).ShouldBeFalse("no username yet");
 
-        viewModel.Username = "alice";
-        viewModel.ConnectCommand.CanExecute(null).ShouldBeFalse("no password yet");
+        viewModel.SourceManagement.Username = "alice";
+        viewModel.SourceManagement.ConnectCommand.CanExecute(null).ShouldBeFalse("no password yet");
 
-        viewModel.Password = "s3cret";
-        viewModel.ConnectCommand.CanExecute(null).ShouldBeTrue();
+        viewModel.SourceManagement.Password = "s3cret";
+        viewModel.SourceManagement.ConnectCommand.CanExecute(null).ShouldBeTrue();
     }
 
     /// <remarks>
@@ -44,11 +50,11 @@ public sealed class MainViewModelTests
     /// it had at construction time.
     /// </remarks>
     [Theory]
-    [InlineData(nameof(MainViewModel.PanelUrl))]
-    [InlineData(nameof(MainViewModel.Username))]
-    [InlineData(nameof(MainViewModel.Password))]
-    [InlineData(nameof(MainViewModel.PlaylistUrl))]
-    [InlineData(nameof(MainViewModel.NewSourceProtocol))]
+    [InlineData(nameof(SourceManagementViewModel.PanelUrl))]
+    [InlineData(nameof(SourceManagementViewModel.Username))]
+    [InlineData(nameof(SourceManagementViewModel.Password))]
+    [InlineData(nameof(SourceManagementViewModel.PlaylistUrl))]
+    [InlineData(nameof(SourceManagementViewModel.NewSourceProtocol))]
     public void ConnectCommand_AnnouncesThatItsGuardChanged_WhenAFieldItReadsChanges(string propertyName)
     {
         // Arrange
@@ -56,7 +62,7 @@ public sealed class MainViewModelTests
         var viewModel = context.Build();
 
         var announcements = 0;
-        viewModel.ConnectCommand.CanExecuteChanged += (_, _) => announcements++;
+        viewModel.SourceManagement.ConnectCommand.CanExecuteChanged += (_, _) => announcements++;
 
         // Act
         SetProperty(viewModel, propertyName);
@@ -75,8 +81,8 @@ public sealed class MainViewModelTests
 
         var refreshAnnouncements = 0;
         var removeAnnouncements = 0;
-        viewModel.RefreshCommand.CanExecuteChanged += (_, _) => refreshAnnouncements++;
-        viewModel.RemoveSourceCommand.CanExecuteChanged += (_, _) => removeAnnouncements++;
+        viewModel.SourceManagement.RefreshCommand.CanExecuteChanged += (_, _) => refreshAnnouncements++;
+        viewModel.SourceManagement.RemoveSourceCommand.CanExecuteChanged += (_, _) => removeAnnouncements++;
 
         // Act
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
@@ -100,10 +106,10 @@ public sealed class MainViewModelTests
         var playAnnouncements = 0;
         var favouriteAnnouncements = 0;
         viewModel.PlaySelectedCommand.CanExecuteChanged += (_, _) => playAnnouncements++;
-        viewModel.ToggleFavoriteCommand.CanExecuteChanged += (_, _) => favouriteAnnouncements++;
+        viewModel.Channels.ToggleFavoriteCommand.CanExecuteChanged += (_, _) => favouriteAnnouncements++;
 
         // Act
-        viewModel.SelectedChannel = viewModel.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
 
         // Assert
         playAnnouncements.ShouldBeGreaterThan(0);
@@ -114,24 +120,24 @@ public sealed class MainViewModelTests
     {
         switch (propertyName)
         {
-            case nameof(MainViewModel.PanelUrl):
-                viewModel.PanelUrl = "http://panel.example:8080";
+            case nameof(SourceManagementViewModel.PanelUrl):
+                viewModel.SourceManagement.PanelUrl = "http://panel.example:8080";
                 break;
 
-            case nameof(MainViewModel.Username):
-                viewModel.Username = "alice";
+            case nameof(SourceManagementViewModel.Username):
+                viewModel.SourceManagement.Username = "alice";
                 break;
 
-            case nameof(MainViewModel.Password):
-                viewModel.Password = "s3cret";
+            case nameof(SourceManagementViewModel.Password):
+                viewModel.SourceManagement.Password = "s3cret";
                 break;
 
-            case nameof(MainViewModel.PlaylistUrl):
-                viewModel.PlaylistUrl = "http://host/list.m3u";
+            case nameof(SourceManagementViewModel.PlaylistUrl):
+                viewModel.SourceManagement.PlaylistUrl = "http://host/list.m3u";
                 break;
 
-            case nameof(MainViewModel.NewSourceProtocol):
-                viewModel.NewSourceProtocol = NewSourceProtocol.M3uPlaylist;
+            case nameof(SourceManagementViewModel.NewSourceProtocol):
+                viewModel.SourceManagement.NewSourceProtocol = NewSourceProtocol.M3uPlaylist;
                 break;
 
             default:
@@ -147,11 +153,11 @@ public sealed class MainViewModelTests
         var viewModel = context.Build();
 
         // Act
-        viewModel.NewSourceProtocol = NewSourceProtocol.M3uPlaylist;
-        viewModel.PlaylistUrl = "http://host/list.m3u";
+        viewModel.SourceManagement.NewSourceProtocol = NewSourceProtocol.M3uPlaylist;
+        viewModel.SourceManagement.PlaylistUrl = "http://host/list.m3u";
 
         // Assert
-        viewModel.ConnectCommand.CanExecute(null).ShouldBeTrue();
+        viewModel.SourceManagement.ConnectCommand.CanExecute(null).ShouldBeTrue();
     }
 
     [Fact]
@@ -162,16 +168,16 @@ public sealed class MainViewModelTests
         var context = new TestContextBuilder();
         var viewModel = context.Build();
 
-        viewModel.PanelUrl = "http://panel.example:8080";
-        viewModel.Username = "alice";
-        viewModel.Password = "s3cret";
-        viewModel.ConnectCommand.CanExecute(null).ShouldBeTrue();
+        viewModel.SourceManagement.PanelUrl = "http://panel.example:8080";
+        viewModel.SourceManagement.Username = "alice";
+        viewModel.SourceManagement.Password = "s3cret";
+        viewModel.SourceManagement.ConnectCommand.CanExecute(null).ShouldBeTrue();
 
         // Act
-        viewModel.NewSourceProtocol = NewSourceProtocol.M3uPlaylist;
+        viewModel.SourceManagement.NewSourceProtocol = NewSourceProtocol.M3uPlaylist;
 
         // Assert
-        viewModel.ConnectCommand.CanExecute(null).ShouldBeFalse();
+        viewModel.SourceManagement.ConnectCommand.CanExecute(null).ShouldBeFalse();
     }
 
     [Fact]
@@ -183,15 +189,15 @@ public sealed class MainViewModelTests
         context.Store.Sources.Add(CreateSource(id: 1));
         var viewModel = context.Build();
 
-        viewModel.RefreshCommand.CanExecute(null).ShouldBeFalse("no source selected before loading");
+        viewModel.SourceManagement.RefreshCommand.CanExecute(null).ShouldBeFalse("no source selected before loading");
 
         // Act
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        viewModel.SelectedSource.ShouldNotBeNull();
-        viewModel.RefreshCommand.CanExecute(null).ShouldBeTrue();
-        viewModel.RemoveSourceCommand.CanExecute(null).ShouldBeTrue();
+        viewModel.SourceManagement.SelectedSource.ShouldNotBeNull();
+        viewModel.SourceManagement.RefreshCommand.CanExecute(null).ShouldBeTrue();
+        viewModel.SourceManagement.RemoveSourceCommand.CanExecute(null).ShouldBeTrue();
     }
 
     [Fact]
@@ -205,7 +211,7 @@ public sealed class MainViewModelTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        viewModel.IsAddingSource.ShouldBeTrue();
+        viewModel.SourceManagement.IsAddingSource.ShouldBeTrue();
     }
 
     [Fact]
@@ -223,9 +229,9 @@ public sealed class MainViewModelTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        viewModel.IsAddingSource.ShouldBeFalse();
-        viewModel.ChannelView.Cast<ChannelItemViewModel>().Count().ShouldBe(1);
-        viewModel.Categories.Count.ShouldBe(2, "the all-categories entry plus the stored one");
+        viewModel.SourceManagement.IsAddingSource.ShouldBeFalse();
+        viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().Count().ShouldBe(1);
+        viewModel.Channels.Categories.Count.ShouldBe(2, "the all-categories entry plus the stored one");
     }
 
     [Fact]
@@ -241,16 +247,16 @@ public sealed class MainViewModelTests
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
-        viewModel.SelectedChannel = viewModel.ChannelView.Cast<ChannelItemViewModel>()
+        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>()
             .Single(channel => channel.Name == "FR: TF1 HD");
 
         // Act
-        viewModel.ChannelFilterText = "tf1";
+        viewModel.Channels.ChannelFilterText = "tf1";
 
         // Assert
-        viewModel.SelectedChannel.ShouldNotBeNull();
-        viewModel.SelectedChannel.Name.ShouldBe("FR: TF1 HD");
-        viewModel.ToggleFavoriteCommand.CanExecute(null).ShouldBeTrue();
+        viewModel.Channels.SelectedChannel.ShouldNotBeNull();
+        viewModel.Channels.SelectedChannel.Name.ShouldBe("FR: TF1 HD");
+        viewModel.Channels.ToggleFavoriteCommand.CanExecute(null).ShouldBeTrue();
     }
 
     [Fact]
@@ -263,13 +269,13 @@ public sealed class MainViewModelTests
 
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
-        viewModel.SelectedChannel = viewModel.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
 
         // Act
-        viewModel.ChannelFilterText = "zdf";
+        viewModel.Channels.ChannelFilterText = "zdf";
 
         // Assert
-        viewModel.ChannelView.Cast<ChannelItemViewModel>().ShouldBeEmpty();
+        viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().ShouldBeEmpty();
     }
 
     [Fact]
@@ -287,11 +293,12 @@ public sealed class MainViewModelTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Act
-        viewModel.SelectedCategory = viewModel.Categories.Single(category => category.ExternalId == "10");
-        viewModel.ChannelFilterText = "tf1";
+        viewModel.Channels.SelectedCategory = viewModel.Channels.Categories
+            .Single(category => category.ExternalId == "10");
+        viewModel.Channels.ChannelFilterText = "tf1";
 
         // Assert
-        var visible = viewModel.ChannelView.Cast<ChannelItemViewModel>().ToList();
+        var visible = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().ToList();
         visible.ShouldHaveSingleItem().Name.ShouldBe("FR: TF1 HD");
     }
 
@@ -305,13 +312,13 @@ public sealed class MainViewModelTests
 
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
-        viewModel.SelectedChannel = viewModel.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
 
         // Act
-        await viewModel.ToggleFavoriteCommand.ExecuteAsync(null);
+        await viewModel.Channels.ToggleFavoriteCommand.ExecuteAsync(null);
 
         // Assert
-        viewModel.SelectedChannel.IsFavorite.ShouldBeTrue();
+        viewModel.Channels.SelectedChannel.IsFavorite.ShouldBeTrue();
         context.Store.FavoriteWrites.ShouldHaveSingleItem().ShouldBe((10, true));
     }
 
@@ -328,10 +335,10 @@ public sealed class MainViewModelTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Act
-        viewModel.ShowFavoritesOnly = true;
+        viewModel.Channels.ShowFavoritesOnly = true;
 
         // Assert
-        viewModel.ChannelView.Cast<ChannelItemViewModel>()
+        viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>()
             .ShouldHaveSingleItem()
             .Name.ShouldBe("Favourite");
     }
@@ -348,12 +355,12 @@ public sealed class MainViewModelTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Act
-        await viewModel.RemoveSourceCommand.ExecuteAsync(null);
+        await viewModel.SourceManagement.RemoveSourceCommand.ExecuteAsync(null);
 
         // Assert
         context.Session.StopCount.ShouldBeGreaterThan(0);
         context.Store.DeletedSourceIds.ShouldContain(1);
-        viewModel.IsAddingSource.ShouldBeTrue("with no sources left there is nothing to show");
+        viewModel.SourceManagement.IsAddingSource.ShouldBeTrue("with no sources left there is nothing to show");
     }
 
     [Fact]
@@ -364,17 +371,17 @@ public sealed class MainViewModelTests
         context.Import.Account = ProviderAccount.Unauthenticated;
         var viewModel = context.Build();
 
-        viewModel.PanelUrl = "http://panel.example:8080";
-        viewModel.Username = "alice";
-        viewModel.Password = "wrong";
+        viewModel.SourceManagement.PanelUrl = "http://panel.example:8080";
+        viewModel.SourceManagement.Username = "alice";
+        viewModel.SourceManagement.Password = "wrong";
 
         // Act
-        await viewModel.ConnectCommand.ExecuteAsync(null);
+        await viewModel.SourceManagement.ConnectCommand.ExecuteAsync(null);
 
         // Assert
-        viewModel.IsAddingSource.ShouldBeTrue();
-        viewModel.Status.ShouldContain("rejected");
-        viewModel.Sources.ShouldBeEmpty();
+        viewModel.SourceManagement.IsAddingSource.ShouldBeTrue();
+        viewModel.Status.Text.ShouldContain("rejected");
+        viewModel.SourceManagement.Sources.ShouldBeEmpty();
     }
 
     [Fact]
@@ -384,15 +391,15 @@ public sealed class MainViewModelTests
         var context = new TestContextBuilder();
         var viewModel = context.Build();
 
-        viewModel.PanelUrl = "panel.example:8080";
-        viewModel.Username = "alice";
-        viewModel.Password = "s3cret";
+        viewModel.SourceManagement.PanelUrl = "panel.example:8080";
+        viewModel.SourceManagement.Username = "alice";
+        viewModel.SourceManagement.Password = "s3cret";
 
         // Act
-        await viewModel.ConnectCommand.ExecuteAsync(null);
+        await viewModel.SourceManagement.ConnectCommand.ExecuteAsync(null);
 
         // Assert
-        viewModel.Status.ShouldContain("http://");
+        viewModel.Status.Text.ShouldContain("http://");
         context.Import.Imported.ShouldBeEmpty();
     }
 
@@ -406,7 +413,7 @@ public sealed class MainViewModelTests
 
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
-        viewModel.SelectedChannel = viewModel.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
 
         // Act
         await viewModel.PlaySelectedCommand.ExecuteAsync(null);
@@ -428,7 +435,7 @@ public sealed class MainViewModelTests
 
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
-        viewModel.SelectedChannel = viewModel.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
 
         // Act
         var act = async () => await viewModel.PlaySelectedCommand.ExecuteAsync(null);
@@ -494,9 +501,13 @@ public sealed class MainViewModelTests
 
         public MainViewModel Build()
         {
+            // One status line for all three, exactly as the container hands it out.
+            var status = new StatusLine();
+
             return new MainViewModel(
-                Store,
-                Import,
+                new SourceManagementViewModel(Store, Import, status, NullLogger<SourceManagementViewModel>.Instance),
+                new ChannelListViewModel(Store, status, NullLogger<ChannelListViewModel>.Instance),
+                status,
                 new StubProviderRegistry(),
                 Session,
                 NullLogger<MainViewModel>.Instance);

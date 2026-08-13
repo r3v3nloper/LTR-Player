@@ -28,8 +28,13 @@
 
       <TextBlock Grid.Row="0" Text="LTR-Player" FontSize="18" FontWeight="SemiBold" />
 
-      <!-- Source picker, hidden while the add form is up -->
+      <!--
+        Source picker, hidden while the add form is up. The two source-management blocks narrow the
+        data context once instead of prefixing every binding; the channel list below cannot, because
+        its own visibility is decided by source management.
+      -->
       <Grid Grid.Row="1" Margin="0,14,0,0"
+            DataContext="{Binding SourceManagement}"
             Visibility="{Binding IsAddingSource, Converter={StaticResource InverseBooleanToVisibility}}">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*" />
@@ -59,6 +64,7 @@
 
       <!-- Add a source -->
       <StackPanel Grid.Row="2" VerticalAlignment="Top" Margin="0,16,0,0"
+                  DataContext="{Binding SourceManagement}"
                   Visibility="{Binding IsAddingSource, Converter={StaticResource BooleanToVisibility}}">
         <TextBlock Text="Subscription type" Style="{StaticResource FieldLabel}" />
         <StackPanel Orientation="Horizontal">
@@ -104,7 +110,8 @@
 
       <!-- Channel list -->
       <Grid Grid.Row="2" Margin="0,14,0,0"
-            Visibility="{Binding IsAddingSource, Converter={StaticResource InverseBooleanToVisibility}}">
+            Visibility="{Binding SourceManagement.IsAddingSource,
+                                 Converter={StaticResource InverseBooleanToVisibility}}">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
@@ -113,8 +120,8 @@
         </Grid.RowDefinitions>
 
         <ComboBox Grid.Row="0"
-                  ItemsSource="{Binding Categories}"
-                  SelectedItem="{Binding SelectedCategory}">
+                  ItemsSource="{Binding Channels.Categories}"
+                  SelectedItem="{Binding Channels.SelectedCategory}">
           <ComboBox.ItemTemplate>
             <DataTemplate>
               <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
@@ -123,19 +130,19 @@
         </ComboBox>
 
         <TextBox Grid.Row="1"
-                 Text="{Binding ChannelFilterText, UpdateSourceTrigger=PropertyChanged, Delay=200}"
+                 Text="{Binding Channels.ChannelFilterText, UpdateSourceTrigger=PropertyChanged, Delay=200}"
                  Margin="0,8,0,0" />
 
         <CheckBox Grid.Row="2"
                   Content="Favourites only"
                   Foreground="{StaticResource MutedTextBrush}"
                   Margin="0,10,0,8"
-                  IsChecked="{Binding ShowFavoritesOnly}" />
+                  IsChecked="{Binding Channels.ShowFavoritesOnly}" />
 
         <!-- Virtualised and recycling: a subscription can list tens of thousands of channels. -->
         <ListBox Grid.Row="3"
-                 ItemsSource="{Binding ChannelView}"
-                 SelectedItem="{Binding SelectedChannel}"
+                 ItemsSource="{Binding Channels.ChannelView}"
+                 SelectedItem="{Binding Channels.SelectedChannel}"
                  ItemContainerStyle="{StaticResource ChannelItem}"
                  Background="Transparent"
                  BorderThickness="0"
@@ -167,11 +174,12 @@
 
       <StackPanel Grid.Row="3" Margin="0,12,0,0">
         <Button Content="Toggle favourite"
-                Command="{Binding ToggleFavoriteCommand}"
+                Command="{Binding Channels.ToggleFavoriteCommand}"
                 HorizontalAlignment="Stretch"
                 Background="{StaticResource BorderBrush}"
-                Visibility="{Binding IsAddingSource, Converter={StaticResource InverseBooleanToVisibility}}" />
-        <TextBlock Text="{Binding Status}"
+                Visibility="{Binding SourceManagement.IsAddingSource,
+                                     Converter={StaticResource InverseBooleanToVisibility}}" />
+        <TextBlock Text="{Binding Status.Text}"
                    Style="{StaticResource MutedText}"
                    TextWrapping="Wrap"
                    Margin="0,10,0,0" />

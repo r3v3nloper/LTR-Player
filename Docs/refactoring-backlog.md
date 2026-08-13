@@ -1,53 +1,34 @@
 # Refactoring backlog
 
-Reviewed after M2. Ranks 1–6 are done and committed; what follows is what remains, in the order it
-was prioritised — most valuable per unit of effort first.
+Reviewed after M2. Ranks 1–7 are done; what follows is what remains, in the order it was prioritised —
+most valuable per unit of effort first.
 
-Ranking rule: criticality against effort. Rank 7 is next not because it is urgent but because M3
-(EPG) attaches to exactly the class it splits, and doing it afterwards costs more.
+Ranking rule: criticality against effort.
 
 ---
 
-## Rank 7 — Split MainViewModel
+## Rank 7 — Split MainViewModel · done
 
-**Project:** LTR.Player.Wpf · **Area:** Maintainability · **Criticality:** major · **Effort:** high
+`MainViewModel` became four types: `SourceManagementViewModel`, `ChannelListViewModel`, a `StatusLine`
+shared by all three, and a `MainViewModel` that composes them and owns playback.
 
-`MainViewModel` (~500 lines) carries three responsibilities and says so in its own documentation:
-managing sources, presenting the channel list, and playback.
+What the split settled, and is worth knowing before touching it again:
 
-Proposed split:
+- The two halves do not know each other. `MainViewModel` implements `ISourceCoordinator`, which is how
+  source management gets a catalogue on screen and a stream released without holding a reference to
+  either. Its two methods are awaitable rather than events on purpose: `RefreshAsync` has to keep
+  `IsBusy` raised until the rebuilt list is showing, and an event handler cannot be awaited.
+- The status line is an object, not a property. All three halves write to it, and forwarding one
+  property through two owners would have been worse.
+- `IsBusy` turned out to belong entirely to source management — nothing else reads it, and no binding
+  ever did.
+- `PlaySelectedCommand` stayed on `MainViewModel` while the selection it guards on moved to the channel
+  list. `[NotifyCanExecuteChangedFor]` cannot cross an object boundary, so `MainViewModel` subscribes to
+  the channel list's `PropertyChanged` and notifies the command by hand. Removing that subscription
+  fails exactly one test, which was verified rather than assumed.
 
-| New class | Owns |
-|---|---|
-| `SourceManagementViewModel` | `Sources`, `SelectedSource`, the add-source form fields, Connect / Refresh / Remove / ShowAddSource / CancelAddSource |
-| `ChannelListViewModel` | `ChannelView`, the backing channel list, category and text filters, favourites-only, `SelectedChannel`, ToggleFavorite |
-| `MainViewModel` | Composes the two, owns playback (`NowPlaying`, PlaySelected, Stop) and the status line |
-
-Coordination that has to survive the split:
-
-- A change of `SelectedSource` must load that source's catalogue into the channel list. Today this
-  happens through `OnSelectedSourceChanged`. Afterwards it wants to be an event the parent subscribes
-  to, not a direct reference from one child to the other.
-- Removing a source must stop playback **first** — the stream in flight belongs to the source about to
-  disappear.
-- `IsBusy` currently guards several commands at once and is read by both halves.
-
-Also required:
-
-- `MainWindow.xaml` bindings become nested paths (`Sources.SelectedSource`, `Channels.ChannelView`, …).
-- The 23 tests in `LTR.Player.Wpf.Tests` must keep passing, adjusted for the new structure. They are
-  the safety net for this change and the reason it is now much safer than it was before M2's review.
-
-Do not lose these, all of which exist because something went wrong once:
-
-- Every command guard needs `[NotifyCanExecuteChangedFor]` on **every** property it reads. Three
-  shipped defects came from omitting it. `MainViewModelTests` asserts the notification, not just
-  `CanExecute` — `CanExecute` invokes the guard directly and passes even when the bug is present.
-- `RefreshChannelView` rebuilds the filter once and restores the selection. Both matter: building the
-  filter per row allocated once per channel per keystroke, and a collection-view reset drops the
-  list box selection.
-- `PlaySelectedCommand` needs `AllowConcurrentExecutions = true`, or zapping away from a slow channel
-  is silently ignored and `PlaybackSession`'s supersession handling becomes unreachable.
+Rank 10 splits `MainWindow.xaml` along the same seam; the source-management markup already narrows its
+data context in one place, so it lifts out as a `UserControl` without further change.
 
 ---
 

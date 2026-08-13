@@ -78,6 +78,9 @@ public partial class App : Application
         services.AddM3uProvider();
         services.AddLibVlcPlayback();
 
+        services.AddSingleton<StatusLine>();
+        services.AddSingleton<SourceManagementViewModel>();
+        services.AddSingleton<ChannelListViewModel>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 

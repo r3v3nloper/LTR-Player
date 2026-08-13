@@ -92,7 +92,7 @@ public partial class MainWindow : Window
     /// </remarks>
     private void OnPasswordChanged(object sender, RoutedEventArgs e)
     {
-        _viewModel.Password = PasswordInput.Password;
+        _viewModel.SourceManagement.Password = PasswordInput.Password;
     }
 
     private void OnChannelActivated(object sender, System.Windows.Input.MouseButtonEventArgs e)
