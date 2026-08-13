@@ -35,6 +35,15 @@ public interface ICatalogueStore
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Which guide channel each of a source's channels is matched to.
+    /// </summary>
+    /// <remarks>
+    /// Read from the store rather than from a <see cref="Channel"/> already in hand, because the link is
+    /// written by a guide import that runs long after the channel list was loaded.
+    /// </remarks>
+    Task<IReadOnlyDictionary<int, int>> GetGuideLinksAsync(int sourceId, CancellationToken cancellationToken);
+
+    /// <summary>
     /// The programmes of specific guide channels that overlap a time window, which is what a timeline
     /// draws.
     /// </summary>

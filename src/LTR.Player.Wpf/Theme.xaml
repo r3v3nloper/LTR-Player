@@ -19,6 +19,15 @@
   <SolidColorBrush x:Key="AccentBrush" Color="#4C8DFF" />
   <SolidColorBrush x:Key="FavoriteBrush" Color="#F0C24B" />
 
+  <!--
+    Selection is a dark tint with an accent edge, not a fill of the accent colour. A channel row carries
+    three levels of text — name, what is on now, what follows — and two of them are deliberately dim; on a
+    saturated blue fill the dim ones become unreadable, which is what the accent fill did. Tinting keeps
+    every level of the row as legible selected as unselected.
+  -->
+  <SolidColorBrush x:Key="SelectionBrush" Color="#25344F" />
+  <SolidColorBrush x:Key="HoverBrush" Color="#232833" />
+
   <Style TargetType="TextBlock">
     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
     <Setter Property="FontSize" Value="13" />
@@ -189,17 +198,47 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ListBoxItem">
-          <Border x:Name="Root" Background="Transparent" Padding="{TemplateBinding Padding}">
+          <!-- The accent lives in a left edge rather than in the fill, so the row's dimmer lines stay
+               readable while the selection is still unmistakable. -->
+          <Border x:Name="Root"
+                  Background="Transparent"
+                  BorderBrush="Transparent"
+                  BorderThickness="3,0,0,0"
+                  Padding="{TemplateBinding Padding}">
             <ContentPresenter />
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="Root" Property="Background" Value="#232833" />
+              <Setter TargetName="Root" Property="Background" Value="{StaticResource HoverBrush}" />
             </Trigger>
             <Trigger Property="IsSelected" Value="True">
-              <Setter TargetName="Root" Property="Background" Value="{StaticResource AccentBrush}" />
+              <Setter TargetName="Root" Property="Background" Value="{StaticResource SelectionBrush}" />
+              <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
             </Trigger>
           </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!--
+    ToolTip is retemplated for the same reason ComboBox is. The default template paints a light system
+    background, and the implicit TextBlock style above paints text light — so every tooltip in the window
+    was light grey on near-white and could not be read at all.
+  -->
+  <Style TargetType="ToolTip">
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="HasDropShadow" Value="False" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ToolTip">
+          <Border Background="{StaticResource SurfaceBrush}"
+                  BorderBrush="{StaticResource BorderBrush}"
+                  BorderThickness="1"
+                  CornerRadius="3"
+                  Padding="9,6">
+            <ContentPresenter />
+          </Border>
         </ControlTemplate>
       </Setter.Value>
     </Setter>

@@ -24,6 +24,16 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
 
     public List<EpgEntry> Programmes { get; } = [];
 
+    /// <summary>
+    /// Channel identity to guide channel identity, as the database holds it.
+    /// </summary>
+    /// <remarks>
+    /// Kept here rather than on the <see cref="Channel"/> instances on purpose, because that is the
+    /// distinction that matters: a guide import writes this long after the channel list was loaded, so a
+    /// channel object in the view layer is stale and anything reading its link is wrong.
+    /// </remarks>
+    public Dictionary<int, int> GuideLinks { get; } = [];
+
     public Task<IReadOnlyList<PlaylistSource>> GetSourcesAsync(CancellationToken cancellationToken)
     {
         return Task.FromResult<IReadOnlyList<PlaylistSource>>(Sources);
@@ -56,10 +66,10 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
     {
         var slices = new List<ChannelGuideSlice>();
 
-        foreach (var channel in Channels.Where(item => item.SourceId == sourceId && item.GuideChannelId is not null))
+        foreach (var channel in Channels.Where(item => item.SourceId == sourceId && GuideLinks.ContainsKey(item.Id)))
         {
             var upcoming = Programmes
-                .Where(entry => entry.GuideChannelId == channel.GuideChannelId && entry.StopUtc > atUtc)
+                .Where(entry => entry.GuideChannelId == GuideLinks[channel.Id] && entry.StopUtc > atUtc)
                 .OrderBy(entry => entry.StartUtc)
                 .Take(2)
                 .ToList();
@@ -78,6 +88,16 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
         }
 
         return Task.FromResult<IReadOnlyList<ChannelGuideSlice>>(slices);
+    }
+
+    public Task<IReadOnlyDictionary<int, int>> GetGuideLinksAsync(
+        int sourceId,
+        CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyDictionary<int, int>>(
+            Channels
+                .Where(channel => channel.SourceId == sourceId && GuideLinks.ContainsKey(channel.Id))
+                .ToDictionary(channel => channel.Id, channel => GuideLinks[channel.Id]));
     }
 
     public Task<IReadOnlyList<EpgEntry>> GetGuideProgrammesAsync(
@@ -103,7 +123,7 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
         return Task.FromResult(new GuideSummary(
             GuideChannels.Count,
             Programmes.Count,
-            channels.Count(channel => channel.GuideChannelId is not null),
+            channels.Count(channel => GuideLinks.ContainsKey(channel.Id)),
             channels.Count,
             Programmes.Count == 0 ? null : Programmes.Max(entry => entry.StopUtc)));
     }

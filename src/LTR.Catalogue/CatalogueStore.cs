@@ -44,6 +44,13 @@ internal sealed class CatalogueStore : ICatalogueStore
         return _database.RunAsync(context => context.GetNowAndNextAsync(sourceId, atUtc, cancellationToken));
     }
 
+    public Task<IReadOnlyDictionary<int, int>> GetGuideLinksAsync(
+        int sourceId,
+        CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.GetGuideLinksAsync(sourceId, cancellationToken));
+    }
+
     public Task<IReadOnlyList<EpgEntry>> GetGuideProgrammesAsync(
         IReadOnlyCollection<int> guideChannelIds,
         DateTimeOffset fromUtc,

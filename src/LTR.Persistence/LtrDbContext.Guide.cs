@@ -219,6 +219,29 @@ public sealed partial class LtrDbContext
     }
 
     /// <summary>
+    /// Reports which guide channel each of a source's channels is matched to.
+    /// </summary>
+    /// <remarks>
+    /// Asked for separately rather than read from a <see cref="Channel"/> the caller already holds. The
+    /// link is written by the guide import, which runs long after the channel list was loaded, so an
+    /// in-memory channel is stale from the moment an import finishes — and a timeline reading it would
+    /// report that nothing has a guide immediately after one was successfully imported.
+    /// </remarks>
+    public async Task<IReadOnlyDictionary<int, int>> GetGuideLinksAsync(
+        int sourceId,
+        CancellationToken cancellationToken)
+    {
+        return await Channels
+            .AsNoTracking()
+            .Where(channel => channel.SourceId == sourceId && channel.GuideChannelId != null)
+            .ToDictionaryAsync(
+                channel => channel.Id,
+                channel => channel.GuideChannelId!.Value,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Reports what is on now and next for every channel of a source that has a guide.
     /// </summary>
     /// <remarks>

@@ -99,8 +99,9 @@ public sealed class GuideViewModelTests
             SourceId = 1,
             ExternalId = "202",
             Name = "Zweite",
-            GuideChannelId = 100,
         });
+
+        context.Store.GuideLinks[20] = 100;
 
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
@@ -211,6 +212,44 @@ public sealed class GuideViewModelTests
         viewModel.Guide.Notice.ShouldContain("guide data");
     }
 
+    /// <summary>
+    /// The defect found against a real 17,000-channel subscription: the channel list showed programmes and
+    /// the timeline reported that no channel had guide data.
+    /// </summary>
+    /// <remarks>
+    /// The cause was the timeline reading <c>Channel.GuideChannelId</c> from the entities it was handed.
+    /// Those are loaded when the catalogue is shown, which is always before an import finishes, so the link
+    /// is written to the database and not to them. Now-and-next was unaffected because the store answers
+    /// that query itself, which is exactly why the two disagreed.
+    /// </remarks>
+    [Fact]
+    public async Task ToggleGuide_AfterAnImportThatFollowedTheCatalogueLoad_StillFindsTheChannels()
+    {
+        // Arrange: a catalogue on screen with no guide yet, which is the state every first run is in.
+        var context = new TestContextBuilder();
+        context.Store.Sources.Add(CreateSource());
+        context.Store.Channels.Add(new Channel { Id = 10, SourceId = 1, ExternalId = "101", Name = "Erste" });
+
+        var viewModel = context.Build();
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        // Act: the import lands. It writes the link and the programmes into the store, and touches nothing
+        // the view layer is holding.
+        context.Store.GuideLinks[10] = 100;
+        context.Store.Programmes.Add(Programme(100, "Running", SixPm.AddMinutes(-30)));
+
+        viewModel.ImportGuideCommand.Execute(null);
+        await viewModel.GuideImportCompletion;
+
+        await viewModel.ToggleGuideCommand.ExecuteAsync(null);
+
+        // Assert
+        viewModel.Guide.Notice.ShouldBeEmpty("every listed channel has guide data");
+        viewModel.Guide.Rows.ShouldHaveSingleItem()
+            .Programmes.Select(programme => programme.Title)
+            .ShouldContain("Running");
+    }
+
     [Fact]
     public async Task ImportGuide_FetchesUnconditionally()
     {
@@ -285,8 +324,9 @@ public sealed class GuideViewModelTests
             SourceId = 1,
             ExternalId = "101",
             Name = "Erste",
-            GuideChannelId = 100,
         });
+
+        context.Store.GuideLinks[10] = 100;
 
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
@@ -437,8 +477,9 @@ public sealed class GuideViewModelTests
             SourceId = 1,
             ExternalId = "101",
             Name = "Erste",
-            GuideChannelId = 100,
         });
+
+        context.Store.GuideLinks[10] = 100;
 
         // Half an hour in, so the progress assertion has a value it can state exactly.
         context.Store.Programmes.Add(Programme(100, "Running", SixPm.AddMinutes(-30)));

@@ -127,22 +127,30 @@ public sealed partial class GuideViewModel : ObservableObject
         BuildTimeMarkers();
         UpdateNowMarker();
 
+        if (_source is null)
+        {
+            Notice = DescribeCoverage(shownRows: 0, channelsWithGuide: 0);
+            return;
+        }
+
+        // Asked for each time rather than read from the channels handed over. Those were loaded when the
+        // catalogue was shown, which is before any guide import finished — reading their link is why the
+        // timeline reported "no guide data" for a guide that had just been imported successfully.
+        var links = await _catalogue.GetGuideLinksAsync(_source.Id, cancellationToken).ConfigureAwait(true);
+
         var rowChannels = _channels
-            .Where(channel => channel.GuideChannelId is not null)
+            .Where(channel => links.ContainsKey(channel.Id))
             .Take(MaximumRows)
             .ToList();
 
-        Notice = DescribeCoverage(rowChannels.Count);
+        Notice = DescribeCoverage(rowChannels.Count, _channels.Count(channel => links.ContainsKey(channel.Id)));
 
-        if (_source is null || rowChannels.Count == 0)
+        if (rowChannels.Count == 0)
         {
             return;
         }
 
-        var guideChannelIds = rowChannels
-            .Select(channel => channel.GuideChannelId!.Value)
-            .Distinct()
-            .ToList();
+        var guideChannelIds = rowChannels.Select(channel => links[channel.Id]).Distinct().ToList();
 
         var programmes = await _catalogue
             .GetGuideProgrammesAsync(guideChannelIds, Timeline.StartUtc, Timeline.EndUtc, cancellationToken)
@@ -154,7 +162,7 @@ public sealed partial class GuideViewModel : ObservableObject
 
         foreach (var channel in rowChannels)
         {
-            var entries = programmesByGuideChannel.GetValueOrDefault(channel.GuideChannelId!.Value, []);
+            var entries = programmesByGuideChannel.GetValueOrDefault(links[channel.Id], []);
 
             Rows.Add(new GuideRowViewModel(
                 channel,
@@ -218,11 +226,9 @@ public sealed partial class GuideViewModel : ObservableObject
         }
     }
 
-    private string DescribeCoverage(int shownRows)
+    private string DescribeCoverage(int shownRows, int channelsWithGuide)
     {
-        var withGuide = _channels.Count(channel => channel.GuideChannelId is not null);
-
-        if (withGuide == 0)
+        if (channelsWithGuide == 0)
         {
             return _channels.Count == 0
                 ? "No channels are listed."
@@ -230,9 +236,9 @@ public sealed partial class GuideViewModel : ObservableObject
                     + "channels the guide covers.";
         }
 
-        return shownRows < withGuide
-            ? $"Showing {shownRows} of {withGuide} channels with guide data. Filter the channel list to "
-                + "see the others."
+        return shownRows < channelsWithGuide
+            ? $"Showing {shownRows} of {channelsWithGuide} channels with guide data. Filter the channel "
+                + "list to see the others."
             : string.Empty;
     }
 }
