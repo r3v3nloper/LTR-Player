@@ -8,6 +8,7 @@ using LTR.Playback;
 using LTR.Providers;
 using LTR.Providers.M3u;
 using LTR.Providers.Xtream;
+using LTR.Security.Dpapi;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -72,7 +73,7 @@ public partial class App : Application
 
         services.AddLogging(logging => logging.ClearProviders().AddSerilog(dispose: true));
 
-        services.AddSingleton<ICredentialProtector, PassThroughCredentialProtector>();
+        services.AddCredentialProtection();
 
         services.AddDbContext<LtrDbContext>(options =>
             options.UseSqlite(LtrDatabaseLocation.ConnectionString));
@@ -100,6 +101,19 @@ public partial class App : Application
         using var scope = services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
         context.Database.Migrate();
+
+        // Protects credentials that predate protection. Blocking here is acceptable: it touches a
+        // handful of rows and runs before the first window opens.
+        var upgraded = context.UpgradeStoredCredentialsAsync(CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        if (upgraded > 0)
+        {
+            PlayerLog.CredentialsUpgraded(
+                scope.ServiceProvider.GetRequiredService<ILogger<App>>(),
+                upgraded);
+        }
     }
 
     private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

@@ -21,6 +21,7 @@
     <ProjectReference Include="..\LTR.Playback\LTR.Playback.csproj" />
     <ProjectReference Include="..\LTR.Providers.M3u\LTR.Providers.M3u.csproj" />
     <ProjectReference Include="..\LTR.Providers\LTR.Providers.csproj" />
+    <ProjectReference Include="..\LTR.Security.Dpapi\LTR.Security.Dpapi.csproj" />
     <ProjectReference Include="..\LTR.Providers.Xtream\LTR.Providers.Xtream.csproj" />
   </ItemGroup>
 

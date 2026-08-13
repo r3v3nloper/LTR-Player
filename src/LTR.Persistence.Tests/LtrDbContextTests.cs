@@ -1,4 +1,5 @@
 using LTR.Core.Content;
+using LTR.Core.Security;
 using LTR.Core.Sources;
 using Microsoft.EntityFrameworkCore;
 
@@ -32,7 +33,7 @@ public sealed class LtrDbContextTests
             .Select(entity => entity.Password)
             .SingleAsync(cancellationToken);
 
-        storedPassword.ShouldBe("terc3s", "the protected form reaches the database");
+        storedPassword.ShouldBe("rev:terc3s", "the protected form reaches the database");
     }
 
     [Fact]
@@ -63,7 +64,76 @@ public sealed class LtrDbContextTests
             .Select(entity => entity.Password)
             .SingleAsync(cancellationToken);
 
-        storedPassword.ShouldBe("terc3s");
+        storedPassword.ShouldBe("rev:terc3s");
+    }
+
+    [Fact]
+    public async Task UpgradeStoredCredentialsAsync_ProtectsAValueLeftInPlainTextByAnEarlierVersion()
+    {
+        // Arrange: nothing else ever rewrites a password — a source is written when it is added and not
+        // again — so without this pass an existing installation would keep its plaintext for good.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTestDatabase.CreateAsync(cancellationToken: cancellationToken);
+
+        // Written through a pass-through protector, which is exactly what an installation from before
+        // credential protection existed left behind.
+        await using (var seedContext = database.CreateContext(new PassThroughCredentialProtector()))
+        {
+            await seedContext.AddSourceAsync(
+                CreateXtreamSource(name: "Legacy", password: "plaintext-password"),
+                cancellationToken);
+        }
+
+        // Act
+        int upgraded;
+
+        await using (var context = database.CreateContext())
+        {
+            upgraded = await context.UpgradeStoredCredentialsAsync(cancellationToken);
+        }
+
+        // Assert: stored protected, still readable as the original.
+        upgraded.ShouldBe(1);
+
+        await using var verifyContext = database.CreateContext();
+
+        var storedPassword = await verifyContext.Sources
+            .AsNoTracking()
+            .OfType<XtreamSource>()
+            .Select(entity => entity.Password)
+            .SingleAsync(cancellationToken);
+
+        storedPassword.ShouldBe("rev:drowssap-txetnialp", "the reversing test protector's protected form");
+
+        var sources = await verifyContext.GetSourcesAsync(cancellationToken);
+        sources.ShouldHaveSingleItem().ShouldBeOfType<XtreamSource>().Password.ShouldBe("plaintext-password");
+    }
+
+    [Fact]
+    public async Task UpgradeStoredCredentialsAsync_LeavesAlreadyProtectedValuesAlone()
+    {
+        // Arrange: running on every start, so it must be idempotent — a second pass must not encrypt
+        // what is already encrypted.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTestDatabase.CreateAsync(cancellationToken: cancellationToken);
+
+        await using (var context = database.CreateContext())
+        {
+            await context.AddSourceAsync(CreateXtreamSource(password: "s3cret"), cancellationToken);
+        }
+
+        // Act
+        await using (var context = database.CreateContext())
+        {
+            var upgraded = await context.UpgradeStoredCredentialsAsync(cancellationToken);
+            upgraded.ShouldBe(0);
+        }
+
+        // Assert
+        await using var verifyContext = database.CreateContext();
+        var sources = await verifyContext.GetSourcesAsync(cancellationToken);
+
+        sources.ShouldHaveSingleItem().ShouldBeOfType<XtreamSource>().Password.ShouldBe("s3cret");
     }
 
     [Fact]

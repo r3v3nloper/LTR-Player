@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <!--
+    Deliberately its own project rather than part of LTR.Core or LTR.Persistence. The Data Protection
+    API is Windows-only, and neither the domain nor the persistence layer should carry a platform-bound
+    dependency — the core is meant to stay usable by the planned web frontend. Choosing this
+    implementation is the composition root's job.
+
+    The target framework stays net10.0, not net10.0-windows, so the command line tool can reference it;
+    the Windows requirement is expressed with SupportedOSPlatform and checked at the registration site.
+  -->
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <!-- References LTR.Core, not only the abstractions, because the non-Windows fallback is the
+       pass-through protector that lives there. -->
+  <ItemGroup>
+    <ProjectReference Include="..\LTR.Core\LTR.Core.csproj" />
+  </ItemGroup>
+
+</Project>

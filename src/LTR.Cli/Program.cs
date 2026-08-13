@@ -1,8 +1,6 @@
 using System.CommandLine;
 using System.Globalization;
 using LTR.Cli;
-using LTR.Core;
-using LTR.Core.Security;
 using LTR.Persistence;
 using Microsoft.EntityFrameworkCore;
 using LTR.Playback;
@@ -10,6 +8,7 @@ using LTR.Playback.LibVlc;
 using LTR.Providers;
 using LTR.Providers.M3u;
 using LTR.Providers.Xtream;
+using LTR.Security.Dpapi;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
@@ -64,7 +63,8 @@ static ServiceProvider BuildServiceProvider(bool verbose)
 
     // The same database the desktop player uses, resolved from the one place that decides it.
     services.AddDbContext<LtrDbContext>(options => options.UseSqlite(LtrDatabaseLocation.ConnectionString));
-    services.AddSingleton<ICredentialProtector, PassThroughCredentialProtector>();
+
+    services.AddCredentialProtection();
 
     services.AddScoped<SourcesCommandHandler>();
     services.AddSingleton<ProbeCommandHandler>();

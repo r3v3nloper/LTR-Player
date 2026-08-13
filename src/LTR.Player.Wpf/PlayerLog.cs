@@ -15,6 +15,12 @@ internal static partial class PlayerLog
     public static partial void UsingDatabase(ILogger logger, string databasePath);
 
     [LoggerMessage(
+        EventId = 3005,
+        Level = LogLevel.Information,
+        Message = "Protected {Count} stored credential(s) that predated credential protection.")]
+    public static partial void CredentialsUpgraded(ILogger logger, int count);
+
+    [LoggerMessage(
         EventId = 3004,
         Level = LogLevel.Error,
         Message = "The stored catalogue for {Source} could not be read.")]

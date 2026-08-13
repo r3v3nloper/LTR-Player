@@ -14,4 +14,16 @@ public sealed class PassThroughCredentialProtector : ICredentialProtector
     {
         return protectedValue;
     }
+
+    /// <summary>
+    /// Always true, because this implementation's protected form is the plaintext itself.
+    /// </summary>
+    /// <remarks>
+    /// Reporting false would make an upgrade pass rewrite every credential on every start, achieving
+    /// nothing.
+    /// </remarks>
+    public bool IsProtected(string storedValue)
+    {
+        return true;
+    }
 }

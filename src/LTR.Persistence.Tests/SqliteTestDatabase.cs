@@ -55,9 +55,14 @@ internal sealed class SqliteTestDatabase : IAsyncDisposable
     /// Creates a fresh context over the same database, so a test can verify what was actually
     /// persisted rather than what is still sitting in a change tracker.
     /// </summary>
-    public LtrDbContext CreateContext()
+    /// <param name="credentialProtector">
+    /// Overrides the database's protector for this context only. Lets a test write rows the way an
+    /// earlier version of the application did — with no protection — and then read or upgrade them
+    /// through the current one, which is the situation the upgrade pass exists for.
+    /// </param>
+    public LtrDbContext CreateContext(ICredentialProtector? credentialProtector = null)
     {
-        return new LtrDbContext(_options, _credentialProtector);
+        return new LtrDbContext(_options, credentialProtector ?? _credentialProtector);
     }
 
     public async ValueTask DisposeAsync()

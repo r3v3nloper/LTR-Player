@@ -29,7 +29,7 @@ internal sealed class SourcesCommandHandler
 
     public async Task<int> ListAsync(CancellationToken cancellationToken)
     {
-        await _context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+        await PrepareAsync(cancellationToken).ConfigureAwait(false);
 
         Console.WriteLine($"Database   {LtrDatabaseLocation.DatabaseFile}");
         Console.WriteLine();
@@ -68,7 +68,7 @@ internal sealed class SourcesCommandHandler
     /// </remarks>
     public async Task<int> AddPlaylistAsync(string address, string? name, CancellationToken cancellationToken)
     {
-        await _context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+        await PrepareAsync(cancellationToken).ConfigureAwait(false);
 
         if (!SourceAddress.TryParse(address, out var playlistUrl))
         {
@@ -121,11 +121,31 @@ internal sealed class SourcesCommandHandler
 
     public async Task<int> RemoveAsync(int sourceId, CancellationToken cancellationToken)
     {
-        await _context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+        await PrepareAsync(cancellationToken).ConfigureAwait(false);
         await _context.DeleteSourceAsync(sourceId, cancellationToken).ConfigureAwait(false);
 
         Console.WriteLine($"Removed source {sourceId} and its catalogue.");
         return 0;
+    }
+
+    /// <summary>
+    /// Brings the database up to date and protects credentials that predate protection.
+    /// </summary>
+    /// <remarks>
+    /// The same two steps the desktop player performs at startup. Both applications share one database,
+    /// so whichever runs first has to leave it in a state the other understands — the command line tool
+    /// cannot assume the player has already been opened.
+    /// </remarks>
+    private async Task PrepareAsync(CancellationToken cancellationToken)
+    {
+        await _context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
+
+        var upgraded = await _context.UpgradeStoredCredentialsAsync(cancellationToken).ConfigureAwait(false);
+
+        if (upgraded > 0)
+        {
+            Console.WriteLine($"Protected {upgraded} stored credential(s) that were held in plain text.");
+        }
     }
 
     private static string DescribeProtocol(PlaylistSource source)

@@ -182,6 +182,49 @@ public sealed class LtrDbContext : DbContext
     }
 
     /// <summary>
+    /// Rewrites any credential still held in an unprotected form, and reports how many were changed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Run once at startup. Introducing credential protection does not retroactively protect what is
+    /// already stored, and nothing else ever rewrites a password — a source is written when it is added
+    /// and not again — so without this pass an existing installation would keep its plaintext for good.
+    /// </para>
+    /// <para>
+    /// Deliberately driven by <see cref="ICredentialProtector.IsProtected"/> rather than by a schema
+    /// version, so it stays correct when a protector is swapped for a stronger one later: values in the
+    /// old form are simply rewritten in the new one.
+    /// </para>
+    /// </remarks>
+    public async Task<int> UpgradeStoredCredentialsAsync(CancellationToken cancellationToken)
+    {
+        var sources = await Sources
+            .OfType<XtreamSource>()
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var upgraded = 0;
+
+        foreach (var source in sources)
+        {
+            if (_credentialProtector.IsProtected(source.Password))
+            {
+                continue;
+            }
+
+            source.Password = _credentialProtector.Protect(source.Password);
+            upgraded++;
+        }
+
+        if (upgraded > 0)
+        {
+            await SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return upgraded;
+    }
+
+    /// <summary>
     /// Removes a source together with its catalogue.
     /// </summary>
     /// <remarks>
