@@ -45,6 +45,11 @@ public sealed class LibVlcOptions
     public bool DisableVideoOutput { get; set; }
 
     /// <summary>Raises LibVLC's own log verbosity, for diagnosing playback failures.</summary>
+    /// <remarks>
+    /// Affects how much LibVLC reports, not where it goes. Its output is routed into the
+    /// application's logger either way, so a provider's broken stream is recorded as what it is
+    /// rather than printed to whatever console happens to be attached.
+    /// </remarks>
     public bool VerboseLogging { get; set; }
 
     /// <summary>
@@ -81,6 +86,13 @@ public sealed class LibVlcOptions
         if (VerboseLogging)
         {
             arguments.Add("--verbose=2");
+        }
+        else
+        {
+            // Stops LibVLC writing to stderr. IPTV streams from real providers produce a constant
+            // stream of decoder complaints, and printed to a console they read as application faults.
+            // They are captured through the log callback instead.
+            arguments.Add("--quiet");
         }
 
         return [.. arguments];

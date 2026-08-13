@@ -233,12 +233,31 @@ public sealed partial class MainViewModel : ObservableObject
             Status = $"{SelectedChannel.Name} could not be played. The channel may be offline.";
             NowPlaying = string.Empty;
         }
+        catch (OperationCanceledException)
+        {
+            // Zapping onwards cancels the open that was still in flight. That is the intended
+            // behaviour of a channel change, not a failure — and left unhandled it surfaces as an
+            // error dialog for an ordinary key press.
+        }
     }
 
     [RelayCommand]
     private async Task StopAsync(CancellationToken cancellationToken)
     {
         await _session.StopAsync(cancellationToken).ConfigureAwait(true);
+        NowPlaying = string.Empty;
+    }
+
+    /// <summary>
+    /// Hands the provider connection back before the window goes away.
+    /// </summary>
+    /// <remarks>
+    /// Not a command, because it is not a user action and must not be cancellable: a subscription
+    /// permitting a single connection is unusable for minutes if the player exits still holding one.
+    /// </remarks>
+    public async Task ShutdownAsync()
+    {
+        await _session.StopAsync(CancellationToken.None).ConfigureAwait(true);
         NowPlaying = string.Empty;
     }
 

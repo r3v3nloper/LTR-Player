@@ -5,6 +5,18 @@ namespace LTR.Playback.LibVlc;
 internal static partial class LibVlcLog
 {
     [LoggerMessage(
+        EventId = 2101,
+        Level = LogLevel.Warning,
+        Message = "LibVLC {Module}: {Detail}")]
+    public static partial void EngineWarning(ILogger logger, string module, string detail);
+
+    [LoggerMessage(
+        EventId = 2102,
+        Level = LogLevel.Debug,
+        Message = "LibVLC {Module}: {Detail}")]
+    public static partial void EngineDetail(ILogger logger, string module, string detail);
+
+    [LoggerMessage(
         EventId = 2100,
         Level = LogLevel.Warning,
         Message = "LibVLC did not release the stream during shutdown. The provider may keep counting the "

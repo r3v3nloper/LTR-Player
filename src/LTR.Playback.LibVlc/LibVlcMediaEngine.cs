@@ -2,6 +2,7 @@ using LibVLCSharp.Shared;
 using LTR.Core.Playback;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using LibVlcLogLevel = LibVLCSharp.Shared.LogLevel;
 using VlcTrackDescription = LibVLCSharp.Shared.Structures.TrackDescription;
 
 namespace LTR.Playback.LibVlc;
@@ -44,6 +45,7 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         LibVlcRuntime.EnsureInitialized(resolvedOptions.NativeLibraryDirectory);
 
         _libVlc = new LibVLC(resolvedOptions.ToArguments());
+        _libVlc.Log += OnEngineLog;
         _mediaPlayer = new MediaPlayer(_libVlc);
 
         SubscribeToPlayerEvents();
@@ -240,6 +242,7 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
 
         _isDisposed = true;
 
+        _libVlc.Log -= OnEngineLog;
         UnsubscribeFromPlayerEvents();
 
         _currentMedia?.Dispose();
@@ -251,6 +254,29 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
     private static MediaTrack ToMediaTrack(VlcTrackDescription description, MediaTrackKind kind)
     {
         return new MediaTrack(description.Id, kind, description.Name, Language: null);
+    }
+
+    /// <summary>
+    /// Routes LibVLC's own diagnostics into the application log.
+    /// </summary>
+    /// <remarks>
+    /// LibVLC's error level is downgraded to a warning deliberately. Nearly all of it describes the
+    /// stream rather than the player — corrupt H.264 references, missing audio headers, a streaming
+    /// node refusing a connection — and treating a provider's broken channel as an application error
+    /// would make the log useless for finding actual faults.
+    /// </remarks>
+    private void OnEngineLog(object? sender, LogEventArgs e)
+    {
+        var module = e.Module ?? "core";
+        var detail = e.Message ?? string.Empty;
+
+        if (e.Level == LibVlcLogLevel.Error)
+        {
+            LibVlcLog.EngineWarning(_logger, module, detail);
+            return;
+        }
+
+        LibVlcLog.EngineDetail(_logger, module, detail);
     }
 
     private void SubscribeToPlayerEvents()
