@@ -26,10 +26,26 @@ public sealed class Channel
     public string? CategoryExternalId { get; set; }
 
     /// <summary>
-    /// The provider's stream identifier, which becomes part of the playback URL. A string rather
-    /// than an integer because M3U playlists identify streams by opaque token, not by number.
+    /// Stable identity of the channel within its source, used to match a refresh against what is
+    /// already stored.
     /// </summary>
+    /// <remarks>
+    /// For Xtream this is the numeric stream id. For M3U it is the guide id, or a key derived from the
+    /// name when there is none — deliberately not the stream URL, because those embed credentials that
+    /// change when a subscription is renewed, and an identity that changes takes the user's favourites
+    /// with it.
+    /// </remarks>
     public required string ExternalId { get; set; }
+
+    /// <summary>
+    /// Complete playback address, for sources that state one outright.
+    /// </summary>
+    /// <remarks>
+    /// M3U playlists carry the full URL per entry, so there is nothing to construct. Xtream sources
+    /// leave this empty and have their address built from the stream id, which is why it is nullable
+    /// rather than required.
+    /// </remarks>
+    public string? StreamUrl { get; set; }
 
     public required string Name { get; set; }
 

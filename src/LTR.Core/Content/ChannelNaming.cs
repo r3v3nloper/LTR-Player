@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace LTR.Core.Content;
@@ -38,6 +39,33 @@ public static partial class ChannelNaming
         }
 
         return DecorativeRunPattern().IsMatch(trimmed);
+    }
+
+    /// <summary>
+    /// Derives a stable identity key from a channel name.
+    /// </summary>
+    /// <remarks>
+    /// For sources that supply no identifier of their own, the name is all there is to recognise a
+    /// channel by across refreshes. Case, punctuation and spacing are discarded because providers
+    /// change those freely; nothing else is, so two genuinely different channels do not collapse into
+    /// one. Quality markers such as HD are deliberately kept — <c>TF1 HD</c> and <c>TF1 FHD</c> are
+    /// separate entries with separate URLs.
+    /// </remarks>
+    public static string ToIdentityKey(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+
+        var key = new StringBuilder(name.Length);
+
+        foreach (var character in name)
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                key.Append(char.ToLowerInvariant(character));
+            }
+        }
+
+        return key.ToString();
     }
 
     /// <summary>

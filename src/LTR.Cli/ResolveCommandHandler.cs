@@ -11,15 +11,11 @@ internal sealed class ResolveCommandHandler
 {
     private const string CredentialMask = "***";
 
-    private readonly IEnumerable<IStreamUrlResolver> _resolvers;
-    private readonly IProviderCapabilityProbe _capabilityProbe;
+    private readonly IProviderRegistry _providers;
 
-    public ResolveCommandHandler(
-        IEnumerable<IStreamUrlResolver> resolvers,
-        IProviderCapabilityProbe capabilityProbe)
+    public ResolveCommandHandler(IProviderRegistry providers)
     {
-        _resolvers = resolvers;
-        _capabilityProbe = capabilityProbe;
+        _providers = providers;
     }
 
     public async Task<int> ExecuteAsync(
@@ -33,17 +29,12 @@ internal sealed class ResolveCommandHandler
         // this panel serves. Opt-in, because probing costs several requests.
         if (probeFirst)
         {
-            source.Capabilities = await _capabilityProbe.ProbeAsync(source, cancellationToken)
+            source.Capabilities = await _providers.GetCapabilityProbe(source)
+                .ProbeAsync(source, cancellationToken)
                 .ConfigureAwait(false);
         }
 
-        var resolver = _resolvers.FirstOrDefault(candidate => candidate.Supports(source));
-
-        if (resolver is null)
-        {
-            Console.Error.WriteLine("No resolver handles this source type.");
-            return 1;
-        }
+        var resolver = _providers.GetStreamUrlResolver(source);
 
         var channel = new Channel
         {

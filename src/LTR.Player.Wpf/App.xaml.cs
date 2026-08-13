@@ -5,6 +5,8 @@ using LTR.Core;
 using LTR.Core.Security;
 using LTR.Persistence;
 using LTR.Playback;
+using LTR.Providers;
+using LTR.Providers.M3u;
 using LTR.Providers.Xtream;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -70,7 +72,9 @@ public partial class App : Application
         services.AddDbContext<LtrDbContext>(options =>
             options.UseSqlite($"Data Source={AppPaths.DatabaseFile}"));
 
+        services.AddProviderRegistry();
         services.AddXtreamProvider();
+        services.AddM3uProvider();
         services.AddLibVlcPlayback();
 
         services.AddSingleton<MainViewModel>();

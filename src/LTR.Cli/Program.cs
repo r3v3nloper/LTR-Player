@@ -3,6 +3,8 @@ using System.Globalization;
 using LTR.Cli;
 using LTR.Playback;
 using LTR.Playback.LibVlc;
+using LTR.Providers;
+using LTR.Providers.M3u;
 using LTR.Providers.Xtream;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -46,7 +48,9 @@ static ServiceProvider BuildServiceProvider(bool verbose)
     var services = new ServiceCollection();
 
     services.AddLogging(logging => logging.ClearProviders().AddSerilog(dispose: true));
+    services.AddProviderRegistry();
     services.AddXtreamProvider();
+    services.AddM3uProvider();
 
     // No window exists here, so video output is switched off. It would otherwise open a window of
     // LibVLC's own and fail to allocate Direct3D decoder buffers, which buries the actual result of

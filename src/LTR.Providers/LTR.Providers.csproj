@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <!--
+    Protocol-neutral provider plumbing, mirroring the LTR.Playback / LTR.Playback.Abstractions split.
+    Knows the contracts but no individual protocol, so adding one requires no change here.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LTR.Providers.Abstractions\LTR.Providers.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

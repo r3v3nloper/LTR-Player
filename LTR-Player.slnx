@@ -12,7 +12,10 @@
     <Project Path="src/LTR.Playback/LTR.Playback.csproj" />
     <Project Path="src/LTR.Player.Wpf/LTR.Player.Wpf.csproj" />
     <Project Path="src/LTR.Providers.Abstractions/LTR.Providers.Abstractions.csproj" />
+    <Project Path="src/LTR.Providers.M3u.Tests/LTR.Providers.M3u.Tests.csproj" />
+    <Project Path="src/LTR.Providers.M3u/LTR.Providers.M3u.csproj" />
     <Project Path="src/LTR.Providers.Xtream.Tests/LTR.Providers.Xtream.Tests.csproj" />
     <Project Path="src/LTR.Providers.Xtream/LTR.Providers.Xtream.csproj" />
+    <Project Path="src/LTR.Providers/LTR.Providers.csproj" />
   </Folder>
 </Solution>

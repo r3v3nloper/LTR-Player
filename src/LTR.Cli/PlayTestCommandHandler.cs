@@ -20,21 +20,18 @@ internal sealed class PlayTestCommandHandler
 
     private static readonly TimeSpan ConnectionCheckDelay = TimeSpan.FromSeconds(5);
 
-    private readonly IEnumerable<IStreamUrlResolver> _resolvers;
+    private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
     private readonly IMediaEngine _engine;
-    private readonly IContentProviderFactory _providerFactory;
 
     public PlayTestCommandHandler(
-        IEnumerable<IStreamUrlResolver> resolvers,
+        IProviderRegistry providers,
         IPlaybackSession session,
-        IMediaEngine engine,
-        IContentProviderFactory providerFactory)
+        IMediaEngine engine)
     {
-        _resolvers = resolvers;
+        _providers = providers;
         _session = session;
         _engine = engine;
-        _providerFactory = providerFactory;
     }
 
     public async Task<int> ExecuteAsync(
@@ -43,13 +40,7 @@ internal sealed class PlayTestCommandHandler
         int seconds,
         CancellationToken cancellationToken)
     {
-        var resolver = _resolvers.FirstOrDefault(candidate => candidate.Supports(source));
-
-        if (resolver is null)
-        {
-            Console.Error.WriteLine("No resolver handles this source type.");
-            return 1;
-        }
+        var resolver = _providers.GetStreamUrlResolver(source);
 
         var channel = new Channel
         {
@@ -129,7 +120,7 @@ internal sealed class PlayTestCommandHandler
     /// </remarks>
     private async Task ReportRemainingConnectionsAsync(XtreamSource source, CancellationToken cancellationToken)
     {
-        var provider = _providerFactory.Create(source);
+        var provider = _providers.CreateProvider(source);
 
         for (var attempt = 1; attempt <= ConnectionCheckAttempts; attempt++)
         {

@@ -9,11 +9,11 @@ namespace LTR.Cli;
 /// </summary>
 internal sealed class ChannelsCommandHandler
 {
-    private readonly IContentProviderFactory _providerFactory;
+    private readonly IProviderRegistry _providers;
 
-    public ChannelsCommandHandler(IContentProviderFactory providerFactory)
+    public ChannelsCommandHandler(IProviderRegistry providers)
     {
-        _providerFactory = providerFactory;
+        _providers = providers;
     }
 
     public async Task<int> ExecuteAsync(
@@ -22,7 +22,7 @@ internal sealed class ChannelsCommandHandler
         int limit,
         CancellationToken cancellationToken)
     {
-        var provider = _providerFactory.Create(source);
+        var provider = _providers.CreateProvider(source);
 
         var categories = await provider.FetchCategoriesAsync(ContentKind.Live, cancellationToken)
             .ConfigureAwait(false);

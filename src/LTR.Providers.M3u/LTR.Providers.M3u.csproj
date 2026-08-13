@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <!--
+    No resilience handler here, unlike the Xtream client. A playlist download is one large response
+    with no partial result to keep, so a retry means starting the whole multi-megabyte transfer again;
+    a generous single timeout is the better trade.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LTR.Providers.Abstractions\LTR.Providers.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LTR.Providers.M3u.Tests" />
+  </ItemGroup>
+
+</Project>

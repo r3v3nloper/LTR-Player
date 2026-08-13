@@ -267,8 +267,9 @@ public sealed class LtrDbContext : DbContext
 
         channel.ToTable("Channels");
         channel.HasKey(entity => entity.Id);
-        channel.Property(entity => entity.ExternalId).IsRequired().HasMaxLength(200);
+        channel.Property(entity => entity.ExternalId).IsRequired().HasMaxLength(400);
         channel.Property(entity => entity.Name).IsRequired().HasMaxLength(400);
+        channel.Property(entity => entity.StreamUrl).HasMaxLength(2000);
         channel.Property(entity => entity.LogoUrl).HasMaxLength(2000);
         channel.Property(entity => entity.EpgChannelId).HasMaxLength(400);
         channel.Property(entity => entity.CategoryExternalId).HasMaxLength(200);
@@ -362,6 +363,7 @@ public sealed class LtrDbContext : DbContext
                 // Everything the provider owns is overwritten; IsFavorite is the user's and is not
                 // touched here.
                 stored.Name = channel.Name;
+                stored.StreamUrl = channel.StreamUrl;
                 stored.LogoUrl = channel.LogoUrl;
                 stored.EpgChannelId = channel.EpgChannelId;
                 stored.CategoryExternalId = channel.CategoryExternalId;

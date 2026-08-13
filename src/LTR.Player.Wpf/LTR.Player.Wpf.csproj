@@ -21,6 +21,8 @@
     <ProjectReference Include="..\LTR.Persistence\LTR.Persistence.csproj" />
     <ProjectReference Include="..\LTR.Playback.LibVlc\LTR.Playback.LibVlc.csproj" />
     <ProjectReference Include="..\LTR.Playback\LTR.Playback.csproj" />
+    <ProjectReference Include="..\LTR.Providers.M3u\LTR.Providers.M3u.csproj" />
+    <ProjectReference Include="..\LTR.Providers\LTR.Providers.csproj" />
     <ProjectReference Include="..\LTR.Providers.Xtream\LTR.Providers.Xtream.csproj" />
   </ItemGroup>
 

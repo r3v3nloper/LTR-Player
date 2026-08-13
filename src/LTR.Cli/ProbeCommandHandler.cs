@@ -9,20 +9,16 @@ namespace LTR.Cli;
 /// </summary>
 internal sealed class ProbeCommandHandler
 {
-    private readonly IContentProviderFactory _providerFactory;
-    private readonly IProviderCapabilityProbe _capabilityProbe;
+    private readonly IProviderRegistry _providers;
 
-    public ProbeCommandHandler(
-        IContentProviderFactory providerFactory,
-        IProviderCapabilityProbe capabilityProbe)
+    public ProbeCommandHandler(IProviderRegistry providers)
     {
-        _providerFactory = providerFactory;
-        _capabilityProbe = capabilityProbe;
+        _providers = providers;
     }
 
     public async Task<int> ExecuteAsync(XtreamSource source, CancellationToken cancellationToken)
     {
-        var provider = _providerFactory.Create(source);
+        var provider = _providers.CreateProvider(source);
         var account = await provider.AuthenticateAsync(cancellationToken).ConfigureAwait(false);
 
         Console.WriteLine($"Panel        {source.BaseUrl}");
@@ -49,7 +45,9 @@ internal sealed class ProbeCommandHandler
                 + "If nothing is playing, a previous session did not close cleanly.");
         }
 
-        var capabilities = await _capabilityProbe.ProbeAsync(source, cancellationToken).ConfigureAwait(false);
+        var capabilities = await _providers.GetCapabilityProbe(source)
+            .ProbeAsync(source, cancellationToken)
+            .ConfigureAwait(false);
 
         Console.WriteLine();
         Console.WriteLine("Capabilities");

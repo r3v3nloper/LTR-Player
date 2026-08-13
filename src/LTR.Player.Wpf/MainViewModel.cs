@@ -19,9 +19,7 @@ namespace LTR.Player.Wpf;
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IContentProviderFactory _providerFactory;
-    private readonly IProviderCapabilityProbe _capabilityProbe;
-    private readonly IEnumerable<IStreamUrlResolver> _resolvers;
+    private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
     private readonly ILogger<MainViewModel> _logger;
     private readonly List<Channel> _channels = [];
@@ -64,16 +62,12 @@ public sealed partial class MainViewModel : ObservableObject
 
     public MainViewModel(
         IServiceScopeFactory scopeFactory,
-        IContentProviderFactory providerFactory,
-        IProviderCapabilityProbe capabilityProbe,
-        IEnumerable<IStreamUrlResolver> resolvers,
+        IProviderRegistry providers,
         IPlaybackSession session,
         ILogger<MainViewModel> logger)
     {
         _scopeFactory = scopeFactory;
-        _providerFactory = providerFactory;
-        _capabilityProbe = capabilityProbe;
-        _resolvers = resolvers;
+        _providers = providers;
         _session = session;
         _logger = logger;
 
@@ -147,7 +141,7 @@ public sealed partial class MainViewModel : ObservableObject
             };
 
             Status = "Checking the subscription...";
-            var provider = _providerFactory.Create(source);
+            var provider = _providers.CreateProvider(source);
             var account = await provider.AuthenticateAsync(cancellationToken).ConfigureAwait(true);
 
             if (!account.IsUsable)
@@ -157,7 +151,8 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             Status = "Reading what the panel supports...";
-            source.Capabilities = await _capabilityProbe.ProbeAsync(source, cancellationToken)
+            source.Capabilities = await _providers.GetCapabilityProbe(source)
+                .ProbeAsync(source, cancellationToken)
                 .ConfigureAwait(true);
 
             Status = "Loading the channel list...";
@@ -211,15 +206,7 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
-        var resolver = _resolvers.FirstOrDefault(candidate => candidate.Supports(_source));
-
-        if (resolver is null)
-        {
-            Status = "No resolver handles this source type.";
-            return;
-        }
-
-        var request = resolver.ResolveLive(_source, SelectedChannel);
+        var request = _providers.GetStreamUrlResolver(_source).ResolveLive(_source, SelectedChannel);
         NowPlaying = SelectedChannel.Name;
 
         try
