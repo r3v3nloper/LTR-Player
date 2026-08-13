@@ -165,17 +165,38 @@ public sealed partial class MainViewModel : ObservableObject
 
     partial void OnChannelFilterTextChanged(string value)
     {
-        ChannelView.Refresh();
+        RefreshChannelView();
     }
 
     partial void OnSelectedCategoryChanged(CategoryChoice value)
     {
-        ChannelView.Refresh();
+        RefreshChannelView();
     }
 
     partial void OnShowFavoritesOnlyChanged(bool value)
     {
+        RefreshChannelView();
+    }
+
+    /// <summary>
+    /// Reapplies the filter, keeping the current row selected when it still qualifies.
+    /// </summary>
+    /// <remarks>
+    /// Refreshing a collection view raises a reset, and the list box drops its selection in response.
+    /// Without restoring it, changing category or typing in the search box silently deselects whatever
+    /// the user had picked — disabling the favourite command while a channel is still playing, which is
+    /// exactly the state it looked like a bug from.
+    /// </remarks>
+    private void RefreshChannelView()
+    {
+        var previouslySelected = SelectedChannel;
+
         ChannelView.Refresh();
+
+        if (previouslySelected is not null && MatchesCurrentFilter(previouslySelected))
+        {
+            SelectedChannel = previouslySelected;
+        }
     }
 
     partial void OnSelectedSourceChanged(PlaylistSource? value)
@@ -404,9 +425,12 @@ public sealed partial class MainViewModel : ObservableObject
         await context.SetFavoriteAsync(channel.Id, channel.IsFavorite, cancellationToken).ConfigureAwait(true);
 
         // Only the filtered view needs rebuilding, and only when the change can move the row out of it.
+        // Un-favouriting while the favourites filter is on legitimately removes the row, and the
+        // selection goes with it — that case is handled by the restore only reselecting rows that still
+        // qualify.
         if (ShowFavoritesOnly)
         {
-            ChannelView.Refresh();
+            RefreshChannelView();
         }
     }
 
