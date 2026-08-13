@@ -24,4 +24,7 @@ public interface IProviderRegistry
 
     /// <exception cref="NotSupportedException">No registered resolver handles this source's protocol.</exception>
     IStreamUrlResolver GetStreamUrlResolver(PlaylistSource source);
+
+    /// <exception cref="NotSupportedException">No registered guide source handles this source's protocol.</exception>
+    IGuideSource GetGuideSource(PlaylistSource source);
 }

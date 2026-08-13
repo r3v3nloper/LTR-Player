@@ -22,6 +22,8 @@ namespace LTR.Player.Wpf;
 /// </remarks>
 public sealed class MainViewModelTests
 {
+    private static readonly DateTimeOffset SixPm = new(2026, 8, 12, 18, 0, 0, TimeSpan.Zero);
+
     [Fact]
     public void ConnectCommand_IsDisabledUntilTheXtreamFieldsAreFilled()
     {
@@ -475,7 +477,8 @@ public sealed class MainViewModelTests
         string externalId,
         string name,
         string? categoryExternalId = null,
-        bool isFavorite = false)
+        bool isFavorite = false,
+        int? guideChannelId = null)
     {
         return new Channel
         {
@@ -485,6 +488,22 @@ public sealed class MainViewModelTests
             Name = name,
             CategoryExternalId = categoryExternalId,
             IsFavorite = isFavorite,
+            GuideChannelId = guideChannelId,
+        };
+    }
+
+    private static EpgEntry CreateProgramme(
+        int guideChannelId,
+        string title,
+        DateTimeOffset startUtc,
+        TimeSpan? duration = null)
+    {
+        return new EpgEntry
+        {
+            GuideChannelId = guideChannelId,
+            Title = title,
+            StartUtc = startUtc,
+            StopUtc = startUtc + (duration ?? TimeSpan.FromHours(1)),
         };
     }
 
@@ -499,17 +518,27 @@ public sealed class MainViewModelTests
 
         public FakePlaybackSession Session { get; } = new();
 
+        public FakeGuideImportService GuideImport { get; } = new();
+
+        /// <summary>
+        /// A fixed clock, so a test can place programmes around a known "now" instead of around whenever
+        /// it happens to run.
+        /// </summary>
+        public FixedTimeProvider Time { get; } = new(SixPm);
+
         public MainViewModel Build()
         {
-            // One status line for all three, exactly as the container hands it out.
+            // One status line for all of them, exactly as the container hands it out.
             var status = new StatusLine();
 
             return new MainViewModel(
                 new SourceManagementViewModel(Store, Import, status, NullLogger<SourceManagementViewModel>.Instance),
-                new ChannelListViewModel(Store, status, NullLogger<ChannelListViewModel>.Instance),
+                new ChannelListViewModel(Store, Time, status, NullLogger<ChannelListViewModel>.Instance),
+                new GuideViewModel(Store, Time),
                 status,
                 new StubProviderRegistry(),
                 Session,
+                GuideImport,
                 NullLogger<MainViewModel>.Instance);
         }
     }

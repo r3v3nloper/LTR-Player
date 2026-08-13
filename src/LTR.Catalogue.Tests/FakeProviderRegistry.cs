@@ -1,3 +1,5 @@
+using System.IO;
+using System.Text;
 using LTR.Core.Content;
 using LTR.Core.Playback;
 using LTR.Core.Sources;
@@ -12,7 +14,8 @@ namespace LTR.Catalogue;
 /// The provider boundary is faked rather than the database: the behaviour under test is the order of the
 /// import sequence and what it stores, and both are only meaningful against a real store.
 /// </remarks>
-internal sealed class FakeProviderRegistry : IProviderRegistry, IContentProvider, IProviderCapabilityProbe
+internal sealed class FakeProviderRegistry
+    : IProviderRegistry, IContentProvider, IProviderCapabilityProbe, IGuideSource
 {
     private readonly List<string> _calls = [];
 
@@ -53,6 +56,34 @@ internal sealed class FakeProviderRegistry : IProviderRegistry, IContentProvider
     public IStreamUrlResolver GetStreamUrlResolver(PlaylistSource source)
     {
         throw new NotSupportedException("Importing never resolves a stream address.");
+    }
+
+    /// <summary>
+    /// The XMLTV document this source serves, or <see langword="null"/> for a source that has no guide.
+    /// </summary>
+    public string? GuideDocument { get; set; }
+
+    public IGuideSource GetGuideSource(PlaylistSource source)
+    {
+        return this;
+    }
+
+    public async Task<bool> TryReadGuideAsync(
+        PlaylistSource source,
+        Func<Stream, CancellationToken, Task> read,
+        CancellationToken cancellationToken)
+    {
+        _calls.Add("guide");
+
+        if (GuideDocument is null)
+        {
+            return false;
+        }
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(GuideDocument));
+        await read(stream, cancellationToken).ConfigureAwait(false);
+
+        return true;
     }
 
     public Task<ProviderAccount> AuthenticateAsync(CancellationToken cancellationToken)

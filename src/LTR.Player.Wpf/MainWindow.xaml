@@ -159,13 +159,48 @@
                   <ColumnDefinition Width="*" />
                   <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
-                <TextBlock Grid.Column="0" Text="★" Foreground="{StaticResource FavoriteBrush}"
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="★" Foreground="{StaticResource FavoriteBrush}"
                            Visibility="{Binding IsFavorite, Converter={StaticResource BooleanToVisibility}}" />
-                <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                <TextBlock Grid.Column="2" Text="⟲" ToolTip="Catch-up available"
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Name}"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="⟲" ToolTip="Catch-up available"
                            Style="{StaticResource MutedText}"
                            Visibility="{Binding HasArchive, Converter={StaticResource BooleanToVisibility}}" />
+
+                <!--
+                  What is on now, collapsed for channels the guide does not cover. Collapsed rather than
+                  blank: most channels of a real subscription have no guide entry, and a reserved empty
+                  line for each of them would halve the number of channels on screen.
+                -->
+                <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,2,0,0"
+                            Visibility="{Binding NowTitle,
+                                                 Converter={StaticResource NonEmptyStringToVisibility}}">
+                  <TextBlock Style="{StaticResource MutedText}" TextTrimming="CharacterEllipsis">
+                    <Run Text="{Binding NowTimes, Mode=OneWay}" />
+                    <Run Text="{Binding NowTitle, Mode=OneWay}" Foreground="{StaticResource TextBrush}" />
+                  </TextBlock>
+
+                  <ProgressBar Height="2"
+                               Margin="0,3,0,0"
+                               Minimum="0"
+                               Maximum="1"
+                               Value="{Binding NowProgress, Mode=OneWay}"
+                               Background="{StaticResource BorderBrush}"
+                               Foreground="{StaticResource AccentBrush}"
+                               BorderThickness="0" />
+
+                  <TextBlock Text="{Binding NextTitle}"
+                             Style="{StaticResource MutedText}"
+                             Margin="0,2,0,0"
+                             TextTrimming="CharacterEllipsis"
+                             Visibility="{Binding NextTitle,
+                                                  Converter={StaticResource NonEmptyStringToVisibility}}" />
+                </StackPanel>
               </Grid>
             </DataTemplate>
           </ListBox.ItemTemplate>
@@ -173,12 +208,31 @@
       </Grid>
 
       <StackPanel Grid.Row="3" Margin="0,12,0,0">
-        <Button Content="Toggle favourite"
-                Command="{Binding Channels.ToggleFavoriteCommand}"
-                HorizontalAlignment="Stretch"
-                Background="{StaticResource BorderBrush}"
-                Visibility="{Binding SourceManagement.IsAddingSource,
-                                     Converter={StaticResource InverseBooleanToVisibility}}" />
+        <Grid Visibility="{Binding SourceManagement.IsAddingSource,
+                                   Converter={StaticResource InverseBooleanToVisibility}}">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+
+          <Button Grid.Column="0" Content="Toggle favourite"
+                  Command="{Binding Channels.ToggleFavoriteCommand}"
+                  HorizontalAlignment="Stretch"
+                  Background="{StaticResource BorderBrush}" />
+
+          <Button Grid.Column="1" Content="Guide"
+                  Command="{Binding ToggleGuideCommand}"
+                  HorizontalAlignment="Stretch"
+                  Margin="6,0,0,0"
+                  Background="{StaticResource BorderBrush}" />
+
+          <Button Grid.Column="2" Content="⭳"
+                  ToolTip="Load the programme guide for this subscription"
+                  Command="{Binding ImportGuideCommand}"
+                  Margin="6,0,0,0"
+                  Background="{StaticResource BorderBrush}" />
+        </Grid>
         <TextBlock Text="{Binding Status.Text}"
                    Style="{StaticResource MutedText}"
                    TextWrapping="Wrap"
@@ -219,6 +273,197 @@
                        TextTrimming="CharacterEllipsis" />
 
             <Button Grid.Column="1" Content="Stop" Command="{Binding StopCommand}" />
+          </Grid>
+        </Border>
+
+        <!--
+          The programme timeline. Also inside VideoView.Content, and for the same reason as the overlay
+          above: placed beside the VideoView it would be hidden behind the native video window entirely.
+        -->
+        <Border x:Name="GuideRoot"
+                DataContext="{Binding Guide}"
+                Background="#F21B1E26"
+                Visibility="{Binding IsVisible, Converter={StaticResource BooleanToVisibility}}">
+          <Grid Margin="14">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Window navigation. Moving the window is a reload, not a scroll, so it is stated as
+                 buttons over time rather than as a scrollbar. -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal">
+              <Button Content="◀ 30 min" Command="{Binding MoveEarlierCommand}"
+                      Background="{StaticResource BorderBrush}" />
+              <Button Content="Now" Command="{Binding JumpToNowCommand}" Margin="6,0,0,0" />
+              <Button Content="30 min ▶" Command="{Binding MoveLaterCommand}" Margin="6,0,0,0"
+                      Background="{StaticResource BorderBrush}" />
+              <Button Content="Close" Command="{Binding DataContext.ToggleGuideCommand,
+                                                        RelativeSource={RelativeSource AncestorType=Window}}"
+                      Margin="18,0,0,0" Background="{StaticResource BorderBrush}" />
+            </StackPanel>
+
+            <TextBlock Grid.Row="1"
+                       Text="{Binding Notice}"
+                       Style="{StaticResource MutedText}"
+                       TextWrapping="Wrap"
+                       Margin="0,8,0,0"
+                       Visibility="{Binding Notice, Converter={StaticResource NonEmptyStringToVisibility}}" />
+
+            <!--
+              One horizontal scroller around the header and the rows together, so a column heading cannot
+              drift out of line with the blocks beneath it. Vertical scrolling is disabled here and left
+              to the row list, which virtualises.
+            -->
+            <ScrollViewer Grid.Row="2"
+                          Margin="0,10,0,0"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Disabled">
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="180" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Channel" Style="{StaticResource MutedText}" />
+
+                <ItemsControl Grid.Row="0" Grid.Column="1"
+                              ItemsSource="{Binding TimeMarkers}"
+                              Width="{Binding Timeline.Width}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <Canvas Height="18" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemContainerStyle>
+                    <Style TargetType="ContentPresenter">
+                      <Setter Property="Canvas.Left" Value="{Binding Position}" />
+                    </Style>
+                  </ItemsControl.ItemContainerStyle>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type local:GuideTimeMarker}">
+                      <TextBlock Text="{Binding Label}" Style="{StaticResource MutedText}" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ListBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                         ItemsSource="{Binding Rows}"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         HorizontalContentAlignment="Stretch"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling"
+                         VirtualizingPanel.ScrollUnit="Pixel">
+                  <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                      <Setter Property="Padding" Value="0,2" />
+                      <Setter Property="Template">
+                        <Setter.Value>
+                          <ControlTemplate TargetType="ListBoxItem">
+                            <ContentPresenter />
+                          </ControlTemplate>
+                        </Setter.Value>
+                      </Setter>
+                    </Style>
+                  </ListBox.ItemContainerStyle>
+                  <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type local:GuideRowViewModel}">
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="180" />
+                          <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding Name}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0"
+                                   TextTrimming="CharacterEllipsis" />
+
+                        <ItemsControl Grid.Column="1"
+                                      ItemsSource="{Binding Programmes}"
+                                      Width="{Binding DataContext.Timeline.Width, ElementName=GuideRoot}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <Canvas Height="34" Background="#141720" />
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                              <Setter Property="Canvas.Left" Value="{Binding Left}" />
+                            </Style>
+                          </ItemsControl.ItemContainerStyle>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type local:GuideProgrammeViewModel}">
+                              <Button Width="{Binding Width}"
+                                      Height="34"
+                                      Padding="6,2"
+                                      HorizontalContentAlignment="Left"
+                                      Background="{StaticResource BorderBrush}"
+                                      ToolTip="{Binding Title}"
+                                      Command="{Binding DataContext.SelectProgrammeCommand,
+                                                        ElementName=GuideRoot}"
+                                      CommandParameter="{Binding}">
+                                <StackPanel>
+                                  <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                  <TextBlock Text="{Binding Times}" Style="{StaticResource MutedText}" />
+                                </StackPanel>
+                              </Button>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!--
+                  The current moment, drawn over the rows. Declared after the row list so it lands on top,
+                  and not hit-testable so it does not swallow clicks on the programme underneath it.
+                -->
+                <Canvas x:Name="NowMarkerLayer"
+                        Grid.Row="1" Grid.Column="1"
+                        IsHitTestVisible="False"
+                        Visibility="{Binding IsNowVisible, Converter={StaticResource BooleanToVisibility}}">
+                  <Rectangle Canvas.Left="{Binding NowPosition}"
+                             Canvas.Top="0"
+                             Width="2"
+                             Height="{Binding ActualHeight, ElementName=NowMarkerLayer}"
+                             Fill="{StaticResource AccentBrush}" />
+                </Canvas>
+              </Grid>
+            </ScrollViewer>
+
+            <!-- Detail of the selected programme, which is where a description is long enough to read. -->
+            <Border Grid.Row="3"
+                    Margin="0,10,0,0"
+                    Padding="12,10"
+                    Background="{StaticResource SurfaceBrush}"
+                    Visibility="{Binding SelectedProgramme,
+                                         Converter={StaticResource NotNullToVisibility}}">
+              <StackPanel DataContext="{Binding SelectedProgramme}">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,0">
+                  <Run Text="{Binding Times, Mode=OneWay}" />
+                  <Run Text="{Binding Category, Mode=OneWay}" />
+                  <Run Text="{Binding EpisodeReference, Mode=OneWay}" />
+                </TextBlock>
+                <TextBlock Text="{Binding Description}"
+                           Style="{StaticResource MutedText}"
+                           Margin="0,6,0,0"
+                           MaxHeight="90"
+                           TextWrapping="Wrap"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Border>
           </Grid>
         </Border>
       </Grid>

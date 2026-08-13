@@ -1,7 +1,6 @@
 using LTR.Core.Content;
 using LTR.Core.Sources;
 using LTR.Persistence;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace LTR.Catalogue;
 
@@ -9,56 +8,64 @@ namespace LTR.Catalogue;
 /// Reads and writes the local catalogue, one unit of work per call.
 /// </summary>
 /// <remarks>
-/// Creates its own scope per operation rather than holding a context. A <see cref="LtrDbContext"/> is a
-/// unit of work meant to be used briefly and discarded (CLAUDE.md §3.3.2), and keeping one alive behind
-/// a long-lived service would turn it into a cache with a stale change tracker. This way callers need
-/// neither a scope nor a context.
+/// Holds no context of its own. A <see cref="LtrDbContext"/> is a unit of work meant to be used briefly
+/// and discarded (CLAUDE.md §3.3.2), and keeping one alive behind a long-lived service would turn it into
+/// a cache with a stale change tracker. This way callers need neither a scope nor a context.
 /// </remarks>
 internal sealed class CatalogueStore : ICatalogueStore
 {
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly CatalogueUnitOfWork _database;
 
-    public CatalogueStore(IServiceScopeFactory scopeFactory)
+    public CatalogueStore(CatalogueUnitOfWork database)
     {
-        _scopeFactory = scopeFactory;
+        _database = database;
     }
 
     public Task<IReadOnlyList<PlaylistSource>> GetSourcesAsync(CancellationToken cancellationToken)
     {
-        return WithContextAsync(context => context.GetSourcesAsync(cancellationToken));
+        return _database.RunAsync(context => context.GetSourcesAsync(cancellationToken));
     }
 
     public Task<IReadOnlyList<Channel>> GetLiveChannelsAsync(int sourceId, CancellationToken cancellationToken)
     {
-        return WithContextAsync(context => context.GetLiveChannelsAsync(sourceId, cancellationToken));
+        return _database.RunAsync(context => context.GetLiveChannelsAsync(sourceId, cancellationToken));
     }
 
     public Task<IReadOnlyList<Category>> GetLiveCategoriesAsync(int sourceId, CancellationToken cancellationToken)
     {
-        return WithContextAsync(context => context.GetLiveCategoriesAsync(sourceId, cancellationToken));
+        return _database.RunAsync(context => context.GetLiveCategoriesAsync(sourceId, cancellationToken));
+    }
+
+    public Task<IReadOnlyList<ChannelGuideSlice>> GetNowAndNextAsync(
+        int sourceId,
+        DateTimeOffset atUtc,
+        CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.GetNowAndNextAsync(sourceId, atUtc, cancellationToken));
+    }
+
+    public Task<IReadOnlyList<EpgEntry>> GetGuideProgrammesAsync(
+        IReadOnlyCollection<int> guideChannelIds,
+        DateTimeOffset fromUtc,
+        DateTimeOffset toUtc,
+        CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context =>
+            context.GetGuideProgrammesAsync(guideChannelIds, fromUtc, toUtc, cancellationToken));
+    }
+
+    public Task<GuideSummary> GetGuideSummaryAsync(int sourceId, CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.GetGuideSummaryAsync(sourceId, cancellationToken));
     }
 
     public Task SetFavoriteAsync(int channelId, bool isFavorite, CancellationToken cancellationToken)
     {
-        return WithContextAsync(context => context.SetFavoriteAsync(channelId, isFavorite, cancellationToken));
+        return _database.RunAsync(context => context.SetFavoriteAsync(channelId, isFavorite, cancellationToken));
     }
 
     public Task DeleteSourceAsync(int sourceId, CancellationToken cancellationToken)
     {
-        return WithContextAsync(context => context.DeleteSourceAsync(sourceId, cancellationToken));
-    }
-
-    private async Task<T> WithContextAsync<T>(Func<LtrDbContext, Task<T>> operation)
-    {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
-        return await operation(context).ConfigureAwait(false);
-    }
-
-    private async Task WithContextAsync(Func<LtrDbContext, Task> operation)
-    {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
-        await operation(context).ConfigureAwait(false);
+        return _database.RunAsync(context => context.DeleteSourceAsync(sourceId, cancellationToken));
     }
 }

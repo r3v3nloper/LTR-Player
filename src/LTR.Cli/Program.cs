@@ -36,6 +36,7 @@ rootCommand.Subcommands.Add(BuildChannelsCommand(serviceProvider, sourceOptions)
 rootCommand.Subcommands.Add(BuildResolveCommand(serviceProvider, sourceOptions));
 rootCommand.Subcommands.Add(BuildPlayTestCommand(serviceProvider, sourceOptions));
 rootCommand.Subcommands.Add(BuildSourcesCommand(serviceProvider));
+rootCommand.Subcommands.Add(BuildGuideCommand(serviceProvider));
 
 return await rootCommand.Parse(args).InvokeAsync().ConfigureAwait(false);
 
@@ -67,6 +68,7 @@ static ServiceProvider BuildServiceProvider(bool verbose)
     // Singleton like the others now: its dependencies create their own units of work, so it no longer
     // needs a scope of its own.
     services.AddSingleton<SourcesCommandHandler>();
+    services.AddSingleton<GuideCommandHandler>();
     services.AddSingleton<ProbeCommandHandler>();
     services.AddSingleton<ChannelsCommandHandler>();
     services.AddSingleton<ResolveCommandHandler>();
@@ -81,7 +83,7 @@ static Command BuildSourcesCommand(IServiceProvider services)
 
     var listCommand = new Command("list", "Shows the configured sources and which database holds them.");
     listCommand.SetAction((_, cancellationToken) => CommandRunner.RunAsync(() =>
-        WithCatalogue(services, handler => handler.ListAsync(cancellationToken))));
+        WithCatalogue<SourcesCommandHandler>(services, handler => handler.ListAsync(cancellationToken))));
 
     var addressArgument = new Argument<string>("address")
     {
@@ -97,7 +99,7 @@ static Command BuildSourcesCommand(IServiceProvider services)
     addCommand.Arguments.Add(addressArgument);
     addCommand.Options.Add(nameOption);
     addCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
-        WithCatalogue(services, handler => handler.AddPlaylistAsync(
+        WithCatalogue<SourcesCommandHandler>(services, handler => handler.AddPlaylistAsync(
             parseResult.GetValue(addressArgument) ?? string.Empty,
             parseResult.GetValue(nameOption),
             cancellationToken))));
@@ -107,11 +109,53 @@ static Command BuildSourcesCommand(IServiceProvider services)
     var removeCommand = new Command("remove", "Removes a source together with its catalogue.");
     removeCommand.Arguments.Add(idArgument);
     removeCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
-        WithCatalogue(services, handler => handler.RemoveAsync(parseResult.GetValue(idArgument), cancellationToken))));
+        WithCatalogue<SourcesCommandHandler>(services, handler => handler.RemoveAsync(
+            parseResult.GetValue(idArgument),
+            cancellationToken))));
 
     command.Subcommands.Add(listCommand);
     command.Subcommands.Add(addCommand);
     command.Subcommands.Add(removeCommand);
+
+    return command;
+}
+
+static Command BuildGuideCommand(IServiceProvider services)
+{
+    var idOption = new Option<int>("--source-id")
+    {
+        Description = "Source id, as shown by 'sources list'.",
+        Required = true,
+    };
+
+    var forceOption = new Option<bool>("--force")
+    {
+        Description = "Fetch the guide even when the stored one is still fresh.",
+    };
+
+    var command = new Command("guide", "Imports and inspects a stored source's programme guide.");
+
+    var importCommand = new Command(
+        "import",
+        "Downloads the source's XMLTV guide, stores it and matches it to the channel list.");
+
+    importCommand.Options.Add(idOption);
+    importCommand.Options.Add(forceOption);
+    importCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithCatalogue<GuideCommandHandler>(services, handler => handler.ImportAsync(
+            parseResult.GetValue(idOption),
+            parseResult.GetValue(forceOption),
+            cancellationToken))));
+
+    var showCommand = new Command("show", "Reports the stored guide's coverage and match rate.");
+    showCommand.Options.Add(idOption);
+    showCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithCatalogue<GuideCommandHandler>(services, handler => handler.ShowAsync(
+            parseResult.GetValue(idOption),
+            cancellationToken))));
+
+    command.Subcommands.Add(importCommand);
+    command.Subcommands.Add(showCommand);
 
     return command;
 }
@@ -125,7 +169,8 @@ static Command BuildSourcesCommand(IServiceProvider services)
 /// applications share one, and either may run first, so whichever does has to migrate it and protect
 /// any credential still held in plain text.
 /// </remarks>
-static async Task<int> WithCatalogue(IServiceProvider services, Func<SourcesCommandHandler, Task<int>> action)
+static async Task<int> WithCatalogue<THandler>(IServiceProvider services, Func<THandler, Task<int>> action)
+    where THandler : notnull
 {
     var upgraded = await services.PrepareCatalogueAsync(CancellationToken.None).ConfigureAwait(false);
 
@@ -134,7 +179,7 @@ static async Task<int> WithCatalogue(IServiceProvider services, Func<SourcesComm
         Console.WriteLine($"Protected {upgraded} stored credential(s) that were held in plain text.");
     }
 
-    return await action(services.GetRequiredService<SourcesCommandHandler>()).ConfigureAwait(false);
+    return await action(services.GetRequiredService<THandler>()).ConfigureAwait(false);
 }
 
 static Command BuildProbeCommand(IServiceProvider services, SourceOptions sourceOptions)

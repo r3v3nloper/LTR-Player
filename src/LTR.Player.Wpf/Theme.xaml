@@ -7,6 +7,7 @@
   <local:StringPresenceToVisibilityConverter x:Key="NonEmptyStringToVisibility" VisibleWhenPresent="True" />
   <local:StringPresenceToVisibilityConverter x:Key="EmptyStringToVisibility" VisibleWhenPresent="False" />
   <local:EnumMatchConverter x:Key="EnumMatch" />
+  <local:NullToVisibilityConverter x:Key="NotNullToVisibility" />
 
   <!-- A video player is used in a dark room, so the chrome stays dark and low-contrast against the
        picture rather than competing with it. -->

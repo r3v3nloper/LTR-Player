@@ -26,6 +26,11 @@ internal sealed class StubProviderRegistry : IProviderRegistry, IStreamUrlResolv
         return this;
     }
 
+    public IGuideSource GetGuideSource(PlaylistSource source)
+    {
+        throw new NotSupportedException("The view model imports the guide through the import service.");
+    }
+
     public bool Supports(PlaylistSource source)
     {
         return true;

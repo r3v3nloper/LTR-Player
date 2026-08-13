@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using LTR.Playback.LibVlc;
 
 namespace LTR.Player.Wpf;
@@ -10,7 +11,18 @@ namespace LTR.Player.Wpf;
 /// </summary>
 public partial class MainWindow : Window
 {
+    /// <summary>
+    /// How often the guide display is brought up to date.
+    /// </summary>
+    /// <remarks>
+    /// A minute is fine for what this shows: programme boundaries land on the minute, and the progress bar
+    /// moving a pixel late is invisible. More often would query the database for thousands of channels for
+    /// no visible gain.
+    /// </remarks>
+    private static readonly TimeSpan GuideRefreshInterval = TimeSpan.FromMinutes(1);
+
     private readonly MainViewModel _viewModel;
+    private readonly DispatcherTimer _guideRefreshTimer;
     private bool _hasReleasedPlayback;
 
     public MainWindow(MainViewModel viewModel, IVlcVideoSink videoSink)
@@ -28,13 +40,26 @@ public partial class MainWindow : Window
         // documented IVlcVideoSink seam: VideoView needs the concrete MediaPlayer to render into.
         Video.MediaPlayer = videoSink.MediaPlayer;
 
+        // The clock belongs to the view rather than the view model: "what time is it" is the one piece of
+        // state nothing in the application changes, and a DispatcherTimer is what makes the update land on
+        // the thread the bindings live on.
+        _guideRefreshTimer = new DispatcherTimer { Interval = GuideRefreshInterval };
+        _guideRefreshTimer.Tick += OnGuideRefreshTick;
+
         Loaded += OnLoaded;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
+        _guideRefreshTimer.Start();
+
         await _viewModel.InitializeAsync(CancellationToken.None).ConfigureAwait(true);
+    }
+
+    private async void OnGuideRefreshTick(object? sender, EventArgs e)
+    {
+        await _viewModel.RefreshGuideDisplayAsync().ConfigureAwait(true);
     }
 
     /// <summary>
@@ -55,6 +80,10 @@ public partial class MainWindow : Window
             base.OnClosing(e);
             return;
         }
+
+        // Stopped before anything else: a tick arriving during teardown would query a database whose
+        // container is on its way out.
+        _guideRefreshTimer.Stop();
 
         e.Cancel = true;
         base.OnClosing(e);

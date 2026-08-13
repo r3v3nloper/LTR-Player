@@ -215,6 +215,7 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
         services.AddSingleton<ICredentialProtector, PassThroughCredentialProtector>();
         services.AddSingleton(registry);
         services.AddDbContext<LtrDbContext>(options => options.UseSqlite(_connection));
+        services.AddSingleton<CatalogueUnitOfWork>();
         services.AddSingleton<ICatalogueStore, CatalogueStore>();
         services.AddSingleton<ISourceImportService, SourceImportService>();
 
@@ -225,28 +226,5 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
         await context.Database.EnsureCreatedAsync(cancellationToken);
 
         return _services.GetRequiredService<ISourceImportService>();
-    }
-
-    /// <summary>
-    /// Collects progress on the calling thread.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="Progress{T}"/> posts to a synchronisation context, which in a test means the callbacks
-    /// may not have run by the time the assertion does. This reports inline so the order can be asserted
-    /// deterministically.
-    /// </remarks>
-    private sealed class SynchronousProgress<T> : IProgress<T>
-    {
-        private readonly Action<T> _report;
-
-        public SynchronousProgress(Action<T> report)
-        {
-            _report = report;
-        }
-
-        public void Report(T value)
-        {
-            _report(value);
-        }
     }
 }

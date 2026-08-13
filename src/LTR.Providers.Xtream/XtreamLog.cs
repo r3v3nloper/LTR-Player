@@ -58,4 +58,10 @@ internal static partial class XtreamLog
         Level = LogLevel.Information,
         Message = "Probed {Source}; supported: {Capabilities}")]
     public static partial void CapabilitiesProbed(ILogger logger, string source, string capabilities);
+
+    [LoggerMessage(
+        EventId = 1007,
+        Level = LogLevel.Information,
+        Message = "{Source} was probed and serves no xmltv.php, so it has no guide to import.")]
+    public static partial void GuideUnavailable(ILogger logger, string source);
 }

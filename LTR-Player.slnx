@@ -7,6 +7,8 @@
     <Project Path="src/LTR.Core.Abstractions/LTR.Core.Abstractions.csproj" />
     <Project Path="src/LTR.Core.Tests/LTR.Core.Tests.csproj" />
     <Project Path="src/LTR.Core/LTR.Core.csproj" />
+    <Project Path="src/LTR.Epg.Xmltv.Tests/LTR.Epg.Xmltv.Tests.csproj" />
+    <Project Path="src/LTR.Epg.Xmltv/LTR.Epg.Xmltv.csproj" />
     <Project Path="src/LTR.Persistence.Tests/LTR.Persistence.Tests.csproj" />
     <Project Path="src/LTR.Persistence/LTR.Persistence.csproj" />
     <Project Path="src/LTR.Playback.Abstractions/LTR.Playback.Abstractions.csproj" />

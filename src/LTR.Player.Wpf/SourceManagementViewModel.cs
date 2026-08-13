@@ -143,6 +143,10 @@ public sealed partial class SourceManagementViewModel : ObservableObject
             Sources.Add(source);
             IsAddingSource = false;
             SelectedSource = source;
+
+            // After the selection, so the channel list is already on screen when the guide starts
+            // arriving behind it.
+            Coordinator.CatalogueImported(source);
         }
         catch (OperationCanceledException)
         {
@@ -202,6 +206,10 @@ public sealed partial class SourceManagementViewModel : ObservableObject
             // Awaited rather than left to the selection path: the source has not changed, and the busy
             // flag has to stay raised until the rebuilt list is on screen.
             await Coordinator.ShowCatalogueAsync(source, cancellationToken).ConfigureAwait(true);
+
+            // Deliberately not awaited by the coordinator either: a guide download must not keep the
+            // refresh busy for the minutes it takes.
+            Coordinator.CatalogueImported(source);
         }
         catch (OperationCanceledException)
         {
@@ -362,6 +370,10 @@ public sealed partial class SourceManagementViewModel : ObservableObject
         public Task ReleasePlaybackAsync(CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
+        }
+
+        public void CatalogueImported(PlaylistSource source)
+        {
         }
     }
 }

@@ -81,6 +81,7 @@ public partial class App : Application
         services.AddSingleton<StatusLine>();
         services.AddSingleton<SourceManagementViewModel>();
         services.AddSingleton<ChannelListViewModel>();
+        services.AddSingleton<GuideViewModel>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 

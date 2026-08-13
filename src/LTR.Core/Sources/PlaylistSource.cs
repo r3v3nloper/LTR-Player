@@ -30,6 +30,16 @@ public abstract class PlaylistSource
     public DateTimeOffset? LastRefreshedUtc { get; set; }
 
     /// <summary>
+    /// When this source's programme guide was last imported.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="LastRefreshedUtc"/> because the two happen on different schedules: a
+    /// guide is a download of tens to hundreds of megabytes and is not worth repeating with every
+    /// catalogue refresh, so this is what decides whether one is due.
+    /// </remarks>
+    public DateTimeOffset? LastGuideImportedUtc { get; set; }
+
+    /// <summary>
     /// What this particular panel turned out to support. Populated by a capability probe rather
     /// than assumed, because Xtream-compatible panels differ substantially.
     /// </summary>

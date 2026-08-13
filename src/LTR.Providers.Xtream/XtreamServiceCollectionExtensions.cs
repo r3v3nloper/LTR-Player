@@ -22,6 +22,12 @@ public static class XtreamServiceCollectionExtensions
     /// </summary>
     private static readonly TimeSpan BreakerSamplingDuration = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// A full guide is one response of tens to hundreds of megabytes, frequently from the same
+    /// overloaded host. Nothing about it can be retried usefully, so it gets one generous attempt.
+    /// </summary>
+    private static readonly TimeSpan GuideDownloadTimeout = TimeSpan.FromMinutes(10);
+
     public static IServiceCollection AddXtreamProvider(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -44,6 +50,12 @@ public static class XtreamServiceCollectionExtensions
 
         // Stateless and free of I/O, so a single instance is enough.
         services.AddSingleton<IStreamUrlResolver, XtreamStreamUrlResolver>();
+
+        // Deliberately not behind the resilience pipeline above: see XtreamGuideSource. Registered
+        // through a factory rather than by type, so the instance comes from the typed-client
+        // registration and arrives with its configured HttpClient instead of a default one.
+        services.AddHttpClient<XtreamGuideSource>(client => client.Timeout = GuideDownloadTimeout);
+        services.AddTransient<IGuideSource>(provider => provider.GetRequiredService<XtreamGuideSource>());
 
         return services;
     }

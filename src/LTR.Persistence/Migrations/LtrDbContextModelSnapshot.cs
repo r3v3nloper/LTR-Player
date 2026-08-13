@@ -75,6 +75,9 @@ namespace LTR.Persistence.Migrations
                         .HasMaxLength(400)
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("GuideChannelId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("HasArchive")
                         .HasColumnType("INTEGER");
 
@@ -109,10 +112,87 @@ namespace LTR.Persistence.Migrations
 
                     b.HasIndex("EpgChannelId");
 
+                    b.HasIndex("GuideChannelId");
+
                     b.HasIndex("SourceId", "ExternalId")
                         .IsUnique();
 
                     b.ToTable("Channels", (string)null);
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.EpgEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EpisodeReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("GuideChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("IconUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("StartUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("StopUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StopUtc");
+
+                    b.HasIndex("GuideChannelId", "StartUtc");
+
+                    b.ToTable("EpgEntries", (string)null);
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.GuideChannel", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IconUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SourceId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceId", "ExternalId")
+                        .IsUnique();
+
+                    b.ToTable("GuideChannels", (string)null);
                 });
 
             modelBuilder.Entity("LTR.Core.Sources.PlaylistSource", b =>
@@ -122,6 +202,9 @@ namespace LTR.Persistence.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset>("CreatedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LastGuideImportedUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("LastRefreshedUtc")
@@ -207,6 +290,11 @@ namespace LTR.Persistence.Migrations
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("LTR.Core.Content.GuideChannel", "GuideChannel")
+                        .WithMany()
+                        .HasForeignKey("GuideChannelId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("LTR.Core.Sources.PlaylistSource", "Source")
                         .WithMany("Channels")
                         .HasForeignKey("SourceId")
@@ -214,6 +302,30 @@ namespace LTR.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Category");
+
+                    b.Navigation("GuideChannel");
+
+                    b.Navigation("Source");
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.EpgEntry", b =>
+                {
+                    b.HasOne("LTR.Core.Content.GuideChannel", "GuideChannel")
+                        .WithMany("Entries")
+                        .HasForeignKey("GuideChannelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GuideChannel");
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.GuideChannel", b =>
+                {
+                    b.HasOne("LTR.Core.Sources.PlaylistSource", "Source")
+                        .WithMany()
+                        .HasForeignKey("SourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("Source");
                 });
@@ -267,6 +379,11 @@ namespace LTR.Persistence.Migrations
             modelBuilder.Entity("LTR.Core.Content.Category", b =>
                 {
                     b.Navigation("Channels");
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.GuideChannel", b =>
+                {
+                    b.Navigation("Entries");
                 });
 
             modelBuilder.Entity("LTR.Core.Sources.PlaylistSource", b =>

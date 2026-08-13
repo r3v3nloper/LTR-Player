@@ -16,6 +16,7 @@ LTR.Providers[.Abstractions]   IContentProvider, probes, resolvers + the registr
 LTR.Providers.Xtream           player_api.php client
 LTR.Providers.M3u              M3U-Plus parser and provider
 LTR.Catalogue[.Abstractions]   Application layer: import orchestration and catalogue access
+LTR.Epg.Xmltv                  XMLTV reader. No dependencies at all — not even on Core
 LTR.Persistence                LtrDbContext. All database logic lives here (§3.3.2)
 LTR.Playback[.Abstractions]    Engine-neutral playback policy
 LTR.Playback.LibVlc            LibVLC engine
@@ -49,8 +50,21 @@ a 404.
 
 **Real data is messier than fixtures.** A 17,000-channel subscription contains decorative separator
 rows carrying valid stream ids (`ChannelNaming.IsSeparatorLabel`), and 72% of its channels have no
-`tvg-id` — so guide matching by name is the primary path for M3, not a fallback. Normalisation must
-strip `FR: ` and `HD`/`FHD`/`4K` but keep `+1`, which is a different channel.
+`tvg-id` — so guide matching by name is the primary path, not a fallback. Normalisation must
+strip `FR: ` and `HD`/`FHD`/`4K` but keep `+1`, which is a different channel. `ChannelNaming` therefore
+has two normalisers that must not be confused: `ToIdentityKey` keeps every distinction the provider makes,
+`ToGuideMatchKey` discards the cosmetic ones. `Docs/epg.md` has the rest of the guide's design.
+
+## Persistence traps
+
+- **SQLite cannot compare a `DateTimeOffset`.** EF writes it as text with the offset appended, which sorts
+  wrongly across offsets, so the provider refuses to translate `<`, `>` or `Max` over such a column. The
+  guide's instants therefore go through a converter to UTC `DateTime`. Any new column that a query filters
+  or orders by needs the same treatment.
+- **`MigrationTests` migrates an empty database and proves only that the schema builds.**
+  `MigrationUpgradeTests` is the one that matters for shipped installations: SQLite cannot alter a
+  constraint in place, so EF implements one by rebuilding the table, and a rebuild is what silently empties
+  it. Add a case there for every migration that alters an existing table.
 
 ## WPF traps, each of which shipped a bug once
 
@@ -70,6 +84,9 @@ strip `FR: ` and `HD`/`FHD`/`4K` but keep `+1`, which is a different channel.
   list box drops its selection, so it has to be restored.
 - **Dispose the DI container asynchronously.** It holds `IAsyncDisposable` singletons; the synchronous
   `Dispose` throws and `PlaybackSession` never releases its stream.
+- **A view model that reads the clock must be given a `TimeProvider`.** `DateTimeOffset.UtcNow` in
+  `ToggleGuideAsync` opened the timeline on a window that could not contain the guide's own "now" marker;
+  the test caught it only because the test clock differs from the real one.
 
 ## Verifying
 
@@ -79,9 +96,12 @@ strip `FR: ` and `HD`/`FHD`/`4K` but keep `+1`, which is a different channel.
 dotnet run --project src/LTR.Cli -- probe    --url http://HOST:PORT --user U --pass P
 dotnet run --project src/LTR.Cli -- channels --url http://HOST:PORT --user U --pass P
 dotnet run --project src/LTR.Cli -- play-test --url http://HOST:PORT --user U --pass P --stream-id ID
+dotnet run --project src/LTR.Cli -- guide import --source-id ID
 ```
 
 `play-test`'s last line is the real test: it polls the panel until it reports the connection released.
+`guide import`'s `Matched N of M` is the equivalent for the guide — everything else about an import can
+succeed while it achieves nothing.
 
 `sources add-playlist <path-to.m3u>` seeds a source with no credentials, which is how UI behaviour that
 needs a configured source gets verified without a subscription.

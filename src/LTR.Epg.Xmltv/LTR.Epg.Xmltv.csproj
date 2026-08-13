@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <!--
+    No package references at all. XMLTV is XML and gzip, both of which the base class library reads
+    without help, and a guide parser that pulls in a dependency would be paying for nothing (§2.14).
+    No project references either: this reads a document and knows nothing about sources, channels or
+    storage, which is what lets it be tested against a file and nothing else.
+  -->
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LTR.Epg.Xmltv.Tests" />
+  </ItemGroup>
+
+</Project>

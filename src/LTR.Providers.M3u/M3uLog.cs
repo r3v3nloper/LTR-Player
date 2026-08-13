@@ -17,6 +17,12 @@ internal static partial class M3uLog
     public static partial void SkippedSeparatorRows(ILogger logger, int count, string source);
 
     [LoggerMessage(
+        EventId = 1203,
+        Level = LogLevel.Information,
+        Message = "{Source} names no XMLTV guide, neither configured nor declared by the playlist.")]
+    public static partial void NoGuideDeclared(ILogger logger, string source);
+
+    [LoggerMessage(
         EventId = 1202,
         Level = LogLevel.Warning,
         Message = "The playlist for {Source} declared {Count} entries that could not be used; they had "

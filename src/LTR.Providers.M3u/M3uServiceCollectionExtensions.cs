@@ -14,6 +14,12 @@ public static class M3uServiceCollectionExtensions
     /// </summary>
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(3);
 
+    /// <summary>
+    /// Longer still than the playlist timeout: a guide is an order of magnitude larger than the
+    /// playlist that points at it.
+    /// </summary>
+    private static readonly TimeSpan GuideDownloadTimeout = TimeSpan.FromMinutes(10);
+
     public static IServiceCollection AddM3uProvider(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -33,6 +39,12 @@ public static class M3uServiceCollectionExtensions
         services.AddTransient<IProviderCapabilityProbe, M3uCapabilityProbe>();
 
         services.AddSingleton<IStreamUrlResolver, M3uStreamUrlResolver>();
+
+        // Its own client, for the same reason the playlist loader has one: a guide is a single large
+        // response that no retry can improve. Registered through a factory so the instance comes from
+        // the typed-client registration rather than being activated with a default HttpClient.
+        services.AddHttpClient<M3uGuideSource>(client => client.Timeout = GuideDownloadTimeout);
+        services.AddTransient<IGuideSource>(provider => provider.GetRequiredService<M3uGuideSource>());
 
         return services;
     }

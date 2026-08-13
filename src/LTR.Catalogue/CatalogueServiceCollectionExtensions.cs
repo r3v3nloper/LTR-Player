@@ -24,10 +24,12 @@ public static class CatalogueServiceCollectionExtensions
         services.AddDbContext<LtrDbContext>(options =>
             options.UseSqlite(LtrDatabaseLocation.ConnectionString));
 
-        // Singletons: both create a scope per operation rather than holding a context, so neither pins
-        // a unit of work open.
+        // Singletons: each creates a scope per operation rather than holding a context, so none pins a
+        // unit of work open.
+        services.TryAddSingleton<CatalogueUnitOfWork>();
         services.TryAddSingleton<ICatalogueStore, CatalogueStore>();
         services.TryAddSingleton<ISourceImportService, SourceImportService>();
+        services.TryAddSingleton<IGuideImportService, GuideImportService>();
 
         return services;
     }

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using LTR.Catalogue;
 using LTR.Core.Sources;
 using LTR.Playback;
 using LTR.Providers;
@@ -9,39 +10,64 @@ using Microsoft.Extensions.Logging;
 namespace LTR.Player.Wpf;
 
 /// <summary>
-/// Drives the main window: composes source management and the channel list, and owns playback.
+/// Drives the main window: composes source management, the channel list and the guide, and owns playback.
 /// </summary>
 /// <remarks>
-/// It is also the two halves' <see cref="ISourceCoordinator"/>, which is what keeps them from knowing
-/// about one another. Only this class can both reach the channel list and stop a stream, and those are
-/// exactly the two things source management has to trigger.
+/// It is also the halves' <see cref="ISourceCoordinator"/>, which is what keeps them from knowing about one
+/// another. Only this class can reach the channel list, the guide and the stream at once, and those are
+/// exactly the things source management has to trigger.
 /// </remarks>
-public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
+public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator, IAsyncDisposable
 {
     private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
+    private readonly IGuideImportService _guideImport;
     private readonly ILogger<MainViewModel> _logger;
+
+    /// <summary>
+    /// Cancels a guide import when the window closes.
+    /// </summary>
+    /// <remarks>
+    /// An import runs for minutes and writes to the database throughout. Left running past shutdown it
+    /// would write into a disposed container, and the process would not exit while it did.
+    /// </remarks>
+    private readonly CancellationTokenSource _guideImportLifetime = new();
+
+    /// <summary>
+    /// The import in flight, so a second one is not started alongside it and so shutdown can wait for it
+    /// to notice its cancellation.
+    /// </summary>
+    private Task _guideImportTask = Task.CompletedTask;
 
     [ObservableProperty]
     private string _nowPlaying = string.Empty;
 
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ImportGuideCommand))]
+    private bool _isImportingGuide;
+
     public MainViewModel(
         SourceManagementViewModel sources,
         ChannelListViewModel channels,
+        GuideViewModel guide,
         StatusLine status,
         IProviderRegistry providers,
         IPlaybackSession session,
+        IGuideImportService guideImport,
         ILogger<MainViewModel> logger)
     {
         SourceManagement = sources;
         Channels = channels;
+        Guide = guide;
         Status = status;
 
         _providers = providers;
         _session = session;
+        _guideImport = guideImport;
         _logger = logger;
 
         Channels.PropertyChanged += OnChannelListPropertyChanged;
+        SourceManagement.PropertyChanged += OnSourceManagementPropertyChanged;
         _session.StateChanged += OnPlaybackStateChanged;
 
         SourceManagement.Coordinator = this;
@@ -51,7 +77,19 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
     public ChannelListViewModel Channels { get; }
 
+    public GuideViewModel Guide { get; }
+
     public StatusLine Status { get; }
+
+    /// <summary>
+    /// The guide import in flight, or an already completed task.
+    /// </summary>
+    /// <remarks>
+    /// Exposed because a background task nothing can observe is also a background task nothing can shut
+    /// down or test. <see cref="DisposeAsync"/> waits on it, and so does anything that needs to know the
+    /// import has finished.
+    /// </remarks>
+    public Task GuideImportCompletion => _guideImportTask;
 
     /// <summary>
     /// Loads the configured sources, so a restart lands straight in the channel list.
@@ -59,6 +97,28 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     public Task InitializeAsync(CancellationToken cancellationToken)
     {
         return SourceManagement.InitializeAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Rereads what is on now, and moves the timeline's marker.
+    /// </summary>
+    /// <remarks>
+    /// Driven by a timer the window owns. "Now" moves without anything happening in the application, so a
+    /// row left alone keeps showing a programme that finished half an hour ago.
+    /// </remarks>
+    public async Task RefreshGuideDisplayAsync()
+    {
+        Guide.UpdateNowMarker();
+
+        try
+        {
+            await Channels.RefreshGuideAsync(CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // A failed periodic refresh must not put a dialog in front of someone watching television.
+            PlayerLog.GuideRefreshFailed(_logger, exception);
+        }
     }
 
     /// <summary>
@@ -78,6 +138,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         try
         {
             await Channels.ShowAsync(source, cancellationToken).ConfigureAwait(true);
+            Guide.Attach(source, Channels.VisibleChannels);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -91,6 +152,11 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     Task ISourceCoordinator.ReleasePlaybackAsync(CancellationToken cancellationToken)
     {
         return ReleasePlaybackAsync(cancellationToken);
+    }
+
+    void ISourceCoordinator.CatalogueImported(PlaylistSource source)
+    {
+        StartGuideImport(source, onlyWhenStale: true);
     }
 
     /// <remarks>
@@ -140,6 +206,133 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         return ReleasePlaybackAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Opens or closes the timeline, loading the window on the way in.
+    /// </summary>
+    /// <remarks>
+    /// The channels are handed over here rather than when the catalogue loads, so the timeline shows what
+    /// the list currently shows — a category or a search having narrowed it is exactly the filter the user
+    /// wants the guide to respect.
+    /// </remarks>
+    [RelayCommand]
+    private async Task ToggleGuideAsync(CancellationToken cancellationToken)
+    {
+        if (Guide.IsVisible)
+        {
+            Guide.Hide();
+            return;
+        }
+
+        await Guide
+            .ShowAsync(SourceManagement.SelectedSource, Channels.VisibleChannels, cancellationToken)
+            .ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Fetches the selected source's guide on request, whether or not the stored one is still fresh.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanImportGuide))]
+    private void ImportGuide()
+    {
+        if (SourceManagement.SelectedSource is { } source)
+        {
+            StartGuideImport(source, onlyWhenStale: false);
+        }
+    }
+
+    private bool CanImportGuide()
+    {
+        return !IsImportingGuide && SourceManagement.SelectedSource is not null;
+    }
+
+    /// <summary>
+    /// Runs a guide import in the background and reports it through the status line.
+    /// </summary>
+    /// <remarks>
+    /// Not awaited by its caller, which is the point: an import takes minutes and the window has to stay
+    /// usable throughout, including for playback. What keeps that from being fire-and-forget in the bad
+    /// sense is that the task is kept, every failure is caught and reported here, and shutdown cancels it.
+    /// </remarks>
+    private void StartGuideImport(PlaylistSource source, bool onlyWhenStale)
+    {
+        if (IsImportingGuide)
+        {
+            return;
+        }
+
+        IsImportingGuide = true;
+        _guideImportTask = RunGuideImportAsync(source, onlyWhenStale);
+    }
+
+    private async Task RunGuideImportAsync(PlaylistSource source, bool onlyWhenStale)
+    {
+        var progress = new Progress<GuideImportStage>(stage => Status.Text = Describe(stage));
+
+        try
+        {
+            var result = onlyWhenStale
+                ? await _guideImport
+                    .ImportIfStaleAsync(source, progress, _guideImportLifetime.Token)
+                    .ConfigureAwait(true)
+                : await _guideImport
+                    .ImportAsync(source, progress, _guideImportLifetime.Token)
+                    .ConfigureAwait(true);
+
+            Status.Text = Describe(result, source);
+
+            if (result.Succeeded)
+            {
+                await Channels.RefreshGuideAsync(_guideImportLifetime.Token).ConfigureAwait(true);
+
+                if (Guide.IsVisible)
+                {
+                    await Guide.LoadAsync(_guideImportLifetime.Token).ConfigureAwait(true);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Either the window is closing or the source was removed. Neither is worth reporting.
+        }
+        catch (Exception exception)
+        {
+            PlayerLog.GuideImportFailed(_logger, exception, source.Name);
+            Status.Text = "The programme guide could not be loaded. Details are in the log.";
+        }
+        finally
+        {
+            IsImportingGuide = false;
+        }
+    }
+
+    private static string Describe(GuideImportStage stage)
+    {
+        return stage switch
+        {
+            GuideImportStage.Locating => "Looking for the programme guide...",
+            GuideImportStage.Reading => "Reading the programme guide...",
+            GuideImportStage.Matching => "Matching the guide to the channel list...",
+            GuideImportStage.Pruning => "Tidying up the guide...",
+            _ => "Working...",
+        };
+    }
+
+    private static string Describe(GuideImportResult result, PlaylistSource source)
+    {
+        return result.Outcome switch
+        {
+            GuideImportOutcome.Imported when result.MatchedChannelCount == 0 =>
+                "The guide loaded but matched none of the channels. Its channel names do not resemble "
+                + "this subscription's.",
+            GuideImportOutcome.Imported =>
+                $"Guide loaded: {result.ProgrammeCount} programmes on {result.MatchedChannelCount} channels.",
+            GuideImportOutcome.NoGuideAvailable => $"{source.Name} offers no programme guide.",
+            GuideImportOutcome.Empty =>
+                "The guide address answered with something that is not a programme guide.",
+            _ => "The stored programme guide is already up to date.",
+        };
+    }
+
     private async Task ReleasePlaybackAsync(CancellationToken cancellationToken)
     {
         await _session.StopAsync(cancellationToken).ConfigureAwait(true);
@@ -147,7 +340,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     }
 
     /// <summary>
-    /// Keeps the play command's guard current with a selection it does not own.
+    /// Keeps commands that guard on state they do not own current.
     /// </summary>
     /// <remarks>
     /// <c>[NotifyCanExecuteChangedFor]</c> cannot cross an object boundary: the command is here and the
@@ -166,11 +359,45 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         PlaySelectedCommand.NotifyCanExecuteChanged();
     }
 
+    /// <remarks>
+    /// The same boundary problem as above: <see cref="ImportGuideCommand"/> lives here and guards on the
+    /// selected source, which belongs to source management.
+    /// </remarks>
+    private void OnSourceManagementPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (null or "" or nameof(SourceManagementViewModel.SelectedSource)))
+        {
+            return;
+        }
+
+        ImportGuideCommand.NotifyCanExecuteChanged();
+    }
+
     private void OnPlaybackStateChanged(object? sender, PlaybackStateChangedEventArgs e)
     {
         if (e.Current == PlaybackState.Playing)
         {
             Status.Text = $"Playing {NowPlaying}";
         }
+    }
+
+    /// <summary>
+    /// Stops the guide import before the container that owns its database goes away.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        await _guideImportLifetime.CancelAsync().ConfigureAwait(false);
+
+        try
+        {
+            await _guideImportTask.ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Already reported by the import itself; failing to shut down over it would be worse.
+            PlayerLog.GuideImportFailed(_logger, exception, string.Empty);
+        }
+
+        _guideImportLifetime.Dispose();
     }
 }

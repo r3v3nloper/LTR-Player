@@ -72,6 +72,27 @@ state: Buffering -> Playing
 Add `--verbose` to any command to see the requests being made. Logged addresses always have their
 credentials stripped, because diagnostic output is what people paste into forums.
 
+## 5. Is the programme guide usable?
+
+The guide works against a stored source, because matching it needs that source's channel list. Add the
+source first (in the window, or with `sources add-playlist`), then:
+
+```bash
+dotnet run --project src/LTR.Cli -- guide import --source-id 1
+```
+
+A second run reports the stored guide as still fresh; `--force` fetches it regardless. `guide show`
+reports the same figures without downloading anything.
+
+**The line that matters is `Matched`.** A guide can download, parse and store perfectly and still be
+useless, because the guide and the channel list are published by different parties and their channel
+names need not resemble each other. Expect well under 100%: a real subscription lists regional and
+duplicate channels no guide covers. Below roughly 30%, look at the unmatched sample the command prints —
+if those channels all carry a guide id, the guide is for a different line-up.
+
+`On air at ...` is the check that the times were read with the right offset. A guide two hours out looks
+perfectly healthy in every count above and wrong in that one list.
+
 ## Automated tests
 
 ```bash

@@ -1,9 +1,32 @@
 # Refactoring backlog
 
 Reviewed after M2. Ranks 1–7 are done; what follows is what remains, in the order it was prioritised —
-most valuable per unit of effort first.
+most valuable per unit of effort first. Items 16 and 17 came out of M3 and have not been ranked against
+the rest.
 
 Ranking rule: criticality against effort.
+
+---
+
+## Rank 16 — Pin the timeline's channel-name column
+
+**Project:** LTR.Player.Wpf · **Area:** Usability · **Criticality:** moderate · **Effort:** medium
+
+The guide timeline puts the header and every row inside one horizontal `ScrollViewer`, so the channel names
+scroll out of view with the programme blocks. Names staying put is most of what makes an EPG readable.
+
+Doing it properly means two vertically synchronised lists, or a custom panel — which is why it was not done
+now. It is mostly hidden today because the window is moved with the buttons rather than by scrolling.
+
+---
+
+## Rank 17 — Page the timeline instead of capping it
+
+**Project:** LTR.Player.Wpf, LTR.Persistence · **Area:** Performance · **Criticality:** minor · **Effort:** high
+
+`GuideViewModel.MaximumRows` draws at most 200 channels and says so on screen. The honest fix is to load
+rows as they are scrolled into view, which needs the store to page and the timeline to build rows lazily.
+Related to rank 15, and worth doing at the same time or not at all.
 
 ---
 

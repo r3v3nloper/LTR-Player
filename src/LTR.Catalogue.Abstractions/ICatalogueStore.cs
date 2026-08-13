@@ -21,6 +21,31 @@ public interface ICatalogueStore
 
     Task<IReadOnlyList<Category>> GetLiveCategoriesAsync(int sourceId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// What is on now and next on every channel of a source that has a guide.
+    /// </summary>
+    /// <remarks>
+    /// Answered for the whole source at once rather than per row. The channel list needs it for every
+    /// visible row, and rows come and go as the user scrolls, so asking per row would be thousands of
+    /// queries driven by a scroll bar.
+    /// </remarks>
+    Task<IReadOnlyList<ChannelGuideSlice>> GetNowAndNextAsync(
+        int sourceId,
+        DateTimeOffset atUtc,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The programmes of specific guide channels that overlap a time window, which is what a timeline
+    /// draws.
+    /// </summary>
+    Task<IReadOnlyList<EpgEntry>> GetGuideProgrammesAsync(
+        IReadOnlyCollection<int> guideChannelIds,
+        DateTimeOffset fromUtc,
+        DateTimeOffset toUtc,
+        CancellationToken cancellationToken);
+
+    Task<GuideSummary> GetGuideSummaryAsync(int sourceId, CancellationToken cancellationToken);
+
     Task SetFavoriteAsync(int channelId, bool isFavorite, CancellationToken cancellationToken);
 
     Task DeleteSourceAsync(int sourceId, CancellationToken cancellationToken);

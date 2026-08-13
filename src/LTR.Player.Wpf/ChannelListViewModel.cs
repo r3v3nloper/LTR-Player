@@ -16,9 +16,13 @@ namespace LTR.Player.Wpf;
 public sealed partial class ChannelListViewModel : ObservableObject
 {
     private readonly ICatalogueStore _catalogue;
+    private readonly TimeProvider _timeProvider;
     private readonly StatusLine _status;
     private readonly ILogger<ChannelListViewModel> _logger;
     private readonly List<ChannelItemViewModel> _channels = [];
+
+    /// <summary>The source the list is currently showing, needed to ask for its guide again.</summary>
+    private PlaylistSource? _source;
 
     /// <summary>
     /// The filter the current view is using. Rebuilt once per refresh rather than per row.
@@ -34,16 +38,25 @@ public sealed partial class ChannelListViewModel : ObservableObject
     [ObservableProperty]
     private bool _showFavoritesOnly;
 
+    /// <summary>
+    /// Whether any row has programme information, which is what decides whether the list makes room for
+    /// it and whether the timeline is worth opening.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasGuide;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ToggleFavoriteCommand))]
     private ChannelItemViewModel? _selectedChannel;
 
     public ChannelListViewModel(
         ICatalogueStore catalogue,
+        TimeProvider timeProvider,
         StatusLine status,
         ILogger<ChannelListViewModel> logger)
     {
         _catalogue = catalogue;
+        _timeProvider = timeProvider;
         _status = status;
         _logger = logger;
 
@@ -71,6 +84,8 @@ public sealed partial class ChannelListViewModel : ObservableObject
     /// </summary>
     public async Task ShowAsync(PlaylistSource? source, CancellationToken cancellationToken)
     {
+        _source = source;
+
         if (source is null)
         {
             Replace([], []);
@@ -90,6 +105,63 @@ public sealed partial class ChannelListViewModel : ObservableObject
         _status.Text = favorites > 0
             ? $"{_channels.Count} channels, {favorites} favourites."
             : $"{_channels.Count} channels. Pick one to start playback.";
+
+        await RefreshGuideAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Rereads what is on now for every row.
+    /// </summary>
+    /// <remarks>
+    /// Called after a catalogue load, after a guide import, and on a timer while the window is open —
+    /// "now" moves on its own, so a row left alone would keep showing a programme that has finished.
+    /// </remarks>
+    public async Task RefreshGuideAsync(CancellationToken cancellationToken)
+    {
+        if (_source is null || _channels.Count == 0)
+        {
+            return;
+        }
+
+        var now = _timeProvider.GetUtcNow();
+        var slices = await _catalogue.GetNowAndNextAsync(_source.Id, now, cancellationToken)
+            .ConfigureAwait(true);
+
+        // Indexed rather than searched: a source has thousands of rows and as many slices, and pairing
+        // them by scanning would be quadratic.
+        var slicesByChannelId = slices.ToDictionary(slice => slice.ChannelId);
+
+        foreach (var row in _channels)
+        {
+            row.ShowGuide(slicesByChannelId.GetValueOrDefault(row.Id), now);
+        }
+
+        HasGuide = slices.Count > 0;
+    }
+
+    /// <summary>
+    /// The channels the filter currently admits, in the order they are shown.
+    /// </summary>
+    /// <remarks>
+    /// Exists so the timeline can show the same selection the list does — the view model composing the two
+    /// passes this across, which is what keeps them from referencing each other.
+    /// </remarks>
+    public IReadOnlyList<Channel> VisibleChannels
+    {
+        get
+        {
+            var visible = new List<Channel>();
+
+            foreach (var item in ChannelView)
+            {
+                if (item is ChannelItemViewModel row)
+                {
+                    visible.Add(row.Channel);
+                }
+            }
+
+            return visible;
+        }
     }
 
     [RelayCommand(CanExecute = nameof(HasSelectedChannel))]
@@ -124,6 +196,8 @@ public sealed partial class ChannelListViewModel : ObservableObject
     {
         _channels.Clear();
         _channels.AddRange(channels.Select(channel => new ChannelItemViewModel(channel)));
+
+        HasGuide = false;
 
         Categories.Clear();
         Categories.Add(CategoryChoice.All);

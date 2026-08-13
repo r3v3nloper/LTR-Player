@@ -58,6 +58,18 @@ public sealed class Channel
     /// </summary>
     public string? EpgChannelId { get; set; }
 
+    /// <summary>
+    /// The guide channel this one was matched to, once a guide has been imported.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately separate from <see cref="EpgChannelId"/>, which the provider owns and a refresh
+    /// overwrites. This is the outcome of matching — by guide id where there is one, by name otherwise —
+    /// and it is written only by the guide import, so a catalogue refresh does not silently discard it.
+    /// </remarks>
+    public int? GuideChannelId { get; set; }
+
+    public GuideChannel? GuideChannel { get; set; }
+
     /// <summary>Channel number as presented by the provider, when it supplies one.</summary>
     public int? Number { get; set; }
 

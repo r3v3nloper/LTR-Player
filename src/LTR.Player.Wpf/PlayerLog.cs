@@ -49,4 +49,20 @@ internal static partial class PlayerLog
         Level = LogLevel.Information,
         Message = "Channel {Channel} could not be played; the provider may have taken it offline.")]
     public static partial void ChannelUnplayable(ILogger logger, Exception exception, string channel);
+
+    [LoggerMessage(
+        EventId = 3006,
+        Level = LogLevel.Error,
+        Message = "The programme guide for {Source} could not be imported.")]
+    public static partial void GuideImportFailed(ILogger logger, Exception exception, string source);
+
+    /// <remarks>
+    /// Warning rather than error: the periodic refresh failing leaves stale programme titles on screen,
+    /// which is a blemish and not a broken player.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 3007,
+        Level = LogLevel.Warning,
+        Message = "Rereading what is on now failed; the channel list keeps what it was showing.")]
+    public static partial void GuideRefreshFailed(ILogger logger, Exception exception);
 }

@@ -10,15 +10,18 @@ public sealed class ProviderRegistry : IProviderRegistry
     private readonly IEnumerable<IContentProviderFactory> _factories;
     private readonly IEnumerable<IProviderCapabilityProbe> _capabilityProbes;
     private readonly IEnumerable<IStreamUrlResolver> _streamUrlResolvers;
+    private readonly IEnumerable<IGuideSource> _guideSources;
 
     public ProviderRegistry(
         IEnumerable<IContentProviderFactory> factories,
         IEnumerable<IProviderCapabilityProbe> capabilityProbes,
-        IEnumerable<IStreamUrlResolver> streamUrlResolvers)
+        IEnumerable<IStreamUrlResolver> streamUrlResolvers,
+        IEnumerable<IGuideSource> guideSources)
     {
         _factories = factories;
         _capabilityProbes = capabilityProbes;
         _streamUrlResolvers = streamUrlResolvers;
+        _guideSources = guideSources;
     }
 
     public IContentProvider CreateProvider(PlaylistSource source)
@@ -37,6 +40,12 @@ public sealed class ProviderRegistry : IProviderRegistry
     {
         ArgumentNullException.ThrowIfNull(source);
         return Select(_streamUrlResolvers, source, resolver => resolver.Supports(source), "stream url resolver");
+    }
+
+    public IGuideSource GetGuideSource(PlaylistSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return Select(_guideSources, source, guide => guide.Supports(source), "guide source");
     }
 
     /// <summary>

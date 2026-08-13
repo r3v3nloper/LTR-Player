@@ -22,7 +22,7 @@ namespace LTR.Persistence;
 /// protector is introduced. Doing it in one place here keeps that impossible.
 /// </para>
 /// </remarks>
-public sealed class LtrDbContext : DbContext
+public sealed partial class LtrDbContext : DbContext
 {
     private readonly ICredentialProtector _credentialProtector;
 
@@ -38,6 +38,10 @@ public sealed class LtrDbContext : DbContext
     public DbSet<Category> Categories => Set<Category>();
 
     public DbSet<Channel> Channels => Set<Channel>();
+
+    public DbSet<GuideChannel> GuideChannels => Set<GuideChannel>();
+
+    public DbSet<EpgEntry> EpgEntries => Set<EpgEntry>();
 
     /// <summary>
     /// Stores a newly configured source, protecting its credentials on the way in.
@@ -259,6 +263,7 @@ public sealed class LtrDbContext : DbContext
         ConfigureSources(modelBuilder);
         ConfigureCategories(modelBuilder);
         ConfigureChannels(modelBuilder);
+        ConfigureGuide(modelBuilder);
 
         base.OnModelCreating(modelBuilder);
     }
@@ -349,6 +354,71 @@ public sealed class LtrDbContext : DbContext
             .WithMany(entity => entity.Channels)
             .HasForeignKey(entity => entity.CategoryId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        // Likewise for the guide: a guide channel that disappears from a reimported guide leaves its
+        // channels with no programmes rather than deleting them.
+        channel.HasOne(entity => entity.GuideChannel)
+            .WithMany()
+            .HasForeignKey(entity => entity.GuideChannelId)
+            .OnDelete(DeleteBehavior.SetNull);
+    }
+
+    /// <summary>
+    /// Stores an instant as a UTC <see cref="DateTime"/>.
+    /// </summary>
+    /// <remarks>
+    /// Required, not cosmetic. SQLite has no date type, and EF's default mapping writes a
+    /// <see cref="DateTimeOffset"/> as text with its offset appended — which sorts wrongly across offsets,
+    /// so the provider refuses to translate any comparison or <c>Max</c> over such a column. Every guide
+    /// query is a comparison over time, so without this the whole guide would be filtered in memory.
+    /// Converting to UTC first makes the text form both sortable and readable.
+    /// </remarks>
+    private static readonly ValueConverter<DateTimeOffset, DateTime> UtcInstantConverter =
+        new(instant => instant.UtcDateTime, stored => new DateTimeOffset(stored, TimeSpan.Zero));
+
+    private static void ConfigureGuide(ModelBuilder modelBuilder)
+    {
+        var guideChannel = modelBuilder.Entity<GuideChannel>();
+
+        guideChannel.ToTable("GuideChannels");
+        guideChannel.HasKey(entity => entity.Id);
+        guideChannel.Property(entity => entity.ExternalId).IsRequired().HasMaxLength(400);
+        guideChannel.Property(entity => entity.DisplayName).HasMaxLength(400);
+        guideChannel.Property(entity => entity.IconUrl).HasMaxLength(2000);
+
+        // The guide's own identifiers mean something only within the guide they came from.
+        guideChannel.HasIndex(entity => new { entity.SourceId, entity.ExternalId }).IsUnique();
+
+        guideChannel.HasOne(entity => entity.Source)
+            .WithMany()
+            .HasForeignKey(entity => entity.SourceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var entry = modelBuilder.Entity<EpgEntry>();
+
+        entry.ToTable("EpgEntries");
+        entry.HasKey(item => item.Id);
+        entry.Property(item => item.StartUtc).HasConversion(UtcInstantConverter);
+        entry.Property(item => item.StopUtc).HasConversion(UtcInstantConverter);
+        entry.Property(item => item.Title).IsRequired().HasMaxLength(600);
+        entry.Property(item => item.Description).HasMaxLength(4000);
+        entry.Property(item => item.Category).HasMaxLength(200);
+        entry.Property(item => item.EpisodeReference).HasMaxLength(100);
+        entry.Property(item => item.IconUrl).HasMaxLength(2000);
+        entry.Ignore(item => item.Duration);
+
+        // Every guide query is "this channel, around this time", whether it asks what is on now or fills
+        // a timeline. This composite is what keeps that from scanning a table with a million rows in it.
+        entry.HasIndex(item => new { item.GuideChannelId, item.StartUtc });
+
+        // Pruning asks the opposite question — everything that ended before a cut-off, whatever channel
+        // it belonged to — and would otherwise scan.
+        entry.HasIndex(item => item.StopUtc);
+
+        entry.HasOne(item => item.GuideChannel)
+            .WithMany(channel => channel.Entries)
+            .HasForeignKey(item => item.GuideChannelId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 
     private async Task<Dictionary<string, int>> ReconcileCategoriesAsync(

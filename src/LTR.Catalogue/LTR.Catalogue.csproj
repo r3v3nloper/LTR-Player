@@ -7,10 +7,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\LTR.Catalogue.Abstractions\LTR.Catalogue.Abstractions.csproj" />
+    <ProjectReference Include="..\LTR.Epg.Xmltv\LTR.Epg.Xmltv.csproj" />
     <ProjectReference Include="..\LTR.Persistence\LTR.Persistence.csproj" />
     <ProjectReference Include="..\LTR.Providers.Abstractions\LTR.Providers.Abstractions.csproj" />
   </ItemGroup>
