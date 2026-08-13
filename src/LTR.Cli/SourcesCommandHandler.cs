@@ -70,15 +70,17 @@ internal sealed class SourcesCommandHandler
     {
         await _context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
 
-        if (!TryParseAddress(address, out var playlistUrl))
+        if (!SourceAddress.TryParse(address, out var playlistUrl))
         {
-            Console.Error.WriteLine($"'{address}' is neither an absolute URL nor an existing file.");
+            Console.Error.WriteLine(
+                $"'{address}' is neither an http address nor an existing file. A panel host on its own "
+                + "is not enough — write it as http://host:port/...");
             return 1;
         }
 
         var source = new M3uSource
         {
-            Name = name ?? DescribeAddress(playlistUrl),
+            Name = name ?? SourceAddress.Describe(playlistUrl),
             PlaylistUrl = playlistUrl,
             CreatedUtc = DateTimeOffset.UtcNow,
         };
@@ -124,31 +126,6 @@ internal sealed class SourcesCommandHandler
 
         Console.WriteLine($"Removed source {sourceId} and its catalogue.");
         return 0;
-    }
-
-    private static bool TryParseAddress(string value, out Uri address)
-    {
-        var trimmed = value.Trim();
-
-        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed))
-        {
-            address = parsed;
-            return true;
-        }
-
-        if (Path.IsPathFullyQualified(trimmed) && File.Exists(trimmed))
-        {
-            address = new Uri(trimmed);
-            return true;
-        }
-
-        address = null!;
-        return false;
-    }
-
-    private static string DescribeAddress(Uri address)
-    {
-        return address.IsFile ? Path.GetFileName(address.LocalPath) : address.Host;
     }
 
     private static string DescribeProtocol(PlaylistSource source)

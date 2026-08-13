@@ -197,6 +197,45 @@ public sealed class M3uContentProviderTests
         account.HasFreeConnection.ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task LoadAsync_ServesASecondReadOfTheSamePlaylistFromCache()
+    {
+        // Arrange: importing a source loads the document twice — once to check it is retrievable and
+        // once by the capability probe, which is resolved separately. Deleting the file between the two
+        // reads is what proves the second one did not go back to the source.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var loader = new M3uPlaylistLoader(new HttpClient(), new M3uPlaylistCache(TimeProvider.System));
+
+        using var file = new TemporaryPlaylist("#EXTM3U\n#EXTINF:-1,Cached\nhttp://host/1.ts\n");
+        var first = await loader.LoadAsync(file.Source, cancellationToken);
+        file.Delete();
+
+        // Act
+        var second = await loader.LoadAsync(file.Source, cancellationToken);
+
+        // Assert
+        first.Entries.ShouldHaveSingleItem().DisplayName.ShouldBe("Cached");
+        second.Entries.ShouldHaveSingleItem().DisplayName.ShouldBe("Cached");
+    }
+
+    [Fact]
+    public async Task LoadAsync_DoesNotServeADifferentPlaylistFromCache()
+    {
+        // Arrange: one slot, so a second address must not be answered with the first one's content.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var loader = new M3uPlaylistLoader(new HttpClient(), new M3uPlaylistCache(TimeProvider.System));
+
+        using var firstFile = new TemporaryPlaylist("#EXTM3U\n#EXTINF:-1,First\nhttp://host/1.ts\n");
+        using var secondFile = new TemporaryPlaylist("#EXTM3U\n#EXTINF:-1,Second\nhttp://host/2.ts\n");
+
+        // Act
+        await loader.LoadAsync(firstFile.Source, cancellationToken);
+        var second = await loader.LoadAsync(secondFile.Source, cancellationToken);
+
+        // Assert
+        second.Entries.ShouldHaveSingleItem().DisplayName.ShouldBe("Second");
+    }
+
     private static async Task<IReadOnlyList<Core.Content.Channel>> FetchChannelsAsync(string playlist)
     {
         using var file = new TemporaryPlaylist(playlist);
@@ -206,9 +245,16 @@ public sealed class M3uContentProviderTests
 
     private static IContentProvider CreateProvider(M3uSource source)
     {
-        var loader = new M3uPlaylistLoader(new HttpClient());
-        var factory = new M3uContentProviderFactory(loader, NullLoggerFactory.Instance);
-        return factory.Create(source);
+        return CreateFactory().Create(source);
+    }
+
+    /// <summary>
+    /// A factory with a cache of its own, so tests cannot see each other's playlists.
+    /// </summary>
+    private static M3uContentProviderFactory CreateFactory()
+    {
+        var loader = new M3uPlaylistLoader(new HttpClient(), new M3uPlaylistCache(TimeProvider.System));
+        return new M3uContentProviderFactory(loader, NullLoggerFactory.Instance);
     }
 
     /// <summary>
@@ -232,6 +278,12 @@ public sealed class M3uContentProviderTests
         }
 
         public M3uSource Source { get; }
+
+        /// <summary>Removes the file while keeping the source, so a cache hit can be proven.</summary>
+        public void Delete()
+        {
+            File.Delete(_path);
+        }
 
         public void Dispose()
         {

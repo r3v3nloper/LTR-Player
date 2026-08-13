@@ -20,6 +20,10 @@ public static class M3uServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
 
+        // Singleton so the provider and the capability probe, which are resolved separately, share it.
+        // It holds parsed playlists only — no HttpClient — so it does not pin a message handler.
+        services.TryAddSingleton<M3uPlaylistCache>();
+
         services
             .AddHttpClient<M3uPlaylistLoader>(client => client.Timeout = DownloadTimeout);
 

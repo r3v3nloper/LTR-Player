@@ -14,22 +14,31 @@ namespace LTR.Providers.M3u;
 internal sealed class M3uPlaylistLoader
 {
     private readonly HttpClient _httpClient;
+    private readonly M3uPlaylistCache _cache;
 
-    public M3uPlaylistLoader(HttpClient httpClient)
+    public M3uPlaylistLoader(HttpClient httpClient, M3uPlaylistCache cache)
     {
         _httpClient = httpClient;
+        _cache = cache;
     }
 
     public async Task<M3uPlaylist> LoadAsync(M3uSource source, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        if (source.PlaylistUrl.IsFile)
+        // The cache is shared across loader instances, which is what stops an import fetching the same
+        // document twice through two separately resolved components.
+        if (_cache.TryGet(source.PlaylistUrl, out var cached))
         {
-            return await LoadFromFileAsync(source.PlaylistUrl, cancellationToken).ConfigureAwait(false);
+            return cached;
         }
 
-        return await LoadFromHttpAsync(source, cancellationToken).ConfigureAwait(false);
+        var playlist = source.PlaylistUrl.IsFile
+            ? await LoadFromFileAsync(source.PlaylistUrl, cancellationToken).ConfigureAwait(false)
+            : await LoadFromHttpAsync(source, cancellationToken).ConfigureAwait(false);
+
+        _cache.Store(source.PlaylistUrl, playlist);
+        return playlist;
     }
 
     private static async Task<M3uPlaylist> LoadFromFileAsync(Uri playlistUrl, CancellationToken cancellationToken)

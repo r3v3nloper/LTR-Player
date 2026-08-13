@@ -32,6 +32,11 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly ILogger<MainViewModel> _logger;
     private readonly List<ChannelItemViewModel> _channels = [];
 
+    /// <summary>
+    /// The filter the current view is using. Rebuilt once per refresh rather than per row.
+    /// </summary>
+    private ChannelFilter _activeFilter = ChannelFilter.None;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
     private NewSourceProtocol _newSourceProtocol = NewSourceProtocol.Xtream;
@@ -191,6 +196,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         var previouslySelected = SelectedChannel;
 
+        _activeFilter = new ChannelFilter(ChannelFilterText, SelectedCategory?.ExternalId, ShowFavoritesOnly);
         ChannelView.Refresh();
 
         if (previouslySelected is not null && MatchesCurrentFilter(previouslySelected))
@@ -498,23 +504,23 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (NewSourceProtocol == NewSourceProtocol.M3uPlaylist)
         {
-            if (!TryParseSourceAddress(PlaylistUrl, out var playlistUrl))
+            if (!SourceAddress.TryParse(PlaylistUrl, out var playlistUrl))
             {
-                Status = "That is not a valid playlist address. Expected a URL or a file path.";
+                Status = "That is not a valid playlist address. Expected a URL or an existing file.";
                 return null;
             }
 
             return new M3uSource
             {
-                Name = DescribeAddress(playlistUrl),
+                Name = SourceAddress.Describe(playlistUrl),
                 PlaylistUrl = playlistUrl,
                 CreatedUtc = DateTimeOffset.UtcNow,
             };
         }
 
-        if (!Uri.TryCreate(PanelUrl.Trim(), UriKind.Absolute, out var baseUrl))
+        if (!SourceAddress.TryParseWebAddress(PanelUrl, out var baseUrl))
         {
-            Status = "That is not a valid address. Expected something like http://host:8080";
+            Status = "That is not a valid panel address. Expected something like http://host:8080";
             return null;
         }
 
@@ -526,35 +532,6 @@ public sealed partial class MainViewModel : ObservableObject
             Password = Password,
             CreatedUtc = DateTimeOffset.UtcNow,
         };
-    }
-
-    /// <summary>
-    /// Accepts either a URL or a local path, since a playlist arrives as both.
-    /// </summary>
-    private static bool TryParseSourceAddress(string value, out Uri address)
-    {
-        var trimmed = value.Trim();
-
-        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var parsed))
-        {
-            address = parsed;
-            return true;
-        }
-
-        // A bare Windows path is not an absolute URI, but it is what a user pastes.
-        if (Path.IsPathFullyQualified(trimmed) && File.Exists(trimmed))
-        {
-            address = new Uri(trimmed);
-            return true;
-        }
-
-        address = null!;
-        return false;
-    }
-
-    private static string DescribeAddress(Uri address)
-    {
-        return address.IsFile ? Path.GetFileName(address.LocalPath) : address.Host;
     }
 
     private void ClearNewSourceForm()
@@ -586,9 +563,11 @@ public sealed partial class MainViewModel : ObservableObject
             Categories.Add(new CategoryChoice(category.Name, category.ExternalId));
         }
 
-        // Reset rather than preserved: a category from the previous source means nothing here.
+        // Both reset rather than preserved: a category and a row from the previous source mean nothing
+        // here, and the row objects themselves have just been replaced.
+        SelectedChannel = null;
         SelectedCategory = CategoryChoice.All;
-        ChannelView.Refresh();
+        RefreshChannelView();
 
         var favorites = _channels.Count(channel => channel.IsFavorite);
         PlayerLog.LoadedCatalogue(_logger, source.Name, _channels.Count, storedCategories.Count, favorites);
@@ -598,6 +577,14 @@ public sealed partial class MainViewModel : ObservableObject
             : $"{_channels.Count} channels. Pick one to start playback.";
     }
 
+    /// <summary>
+    /// Tests one row against the filter built for the current refresh.
+    /// </summary>
+    /// <remarks>
+    /// The filter is deliberately not constructed here. This runs once per channel per refresh, so at
+    /// a realistic catalogue size building it inside meant tens of thousands of allocations for every
+    /// keystroke in the search box.
+    /// </remarks>
     private bool MatchesCurrentFilter(object item)
     {
         if (item is not ChannelItemViewModel channel)
@@ -605,8 +592,7 @@ public sealed partial class MainViewModel : ObservableObject
             return false;
         }
 
-        var filter = new ChannelFilter(ChannelFilterText, SelectedCategory?.ExternalId, ShowFavoritesOnly);
-        return filter.Matches(channel.Channel);
+        return _activeFilter.Matches(channel.Channel);
     }
 
     private void OnPlaybackStateChanged(object? sender, PlaybackStateChangedEventArgs e)
