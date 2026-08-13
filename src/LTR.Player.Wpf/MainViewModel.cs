@@ -4,12 +4,11 @@ using System.IO;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using LTR.Catalogue;
 using LTR.Core.Content;
 using LTR.Core.Sources;
-using LTR.Persistence;
 using LTR.Playback;
 using LTR.Providers;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace LTR.Player.Wpf;
@@ -26,7 +25,8 @@ namespace LTR.Player.Wpf;
 /// </remarks>
 public sealed partial class MainViewModel : ObservableObject
 {
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ICatalogueStore _catalogue;
+    private readonly ISourceImportService _import;
     private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
     private readonly ILogger<MainViewModel> _logger;
@@ -93,12 +93,14 @@ public sealed partial class MainViewModel : ObservableObject
     private string _nowPlaying = string.Empty;
 
     public MainViewModel(
-        IServiceScopeFactory scopeFactory,
+        ICatalogueStore catalogue,
+        ISourceImportService import,
         IProviderRegistry providers,
         IPlaybackSession session,
         ILogger<MainViewModel> logger)
     {
-        _scopeFactory = scopeFactory;
+        _catalogue = catalogue;
+        _import = import;
         _providers = providers;
         _session = session;
         _logger = logger;
@@ -130,10 +132,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
-
-        var sources = await context.GetSourcesAsync(cancellationToken).ConfigureAwait(true);
+        var sources = await _catalogue.GetSourcesAsync(cancellationToken).ConfigureAwait(true);
 
         Sources.Clear();
 
@@ -245,37 +244,14 @@ public sealed partial class MainViewModel : ObservableObject
                 return;
             }
 
-            Status = "Checking the subscription...";
-            var provider = _providers.CreateProvider(source);
-            var account = await provider.AuthenticateAsync(cancellationToken).ConfigureAwait(true);
+            var result = await _import.ImportAsync(source, CreateProgressReporter(), cancellationToken)
+                .ConfigureAwait(true);
 
-            if (!account.IsUsable)
+            if (!result.Succeeded)
             {
-                Status = DescribeUnusableAccount(account);
+                Status = DescribeUnusableAccount(result.Account);
                 return;
             }
-
-            Status = "Reading what the source supports...";
-            source.Capabilities = await _providers.GetCapabilityProbe(source)
-                .ProbeAsync(source, cancellationToken)
-                .ConfigureAwait(true);
-
-            Status = "Loading the channel list...";
-            var categories = await provider.FetchCategoriesAsync(ContentKind.Live, cancellationToken)
-                .ConfigureAwait(true);
-            var channels = await provider.FetchLiveChannelsAsync(cancellationToken).ConfigureAwait(true);
-
-            await using var scope = _scopeFactory.CreateAsyncScope();
-            var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
-
-            var sourceId = await context.AddSourceAsync(source, cancellationToken).ConfigureAwait(true);
-            await context.ReconcileLiveCatalogueAsync(
-                    sourceId,
-                    categories,
-                    channels,
-                    DateTimeOffset.UtcNow,
-                    cancellationToken)
-                .ConfigureAwait(true);
 
             ClearNewSourceForm();
             Sources.Add(source);
@@ -328,23 +304,14 @@ public sealed partial class MainViewModel : ObservableObject
 
         try
         {
-            Status = "Refreshing the catalogue...";
-
-            var provider = _providers.CreateProvider(source);
-            var categories = await provider.FetchCategoriesAsync(ContentKind.Live, cancellationToken)
+            var result = await _import.RefreshAsync(source, CreateProgressReporter(), cancellationToken)
                 .ConfigureAwait(true);
-            var channels = await provider.FetchLiveChannelsAsync(cancellationToken).ConfigureAwait(true);
 
-            await using var scope = _scopeFactory.CreateAsyncScope();
-            var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
-
-            await context.ReconcileLiveCatalogueAsync(
-                    source.Id,
-                    categories,
-                    channels,
-                    DateTimeOffset.UtcNow,
-                    cancellationToken)
-                .ConfigureAwait(true);
+            if (!result.Succeeded)
+            {
+                Status = DescribeUnusableAccount(result.Account);
+                return;
+            }
 
             await LoadCatalogueAsync(source, cancellationToken).ConfigureAwait(true);
         }
@@ -374,9 +341,7 @@ public sealed partial class MainViewModel : ObservableObject
             await _session.StopAsync(CancellationToken.None).ConfigureAwait(true);
             NowPlaying = string.Empty;
 
-            await using var scope = _scopeFactory.CreateAsyncScope();
-            var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
-            await context.DeleteSourceAsync(source.Id, cancellationToken).ConfigureAwait(true);
+            await _catalogue.DeleteSourceAsync(source.Id, cancellationToken).ConfigureAwait(true);
 
             Sources.Remove(source);
             SelectedSource = Sources.Count > 0 ? Sources[0] : null;
@@ -426,9 +391,8 @@ public sealed partial class MainViewModel : ObservableObject
 
         channel.IsFavorite = !channel.IsFavorite;
 
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
-        await context.SetFavoriteAsync(channel.Id, channel.IsFavorite, cancellationToken).ConfigureAwait(true);
+        await _catalogue.SetFavoriteAsync(channel.Id, channel.IsFavorite, cancellationToken)
+            .ConfigureAwait(true);
 
         // Only the filtered view needs rebuilding, and only when the change can move the row out of it.
         // Un-favouriting while the favourites filter is on legitimately removes the row, and the
@@ -488,6 +452,32 @@ public sealed partial class MainViewModel : ObservableObject
         NowPlaying = string.Empty;
     }
 
+    /// <summary>
+    /// Turns import stages into status text.
+    /// </summary>
+    /// <remarks>
+    /// The service reports stages, not sentences, so the wording stays here where the audience is known.
+    /// Progress arrives on whichever thread the service happens to be on, and <see cref="Progress{T}"/>
+    /// marshals the callback back to the thread that created it — the UI thread, since the view model is
+    /// constructed there.
+    /// </remarks>
+    private Progress<SourceImportStage> CreateProgressReporter()
+    {
+        return new Progress<SourceImportStage>(stage => Status = Describe(stage));
+    }
+
+    private static string Describe(SourceImportStage stage)
+    {
+        return stage switch
+        {
+            SourceImportStage.Authenticating => "Checking the subscription...",
+            SourceImportStage.Probing => "Reading what the source supports...",
+            SourceImportStage.FetchingCatalogue => "Loading the channel list...",
+            SourceImportStage.Storing => "Storing the catalogue...",
+            _ => "Working...",
+        };
+    }
+
     private static string DescribeUnusableAccount(ProviderAccount account)
     {
         return account.Status switch
@@ -544,12 +534,9 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task LoadCatalogueAsync(PlaylistSource source, CancellationToken cancellationToken)
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
-
-        var storedChannels = await context.GetLiveChannelsAsync(source.Id, cancellationToken)
+        var storedChannels = await _catalogue.GetLiveChannelsAsync(source.Id, cancellationToken)
             .ConfigureAwait(true);
-        var storedCategories = await context.GetLiveCategoriesAsync(source.Id, cancellationToken)
+        var storedCategories = await _catalogue.GetLiveCategoriesAsync(source.Id, cancellationToken)
             .ConfigureAwait(true);
 
         _channels.Clear();

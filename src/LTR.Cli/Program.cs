@@ -1,8 +1,7 @@
-using System.CommandLine;
+﻿using System.CommandLine;
 using System.Globalization;
+using LTR.Catalogue;
 using LTR.Cli;
-using LTR.Persistence;
-using Microsoft.EntityFrameworkCore;
 using LTR.Playback;
 using LTR.Playback.LibVlc;
 using LTR.Providers;
@@ -13,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
 
-// Headless entry point for the core (CLAUDE.md §2.12). Everything below the UI is reachable from
+// Headless entry point for the core (CLAUDE.md Â§2.12). Everything below the UI is reachable from
 // here, which is what makes the player verifiable against a real panel without WPF in the way.
 var verboseOption = new Option<bool>("--verbose", "-v")
 {
@@ -62,11 +61,12 @@ static ServiceProvider BuildServiceProvider(bool verbose)
     services.AddLibVlcPlayback(options => options.DisableVideoOutput = true);
 
     // The same database the desktop player uses, resolved from the one place that decides it.
-    services.AddDbContext<LtrDbContext>(options => options.UseSqlite(LtrDatabaseLocation.ConnectionString));
-
     services.AddCredentialProtection();
+    services.AddCatalogue();
 
-    services.AddScoped<SourcesCommandHandler>();
+    // Singleton like the others now: its dependencies create their own units of work, so it no longer
+    // needs a scope of its own.
+    services.AddSingleton<SourcesCommandHandler>();
     services.AddSingleton<ProbeCommandHandler>();
     services.AddSingleton<ChannelsCommandHandler>();
     services.AddSingleton<ResolveCommandHandler>();
@@ -81,7 +81,7 @@ static Command BuildSourcesCommand(IServiceProvider services)
 
     var listCommand = new Command("list", "Shows the configured sources and which database holds them.");
     listCommand.SetAction((_, cancellationToken) => CommandRunner.RunAsync(() =>
-        WithScope(services, handler => handler.ListAsync(cancellationToken))));
+        WithCatalogue(services, handler => handler.ListAsync(cancellationToken))));
 
     var addressArgument = new Argument<string>("address")
     {
@@ -97,7 +97,7 @@ static Command BuildSourcesCommand(IServiceProvider services)
     addCommand.Arguments.Add(addressArgument);
     addCommand.Options.Add(nameOption);
     addCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
-        WithScope(services, handler => handler.AddPlaylistAsync(
+        WithCatalogue(services, handler => handler.AddPlaylistAsync(
             parseResult.GetValue(addressArgument) ?? string.Empty,
             parseResult.GetValue(nameOption),
             cancellationToken))));
@@ -107,7 +107,7 @@ static Command BuildSourcesCommand(IServiceProvider services)
     var removeCommand = new Command("remove", "Removes a source together with its catalogue.");
     removeCommand.Arguments.Add(idArgument);
     removeCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
-        WithScope(services, handler => handler.RemoveAsync(parseResult.GetValue(idArgument), cancellationToken))));
+        WithCatalogue(services, handler => handler.RemoveAsync(parseResult.GetValue(idArgument), cancellationToken))));
 
     command.Subcommands.Add(listCommand);
     command.Subcommands.Add(addCommand);
@@ -117,13 +117,24 @@ static Command BuildSourcesCommand(IServiceProvider services)
 }
 
 /// <summary>
-/// Runs a database command inside its own scope, because the context is scoped and these commands are
-/// the only ones that touch it.
+/// Prepares the catalogue, then runs a command against it.
 /// </summary>
-static async Task<int> WithScope(IServiceProvider services, Func<SourcesCommandHandler, Task<int>> action)
+/// <remarks>
+/// Preparation happens here rather than at startup because only these commands touch the database:
+/// probing a panel or testing playback should not create a database file as a side effect. Both
+/// applications share one, and either may run first, so whichever does has to migrate it and protect
+/// any credential still held in plain text.
+/// </remarks>
+static async Task<int> WithCatalogue(IServiceProvider services, Func<SourcesCommandHandler, Task<int>> action)
 {
-    await using var scope = services.CreateAsyncScope();
-    return await action(scope.ServiceProvider.GetRequiredService<SourcesCommandHandler>()).ConfigureAwait(false);
+    var upgraded = await services.PrepareCatalogueAsync(CancellationToken.None).ConfigureAwait(false);
+
+    if (upgraded > 0)
+    {
+        Console.WriteLine($"Protected {upgraded} stored credential(s) that were held in plain text.");
+    }
+
+    return await action(services.GetRequiredService<SourcesCommandHandler>()).ConfigureAwait(false);
 }
 
 static Command BuildProbeCommand(IServiceProvider services, SourceOptions sourceOptions)
@@ -235,3 +246,4 @@ static Command BuildPlayTestCommand(IServiceProvider services, SourceOptions sou
 
     return command;
 }
+

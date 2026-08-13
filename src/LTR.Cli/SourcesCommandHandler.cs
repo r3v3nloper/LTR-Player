@@ -1,9 +1,7 @@
 using System.Globalization;
-using LTR.Core.Content;
+using LTR.Catalogue;
 using LTR.Core.Sources;
 using LTR.Persistence;
-using LTR.Providers;
-using Microsoft.EntityFrameworkCore;
 
 namespace LTR.Cli;
 
@@ -18,23 +16,21 @@ namespace LTR.Cli;
 /// </remarks>
 internal sealed class SourcesCommandHandler
 {
-    private readonly LtrDbContext _context;
-    private readonly IProviderRegistry _providers;
+    private readonly ICatalogueStore _catalogue;
+    private readonly ISourceImportService _import;
 
-    public SourcesCommandHandler(LtrDbContext context, IProviderRegistry providers)
+    public SourcesCommandHandler(ICatalogueStore catalogue, ISourceImportService import)
     {
-        _context = context;
-        _providers = providers;
+        _catalogue = catalogue;
+        _import = import;
     }
 
     public async Task<int> ListAsync(CancellationToken cancellationToken)
     {
-        await PrepareAsync(cancellationToken).ConfigureAwait(false);
-
         Console.WriteLine($"Database   {LtrDatabaseLocation.DatabaseFile}");
         Console.WriteLine();
 
-        var sources = await _context.GetSourcesAsync(cancellationToken).ConfigureAwait(false);
+        var sources = await _catalogue.GetSourcesAsync(cancellationToken).ConfigureAwait(false);
 
         if (sources.Count == 0)
         {
@@ -46,7 +42,7 @@ internal sealed class SourcesCommandHandler
 
         foreach (var source in sources)
         {
-            var channels = await _context.GetLiveChannelsAsync(source.Id, cancellationToken)
+            var channels = await _catalogue.GetLiveChannelsAsync(source.Id, cancellationToken)
                 .ConfigureAwait(false);
 
             Console.WriteLine(
@@ -68,8 +64,6 @@ internal sealed class SourcesCommandHandler
     /// </remarks>
     public async Task<int> AddPlaylistAsync(string address, string? name, CancellationToken cancellationToken)
     {
-        await PrepareAsync(cancellationToken).ConfigureAwait(false);
-
         if (!SourceAddress.TryParse(address, out var playlistUrl))
         {
             Console.Error.WriteLine(
@@ -85,67 +79,28 @@ internal sealed class SourcesCommandHandler
             CreatedUtc = DateTimeOffset.UtcNow,
         };
 
-        var provider = _providers.CreateProvider(source);
-        var account = await provider.AuthenticateAsync(cancellationToken).ConfigureAwait(false);
+        var progress = new Progress<SourceImportStage>(stage => Console.WriteLine($"  {stage}..."));
+        var result = await _import.ImportAsync(source, progress, cancellationToken).ConfigureAwait(false);
 
-        if (!account.IsUsable)
+        if (!result.Succeeded)
         {
             Console.Error.WriteLine("The playlist could not be retrieved.");
             return 1;
         }
 
-        source.Capabilities = await _providers.GetCapabilityProbe(source)
-            .ProbeAsync(source, cancellationToken)
-            .ConfigureAwait(false);
-
-        var categories = await provider.FetchCategoriesAsync(ContentKind.Live, cancellationToken)
-            .ConfigureAwait(false);
-        var channels = await provider.FetchLiveChannelsAsync(cancellationToken).ConfigureAwait(false);
-
-        var sourceId = await _context.AddSourceAsync(source, cancellationToken).ConfigureAwait(false);
-
-        await _context.ReconcileLiveCatalogueAsync(
-                sourceId,
-                categories,
-                channels,
-                DateTimeOffset.UtcNow,
-                cancellationToken)
-            .ConfigureAwait(false);
-
         Console.WriteLine(
-            $"Added '{source.Name}' as source {sourceId}: {channels.Count} channels, "
-            + $"{categories.Count} categories.");
+            $"Added '{source.Name}' as source {result.SourceId}: {result.ChannelCount} channels, "
+            + $"{result.CategoryCount} categories.");
 
         return 0;
     }
 
     public async Task<int> RemoveAsync(int sourceId, CancellationToken cancellationToken)
     {
-        await PrepareAsync(cancellationToken).ConfigureAwait(false);
-        await _context.DeleteSourceAsync(sourceId, cancellationToken).ConfigureAwait(false);
+        await _catalogue.DeleteSourceAsync(sourceId, cancellationToken).ConfigureAwait(false);
 
         Console.WriteLine($"Removed source {sourceId} and its catalogue.");
         return 0;
-    }
-
-    /// <summary>
-    /// Brings the database up to date and protects credentials that predate protection.
-    /// </summary>
-    /// <remarks>
-    /// The same two steps the desktop player performs at startup. Both applications share one database,
-    /// so whichever runs first has to leave it in a state the other understands — the command line tool
-    /// cannot assume the player has already been opened.
-    /// </remarks>
-    private async Task PrepareAsync(CancellationToken cancellationToken)
-    {
-        await _context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
-
-        var upgraded = await _context.UpgradeStoredCredentialsAsync(cancellationToken).ConfigureAwait(false);
-
-        if (upgraded > 0)
-        {
-            Console.WriteLine($"Protected {upgraded} stored credential(s) that were held in plain text.");
-        }
     }
 
     private static string DescribeProtocol(PlaylistSource source)

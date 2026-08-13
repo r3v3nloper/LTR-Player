@@ -1,9 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Threading;
-using LTR.Core;
-using LTR.Core.Security;
-using LTR.Persistence;
+using LTR.Catalogue;
 using LTR.Playback;
 using LTR.Providers;
 using LTR.Providers.M3u;
@@ -74,10 +72,7 @@ public partial class App : Application
         services.AddLogging(logging => logging.ClearProviders().AddSerilog(dispose: true));
 
         services.AddCredentialProtection();
-
-        services.AddDbContext<LtrDbContext>(options =>
-            options.UseSqlite(LtrDatabaseLocation.ConnectionString));
-
+        services.AddCatalogue();
         services.AddProviderRegistry();
         services.AddXtreamProvider();
         services.AddM3uProvider();
@@ -98,21 +93,15 @@ public partial class App : Application
     /// </remarks>
     private static void MigrateDatabase(IServiceProvider services)
     {
-        using var scope = services.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
-        context.Database.Migrate();
-
-        // Protects credentials that predate protection. Blocking here is acceptable: it touches a
-        // handful of rows and runs before the first window opens.
-        var upgraded = context.UpgradeStoredCredentialsAsync(CancellationToken.None)
+        // Blocking here is acceptable: it migrates a small schema and touches a handful of credential
+        // rows, and it runs before the first window opens.
+        var upgraded = services.PrepareCatalogueAsync(CancellationToken.None)
             .GetAwaiter()
             .GetResult();
 
         if (upgraded > 0)
         {
-            PlayerLog.CredentialsUpgraded(
-                scope.ServiceProvider.GetRequiredService<ILogger<App>>(),
-                upgraded);
+            PlayerLog.CredentialsUpgraded(services.GetRequiredService<ILogger<App>>(), upgraded);
         }
     }
 
