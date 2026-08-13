@@ -21,6 +21,13 @@ internal static partial class PlayerLog
     public static partial void CredentialsUpgraded(ILogger logger, int count);
 
     [LoggerMessage(
+        EventId = 3008,
+        Level = LogLevel.Error,
+        Message = "The catalogue database could not be read and was set aside as {QuarantinedPath}; "
+            + "started with an empty one.")]
+    public static partial void CatalogueQuarantined(ILogger logger, string quarantinedPath);
+
+    [LoggerMessage(
         EventId = 3004,
         Level = LogLevel.Error,
         Message = "The stored catalogue for {Source} could not be read.")]

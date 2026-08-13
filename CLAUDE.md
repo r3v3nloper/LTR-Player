@@ -61,6 +61,12 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   wrongly across offsets, so the provider refuses to translate `<`, `>` or `Max` over such a column. The
   guide's instants therefore go through a converter to UTC `DateTime`. Any new column that a query filters
   or orders by needs the same treatment.
+- **A database that cannot be read is set aside, not repaired.** Migration is the first thing either
+  application does, so corruption used to be fatal before any window opened. `PrepareCatalogueAsync`
+  renames the file and its `-wal`/`-shm` to `catalogue.db.corrupt-<stamp>` and starts over — the catalogue
+  is a cache, and starting over beats an application that will not open. The files are kept: what
+  corrupted one is worth knowing, and deleting the evidence is how the cause stays unknown. Quarantining
+  needs `SqliteConnection.ClearAllPools()` first, or Windows refuses to rename the still-open file.
 - **`MigrationTests` migrates an empty database and proves only that the schema builds.**
   `MigrationUpgradeTests` is the one that matters for shipped installations: SQLite cannot alter a
   constraint in place, so EF implements one by rebuilding the table, and a rebuild is what silently empties

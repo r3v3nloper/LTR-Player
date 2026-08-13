@@ -99,14 +99,40 @@ public partial class App : Application
     {
         // Blocking here is acceptable: it migrates a small schema and touches a handful of credential
         // rows, and it runs before the first window opens.
-        var upgraded = services.PrepareCatalogueAsync(CancellationToken.None)
+        var preparation = services.PrepareCatalogueAsync(CancellationToken.None)
             .GetAwaiter()
             .GetResult();
 
-        if (upgraded > 0)
+        var logger = services.GetRequiredService<ILogger<App>>();
+
+        if (preparation.UpgradedCredentials > 0)
         {
-            PlayerLog.CredentialsUpgraded(services.GetRequiredService<ILogger<App>>(), upgraded);
+            PlayerLog.CredentialsUpgraded(logger, preparation.UpgradedCredentials);
         }
+
+        if (preparation.QuarantinedDatabasePath is { } quarantined)
+        {
+            PlayerLog.CatalogueQuarantined(logger, quarantined);
+            ReportQuarantine(quarantined);
+        }
+    }
+
+    /// <summary>
+    /// Tells the user their catalogue was unreadable, because their configured subscriptions went with it.
+    /// </summary>
+    /// <remarks>
+    /// A dialog rather than the status line. Coming up with an empty channel list and no explanation looks
+    /// like the player lost their subscription for no reason, which is worse than being interrupted once.
+    /// </remarks>
+    private static void ReportQuarantine(string quarantinedPath)
+    {
+        MessageBox.Show(
+            "The stored catalogue could not be read and has been set aside, so the player has started with "
+            + "an empty one. Your subscriptions will have to be added again.\n\n"
+            + $"The unreadable file was kept here, in case it is worth looking at:\n{quarantinedPath}",
+            "LTR-Player",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
     }
 
     private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

@@ -1,3 +1,4 @@
+using System.IO;
 using LTR.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,14 +16,21 @@ namespace LTR.Catalogue;
 /// </remarks>
 public static class CatalogueServiceCollectionExtensions
 {
-    public static IServiceCollection AddCatalogue(this IServiceCollection services)
+    /// <param name="connectionString">
+    /// Overrides where the database lives. Left unset by both applications, which is the point of the
+    /// shared default; a test supplies one so that startup preparation can be exercised against a real
+    /// file rather than only against the user's own.
+    /// </param>
+    public static IServiceCollection AddCatalogue(
+        this IServiceCollection services,
+        string? connectionString = null)
     {
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddSingleton(TimeProvider.System);
 
         services.AddDbContext<LtrDbContext>(options =>
-            options.UseSqlite(LtrDatabaseLocation.ConnectionString));
+            options.UseSqlite(connectionString ?? LtrDatabaseLocation.ConnectionString));
 
         // Singletons: each creates a scope per operation rather than holding a context, so none pins a
         // unit of work open.
@@ -35,23 +43,77 @@ public static class CatalogueServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Brings the database up to date and protects credentials that predate protection.
+    /// Brings the database up to date, protects credentials that predate protection, and sets aside a
+    /// database that cannot be read at all.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Both applications share one database and either may be started first, so whichever runs must
-    /// leave it in a state the other understands. Returning the number upgraded lets the caller report
-    /// it in whatever way suits it.
+    /// leave it in a state the other understands.
+    /// </para>
+    /// <para>
+    /// The quarantine exists because this is the first thing either application does, and until it
+    /// succeeds nothing else can run. A corrupt catalogue therefore used to be fatal at startup — and a
+    /// catalogue is a cache of a subscription that can be fetched again, so starting over beats an
+    /// application that will not open. It is attempted once: a second failure is not corruption of the
+    /// file we just moved and must surface.
+    /// </para>
     /// </remarks>
-    public static async Task<int> PrepareCatalogueAsync(
+    public static async Task<CataloguePreparation> PrepareCatalogueAsync(
         this IServiceProvider services,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        try
+        {
+            var upgraded = await MigrateAsync(services, cancellationToken).ConfigureAwait(false);
+            return new CataloguePreparation(upgraded, QuarantinedDatabasePath: null);
+        }
+        catch (Exception exception) when (SqliteDatabaseFile.IsCorruption(exception))
+        {
+            var quarantined = QuarantineDatabase(services);
+
+            if (quarantined is null)
+            {
+                // Nothing was moved, so retrying would fail the same way. Most likely the database is not
+                // the file this process knows about — an in-memory one, or a path someone else supplied.
+                throw;
+            }
+
+            var upgraded = await MigrateAsync(services, cancellationToken).ConfigureAwait(false);
+            return new CataloguePreparation(upgraded, quarantined);
+        }
+    }
+
+    private static async Task<int> MigrateAsync(IServiceProvider services, CancellationToken cancellationToken)
+    {
         await using var scope = services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
 
         await context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
         return await context.UpgradeStoredCredentialsAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Moves the database this container is configured against, whichever file that is.
+    /// </summary>
+    /// <remarks>
+    /// The path is read from the connection rather than assumed to be the shared default, so a container
+    /// pointed at another file cannot cause the user's own catalogue to be moved.
+    /// </remarks>
+    private static string? QuarantineDatabase(IServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<LtrDbContext>();
+        var databasePath = context.Database.GetDbConnection().DataSource;
+
+        if (string.IsNullOrWhiteSpace(databasePath) || !File.Exists(databasePath))
+        {
+            return null;
+        }
+
+        var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();
+        return SqliteDatabaseFile.Quarantine(databasePath, timeProvider.GetUtcNow());
     }
 }

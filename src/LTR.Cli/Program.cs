@@ -172,11 +172,20 @@ static Command BuildGuideCommand(IServiceProvider services)
 static async Task<int> WithCatalogue<THandler>(IServiceProvider services, Func<THandler, Task<int>> action)
     where THandler : notnull
 {
-    var upgraded = await services.PrepareCatalogueAsync(CancellationToken.None).ConfigureAwait(false);
+    var preparation = await services.PrepareCatalogueAsync(CancellationToken.None).ConfigureAwait(false);
 
-    if (upgraded > 0)
+    if (preparation.UpgradedCredentials > 0)
     {
-        Console.WriteLine($"Protected {upgraded} stored credential(s) that were held in plain text.");
+        Console.WriteLine(
+            $"Protected {preparation.UpgradedCredentials} stored credential(s) that were held in plain text.");
+    }
+
+    if (preparation.QuarantinedDatabasePath is { } quarantined)
+    {
+        Console.Error.WriteLine(
+            "The catalogue could not be read and was set aside; starting from an empty one. Sources will "
+            + "have to be added again.");
+        Console.Error.WriteLine($"Unreadable file kept at: {quarantined}");
     }
 
     return await action(services.GetRequiredService<THandler>()).ConfigureAwait(false);
