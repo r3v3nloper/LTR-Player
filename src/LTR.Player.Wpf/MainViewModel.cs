@@ -28,19 +28,26 @@ public sealed partial class MainViewModel : ObservableObject
 
     private PlaylistSource? _source;
 
+    // Each field the Connect command guards on must re-evaluate that guard when it changes. Without
+    // NotifyCanExecuteChangedFor the generated command evaluates CanConnect once, at construction
+    // time when every field is still empty, and the button stays disabled no matter what is typed.
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
     private string _panelUrl = string.Empty;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
     private string _username = string.Empty;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
     private string _password = string.Empty;
 
     [ObservableProperty]
     private string _status = "Add a subscription to begin.";
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConnectCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -190,7 +197,13 @@ public sealed partial class MainViewModel : ObservableObject
             && !string.IsNullOrWhiteSpace(Password);
     }
 
-    [RelayCommand]
+    /// <remarks>
+    /// Concurrent execution is allowed deliberately. The generated command would otherwise report
+    /// CanExecute as false while a stream is still opening, so zapping away from a slow channel would
+    /// be silently ignored — and the playback session's supersession handling, which exists precisely
+    /// to make rapid channel changes safe, would never be reachable from the UI.
+    /// </remarks>
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task PlaySelectedAsync(CancellationToken cancellationToken)
     {
         if (SelectedChannel is null || _source is null)
