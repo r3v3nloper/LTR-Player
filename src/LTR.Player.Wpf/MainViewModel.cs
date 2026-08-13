@@ -135,6 +135,8 @@ public sealed partial class MainViewModel : ObservableObject
             Sources.Add(source);
         }
 
+        PlayerLog.LoadedSources(_logger, Sources.Count);
+
         if (Sources.Count == 0)
         {
             return;
@@ -547,6 +549,7 @@ public sealed partial class MainViewModel : ObservableObject
         ChannelView.Refresh();
 
         var favorites = _channels.Count(channel => channel.IsFavorite);
+        PlayerLog.LoadedCatalogue(_logger, source.Name, _channels.Count, storedCategories.Count, favorites);
 
         Status = favorites > 0
             ? $"{_channels.Count} channels, {favorites} favourites."

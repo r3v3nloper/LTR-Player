@@ -39,6 +39,11 @@ public partial class App : Application
         DispatcherUnhandledException += OnDispatcherUnhandledException;
 
         _services = BuildServices();
+
+        PlayerLog.UsingDatabase(
+            _services.GetRequiredService<ILogger<App>>(),
+            AppPaths.DatabaseFile);
+
         MigrateDatabase(_services);
 
         var mainWindow = _services.GetRequiredService<MainWindow>();
