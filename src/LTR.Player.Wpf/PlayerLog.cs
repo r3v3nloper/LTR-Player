@@ -112,6 +112,28 @@ internal static partial class PlayerLog
         Message = "Sampling where playback has reached failed.")]
     public static partial void PlaybackSampleFailed(ILogger logger, Exception exception);
 
+    /// <remarks>
+    /// Warning rather than error, and the file is left where it is rather than replaced. Whatever is wrong
+    /// with it is worth being able to look at, and the player runs perfectly well on the defaults.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 3014,
+        Level = LogLevel.Warning,
+        Message = "The settings in {Path} could not be read; using the defaults.")]
+    public static partial void SettingsNotRead(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(
+        EventId = 3015,
+        Level = LogLevel.Warning,
+        Message = "The settings could not be written to {Path}; this session's changes are lost.")]
+    public static partial void SettingsNotSaved(ILogger logger, Exception exception, string path);
+
+    [LoggerMessage(
+        EventId = 3016,
+        Level = LogLevel.Error,
+        Message = "The settings for source {Source} could not be stored.")]
+    public static partial void SourceSettingsNotSaved(ILogger logger, Exception exception, string source);
+
     [LoggerMessage(
         EventId = 3012,
         Level = LogLevel.Information,

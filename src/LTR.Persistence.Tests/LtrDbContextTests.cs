@@ -37,6 +37,82 @@ public sealed class LtrDbContextTests
     }
 
     [Fact]
+    public async Task UpdateSourceSettingsAsync_StoresTheAgentAndTheFormat()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTestDatabase.CreateAsync(cancellationToken: cancellationToken);
+        var source = CreateXtreamSource(password: "s3cret");
+
+        await using (var context = database.CreateContext())
+        {
+            await context.AddSourceAsync(source, cancellationToken);
+        }
+
+        // Act
+        await using (var context = database.CreateContext())
+        {
+            await context.UpdateSourceSettingsAsync(
+                source.Id,
+                "Lavf/60.16.100",
+                StreamFormat.HlsPlaylist,
+                cancellationToken);
+        }
+
+        // Assert
+        await using var verifyContext = database.CreateContext();
+        var stored = (await verifyContext.GetSourcesAsync(cancellationToken)).ShouldHaveSingleItem();
+
+        stored.UserAgent.ShouldBe("Lavf/60.16.100");
+        stored.PreferredStreamFormat.ShouldBe(StreamFormat.HlsPlaylist);
+    }
+
+    /// <remarks>
+    /// The two writes to a source row happen on different schedules — this one when the viewer saves, and the
+    /// probe's whenever a refresh runs. Writing field by field rather than saving a whole instance is what
+    /// stops one clobbering the other; this is the guard for that.
+    /// </remarks>
+    [Fact]
+    public async Task UpdateSourceSettingsAsync_LeavesTheProbedCapabilitiesAlone()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTestDatabase.CreateAsync(cancellationToken: cancellationToken);
+        var source = CreateXtreamSource(password: "s3cret");
+
+        await using (var context = database.CreateContext())
+        {
+            await context.AddSourceAsync(source, cancellationToken);
+
+            source.Capabilities = new ProviderCapabilities
+            {
+                SupportsLive = true,
+                SupportsVod = true,
+                ProbedAtUtc = RefreshedAt,
+            };
+
+            await context.UpdateProbeResultAsync(source, cancellationToken);
+        }
+
+        // Act
+        await using (var context = database.CreateContext())
+        {
+            await context.UpdateSourceSettingsAsync(
+                source.Id,
+                "Lavf/60.16.100",
+                StreamFormat.HlsPlaylist,
+                cancellationToken);
+        }
+
+        // Assert
+        await using var verifyContext = database.CreateContext();
+        var stored = (await verifyContext.GetSourcesAsync(cancellationToken)).ShouldHaveSingleItem();
+
+        stored.Capabilities.SupportsVod.ShouldBeTrue();
+        stored.Capabilities.ProbedAtUtc.ShouldNotBeNull();
+    }
+
+    [Fact]
     public async Task AddSourceAsync_FollowedByAnotherSave_DoesNotLeakThePlaintextIntoTheDatabase()
     {
         // Arrange: revealing the password on a tracked entity would make the next save overwrite the

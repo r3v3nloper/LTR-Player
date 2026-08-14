@@ -142,6 +142,37 @@ public sealed partial class LtrDbContext : DbContext
     }
 
     /// <summary>
+    /// Stores the two source settings a viewer can correct after the fact.
+    /// </summary>
+    /// <remarks>
+    /// Field by field rather than by saving a whole source, unlike
+    /// <see cref="UpdateProbeResultAsync"/>. What the viewer may edit is a short, fixed list, and taking the
+    /// instance whole would let a stale copy from the window overwrite a capability set the probe had
+    /// meanwhile refreshed — the two write to the same row from different schedules.
+    /// </remarks>
+    public async Task UpdateSourceSettingsAsync(
+        int sourceId,
+        string userAgent,
+        StreamFormat preferredStreamFormat,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userAgent);
+
+        var stored = await Sources.FirstOrDefaultAsync(entity => entity.Id == sourceId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (stored is null)
+        {
+            return;
+        }
+
+        stored.UserAgent = userAgent;
+        stored.PreferredStreamFormat = preferredStreamFormat;
+
+        await SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Reconciles a freshly fetched live catalogue against what is stored.
     /// </summary>
     /// <remarks>

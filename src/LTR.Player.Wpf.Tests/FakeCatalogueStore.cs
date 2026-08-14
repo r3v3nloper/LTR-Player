@@ -156,6 +156,20 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
         return Task.CompletedTask;
     }
 
+    /// <summary>Source settings that were written, so a test can prove they reached the store.</summary>
+    public List<(int SourceId, string UserAgent, StreamFormat Format)> SourceSettingWrites { get; } = [];
+
+    public Task UpdateSourceSettingsAsync(
+        int sourceId,
+        string userAgent,
+        StreamFormat preferredStreamFormat,
+        CancellationToken cancellationToken)
+    {
+        SourceSettingWrites.Add((sourceId, userAgent, preferredStreamFormat));
+
+        return Task.CompletedTask;
+    }
+
     public Task DeleteSourceAsync(int sourceId, CancellationToken cancellationToken)
     {
         DeletedSourceIds.Add(sourceId);
