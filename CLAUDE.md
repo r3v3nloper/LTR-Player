@@ -123,6 +123,9 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   resolve with `DisplayMemberPath` and leaves the control rendering `ToString()`.
 - **`Progress<T>` and `ICollectionView.Refresh` both matter:** a refresh resets the collection and the
   list box drops its selection, so it has to be restored.
+- **Fill a bound collection before selecting in it.** Emptying one makes a `ComboBox` write a null selection
+  back through the binding, so a selection assigned first is discarded. Both new pickers rendered blank while
+  their lists looked perfectly correct, because the filter read the same null as "every category".
 - **Dispose the DI container asynchronously.** It holds `IAsyncDisposable` singletons; the synchronous
   `Dispose` throws and `PlaybackSession` never releases its stream.
 - **A view model that reads the clock must be given a `TimeProvider`.** `DateTimeOffset.UtcNow` in
