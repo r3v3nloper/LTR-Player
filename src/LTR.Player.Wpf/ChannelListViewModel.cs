@@ -165,6 +165,49 @@ public sealed partial class ChannelListViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Moves the selection one channel along, and reports whether it moved.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Through the filtered view rather than the backing list, so zapping walks the channels the viewer can
+    /// see. A category or a search having narrowed the list is exactly the set they mean by "the next
+    /// channel".
+    /// </para>
+    /// <para>
+    /// It stops at the ends rather than wrapping. Wrapping from the last channel to the first is
+    /// indistinguishable from a zap that did nothing except by watching the picture, and a list this long
+    /// makes that guess expensive: an unwanted wrap costs a stream open, which costs the account's one
+    /// connection.
+    /// </para>
+    /// </remarks>
+    public bool SelectAdjacent(int offset)
+    {
+        var visible = ChannelView.Cast<ChannelItemViewModel>().ToList();
+
+        if (visible.Count == 0)
+        {
+            return false;
+        }
+
+        // Nothing selected yet: the first channel is what "next" means, and the last is what "previous"
+        // does — both land the viewer somewhere rather than refusing.
+        var current = SelectedChannel is null
+            ? (offset > 0 ? -1 : visible.Count)
+            : visible.IndexOf(SelectedChannel);
+
+        var target = current + offset;
+
+        if (target < 0 || target >= visible.Count)
+        {
+            return false;
+        }
+
+        SelectedChannel = visible[target];
+
+        return true;
+    }
+
     [RelayCommand(CanExecute = nameof(HasSelectedChannel))]
     private async Task ToggleFavoriteAsync(CancellationToken cancellationToken)
     {

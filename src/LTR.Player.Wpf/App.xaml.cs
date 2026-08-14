@@ -87,6 +87,10 @@ public partial class App : Application
         services.AddSingleton<ContinueWatchingViewModel>();
         services.AddSingleton<GuideImportCoordinator>();
         services.AddSingleton<PlaybackCoordinator>();
+
+        // Takes the TimeProvider the catalogue registered, as the channel list and the guide already do:
+        // a view model that reads the clock is given one rather than reaching for the static property.
+        services.AddSingleton<PlayerOverlayViewModel>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 

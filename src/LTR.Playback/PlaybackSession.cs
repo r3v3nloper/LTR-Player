@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LTR.Core.Playback;
 using Microsoft.Extensions.Logging;
 
@@ -73,6 +74,50 @@ public sealed class PlaybackSession : IPlaybackSession
 
     public TimeSpan? Duration => _isDisposed ? null : _engine.Duration;
 
+    public bool IsSeekable => !_isDisposed && _engine.IsSeekable;
+
+    /// <remarks>
+    /// Every member from here down is a delegation, and deliberately so. They are on the session because
+    /// the on-screen controls need them and must not hold the engine; the session adds nothing to them
+    /// beyond refusing to touch a disposed engine, which is reachable — the window's sampling timer can
+    /// tick once more while the container is being torn down.
+    /// </remarks>
+    public int Volume
+    {
+        get => _isDisposed ? 0 : _engine.Volume;
+        set
+        {
+            if (!_isDisposed)
+            {
+                _engine.Volume = value;
+            }
+        }
+    }
+
+    public bool IsMuted
+    {
+        get => !_isDisposed && _engine.IsMuted;
+        set
+        {
+            if (!_isDisposed)
+            {
+                _engine.IsMuted = value;
+            }
+        }
+    }
+
+    public VideoAspectRatio AspectRatio
+    {
+        get => _isDisposed ? VideoAspectRatio.Source : _engine.AspectRatio;
+        set
+        {
+            if (!_isDisposed)
+            {
+                _engine.AspectRatio = value;
+            }
+        }
+    }
+
     public async Task<PlaybackState> SwitchToAsync(MediaRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -98,10 +143,21 @@ public sealed class PlaybackSession : IPlaybackSession
 
             PlaybackLog.Switching(_logger, request.DisplayName);
 
+            // Timed because zapping latency is otherwise unmeasurable: the wait a viewer notices is spread
+            // across releasing the old stream, the panel answering and the engine filling its buffer, and
+            // no setting can be judged without knowing which of those the time went into. The stop is
+            // outside this figure on purpose — it is mandatory and cannot be tuned.
+            var openStarted = Stopwatch.GetTimestamp();
+
             try
             {
                 await _engine.PlayAsync(request, cancellationToken).ConfigureAwait(false);
                 _current = request;
+
+                PlaybackLog.Opened(
+                    _logger,
+                    request.DisplayName,
+                    Stopwatch.GetElapsedTime(openStarted).TotalMilliseconds);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -137,6 +193,40 @@ public sealed class PlaybackSession : IPlaybackSession
         finally
         {
             _gate.Release();
+        }
+    }
+
+    public void SetPaused(bool isPaused)
+    {
+        if (!_isDisposed)
+        {
+            _engine.SetPaused(isPaused);
+        }
+    }
+
+    public void SeekTo(TimeSpan position)
+    {
+        if (!_isDisposed)
+        {
+            _engine.SeekTo(position);
+        }
+    }
+
+    public IReadOnlyList<MediaTrack> GetTracks(MediaTrackKind kind)
+    {
+        return _isDisposed ? [] : _engine.GetTracks(kind);
+    }
+
+    public int GetSelectedTrack(MediaTrackKind kind)
+    {
+        return _isDisposed ? MediaTrack.DisabledId : _engine.GetSelectedTrack(kind);
+    }
+
+    public void SelectTrack(MediaTrackKind kind, int trackId)
+    {
+        if (!_isDisposed)
+        {
+            _engine.SelectTrack(kind, trackId);
         }
     }
 

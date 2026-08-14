@@ -38,4 +38,10 @@ internal static partial class PlaybackLog
         Level = LogLevel.Warning,
         Message = "Playback of {Stream} failed to start.")]
     public static partial void PlayFailed(ILogger logger, Exception exception, string stream);
+
+    [LoggerMessage(
+        EventId = 2005,
+        Level = LogLevel.Information,
+        Message = "{Stream} began playing {ElapsedMilliseconds:F0} ms after the open was issued.")]
+    public static partial void Opened(ILogger logger, string stream, double elapsedMilliseconds);
 }

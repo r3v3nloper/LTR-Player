@@ -306,12 +306,18 @@ internal sealed class VodCommandHandler
     /// Whether to record where playback got to, as the window does. Off by default so that a play-test stays
     /// a read-only check; on, it is what lets the continue-watching list be exercised without the window.
     /// </param>
+    /// <param name="seekToSeconds">
+    /// Where to seek part-way through the hold, or zero for no seek. Distinct from
+    /// <paramref name="startAtSeconds"/>, which is honoured while the stream is opening: that path is the
+    /// resume, and this one is what the seek bar does to a stream already playing.
+    /// </param>
     public async Task<int> PlayTestAsync(
         int sourceId,
         int? movieId,
         int? episodeId,
         int seconds,
         int startAtSeconds,
+        int seekToSeconds,
         bool remember,
         CancellationToken cancellationToken)
     {
@@ -369,13 +375,16 @@ internal sealed class VodCommandHandler
             }
         }
 
-        return await PlayAsync(source, request, seconds, cancellationToken).ConfigureAwait(false);
+        var seekTo = seekToSeconds > 0 ? TimeSpan.FromSeconds(seekToSeconds) : (TimeSpan?)null;
+
+        return await PlayAsync(source, request, seconds, seekTo, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<int> PlayAsync(
         PlaylistSource source,
         MediaRequest request,
         int seconds,
+        TimeSpan? seekTo,
         CancellationToken cancellationToken)
     {
         Console.WriteLine($"Opening '{request.DisplayName}' as {request.Format}...");
@@ -406,6 +415,11 @@ internal sealed class VodCommandHandler
             Console.WriteLine($"Playing. Holding the stream for {seconds}s.");
             await Task.Delay(TimeSpan.FromSeconds(seconds), cancellationToken).ConfigureAwait(false);
 
+            if (seekTo is { } target)
+            {
+                await SeekAndReportAsync(target, seconds, cancellationToken).ConfigureAwait(false);
+            }
+
             // The two figures that decide whether resuming can work at all. A film reporting no duration
             // can never be recognised as finished, and one reporting no position can never be resumed.
             Console.WriteLine($"Position   {DescribeTime(_session.Position)}");
@@ -434,6 +448,32 @@ internal sealed class VodCommandHandler
         await _releaseCheck.ReportAsync(source, cancellationToken).ConfigureAwait(false);
 
         return 0;
+    }
+
+    /// <summary>
+    /// Moves a playing stream and reports where it ended up.
+    /// </summary>
+    /// <remarks>
+    /// Held again afterwards, because a seek over HTTP is answered by a fresh range request and the engine
+    /// reports the old position until that arrives. Reading immediately would say the seek did nothing on
+    /// exactly the panels where it takes longest — which is the case worth knowing about.
+    /// </remarks>
+    private async Task SeekAndReportAsync(TimeSpan target, int seconds, CancellationToken cancellationToken)
+    {
+        if (!_session.IsSeekable)
+        {
+            Console.Error.WriteLine(
+                "Seek       refused; the panel serves this without range support, so it cannot be "
+                + "positioned at all.");
+            return;
+        }
+
+        Console.WriteLine($"Seeking to {target:hh\\:mm\\:ss}, then holding another {seconds}s.");
+        _session.SeekTo(target);
+
+        await Task.Delay(TimeSpan.FromSeconds(seconds), cancellationToken).ConfigureAwait(false);
+
+        Console.WriteLine($"Sought to  {DescribeTime(_session.Position)}");
     }
 
     /// <summary>

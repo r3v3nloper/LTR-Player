@@ -59,6 +59,7 @@ internal sealed class MainViewModelHarness
                 Progress,
                 status,
                 NullLogger<PlaybackCoordinator>.Instance),
+            new PlayerOverlayViewModel(Session, Clock),
             new GuideImportCoordinator(GuideImport, status, NullLogger<GuideImportCoordinator>.Instance),
             NullLogger<MainViewModel>.Instance);
     }

@@ -1,0 +1,217 @@
+<UserControl x:Class="LTR.Player.Wpf.Views.PlayerOverlayView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:LTR.Player.Wpf"
+             MouseMove="OnPointerActivity"
+             MouseDoubleClick="OnPictureDoubleClicked">
+
+  <!--
+    The on-screen display. Hosted inside VideoView.Content by the window, for the same reason the guide is:
+    VideoView puts a separate native window over the WPF tree, so anything beside it is invisible behind the
+    video.
+
+    That hosting has a second consequence, which is why this file handles pointer events at all. The content
+    lives in an overlay window of its own, so input over it does not reach the shell window's handlers. The
+    keyboard is still the shell's business, because focus stays with the shell window; the pointer is not.
+
+    The outer grid is transparent rather than unset, and covers the whole picture — that is what makes the
+    pointer moving anywhere over the video wake the controls, and a double-click anywhere on it go
+    fullscreen. Nothing is obscured: the video underneath is a native surface, not part of this visual tree.
+  -->
+  <Grid Background="Transparent">
+    <Border x:Name="OverlayRoot"
+            DataContext="{Binding PlayerOverlay}"
+            VerticalAlignment="Bottom"
+            Background="#D9000000"
+            Padding="16,12"
+            Visibility="{Binding IsVisible, Converter={StaticResource BooleanToVisibility}}">
+      <StackPanel>
+
+        <!--
+          The seek bar, absent rather than disabled for live television. A greyed-out scrubber invites the
+          question of why it does not work; a channel simply has no position to move to.
+        -->
+        <Grid Margin="0,0,0,8"
+              Visibility="{Binding IsSeekable, Converter={StaticResource BooleanToVisibility}}">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+
+          <TextBlock Grid.Column="0"
+                     Text="{Binding PositionLabel}"
+                     Style="{StaticResource MutedText}"
+                     VerticalAlignment="Center"
+                     MinWidth="46"
+                     TextAlignment="Right" />
+
+          <!--
+            Not focusable on purpose. A focused slider answers the arrow keys itself, and those are the
+            shell's skip-back and skip-forward keys — leaving it focusable makes the same key do two
+            different things depending on what was clicked last.
+          -->
+          <Slider Grid.Column="1"
+                  Margin="10,0"
+                  Focusable="False"
+                  Minimum="0"
+                  Maximum="{Binding DurationSeconds}"
+                  Value="{Binding PositionSeconds, Mode=TwoWay}"
+                  Thumb.DragStarted="OnSeekStarted"
+                  Thumb.DragCompleted="OnSeekCompleted" />
+
+          <TextBlock Grid.Column="2"
+                     Text="{Binding DurationLabel}"
+                     Style="{StaticResource MutedText}"
+                     VerticalAlignment="Center"
+                     MinWidth="46" />
+        </Grid>
+
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+
+          <!-- Transport. The skip buttons follow the seek bar in being present only when there is
+               something to skip within. -->
+          <StackPanel Grid.Column="0" Orientation="Horizontal">
+            <Button Style="{StaticResource OverlayButton}"
+                    Command="{Binding TogglePauseCommand}"
+                    ToolTip="Pause or resume  ·  Space">
+              <TextBlock>
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                    <Setter Property="Text" Value="❚❚" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding IsPaused}" Value="True">
+                        <Setter Property="Text" Value="▶" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
+            </Button>
+
+            <Button Style="{StaticResource OverlayButton}"
+                    Content="■"
+                    ToolTip="Stop and release the connection"
+                    Command="{Binding DataContext.StopCommand,
+                                      RelativeSource={RelativeSource AncestorType=Window}}" />
+
+            <Button Style="{StaticResource OverlayButton}"
+                    Content="⏴⏴"
+                    ToolTip="Back 10 seconds  ·  Left"
+                    Command="{Binding SkipBackCommand}"
+                    Visibility="{Binding IsSeekable, Converter={StaticResource BooleanToVisibility}}" />
+
+            <Button Style="{StaticResource OverlayButton}"
+                    Content="⏵⏵"
+                    ToolTip="Forward 10 seconds  ·  Right"
+                    Command="{Binding SkipForwardCommand}"
+                    Visibility="{Binding IsSeekable, Converter={StaticResource BooleanToVisibility}}" />
+
+            <Button Style="{StaticResource OverlayButton}"
+                    Content="⏮"
+                    Margin="8,0,0,0"
+                    ToolTip="Previous channel  ·  Page Up"
+                    Command="{Binding DataContext.ZapPreviousCommand,
+                                      RelativeSource={RelativeSource AncestorType=Window}}" />
+
+            <Button Style="{StaticResource OverlayButton}"
+                    Content="⏭"
+                    ToolTip="Next channel  ·  Page Down"
+                    Command="{Binding DataContext.ZapNextCommand,
+                                      RelativeSource={RelativeSource AncestorType=Window}}" />
+          </StackPanel>
+
+          <TextBlock Grid.Column="1"
+                     Text="{Binding DataContext.NowPlaying,
+                                    RelativeSource={RelativeSource AncestorType=Window}}"
+                     Margin="16,0"
+                     VerticalAlignment="Center"
+                     FontWeight="SemiBold"
+                     TextTrimming="CharacterEllipsis" />
+
+          <StackPanel Grid.Column="2" Orientation="Horizontal">
+            <!-- Each track picker appears only when it holds a real choice, so a channel with one audio
+                 track and no subtitles shows neither rather than two menus of one entry. -->
+            <ComboBox Width="120"
+                      Margin="0,0,6,0"
+                      DataContext="{Binding AudioTracks}"
+                      ItemsSource="{Binding Tracks}"
+                      SelectedItem="{Binding SelectedTrack}"
+                      ToolTip="Audio track"
+                      Visibility="{Binding IsAvailable, Converter={StaticResource BooleanToVisibility}}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type local:TrackChoice}">
+                  <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <ComboBox Width="120"
+                      Margin="0,0,6,0"
+                      DataContext="{Binding SubtitleTracks}"
+                      ItemsSource="{Binding Tracks}"
+                      SelectedItem="{Binding SelectedTrack}"
+                      ToolTip="Subtitles"
+                      Visibility="{Binding IsAvailable, Converter={StaticResource BooleanToVisibility}}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type local:TrackChoice}">
+                  <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <!-- The list is fixed and belongs to the choice itself, so it is taken from there rather than
+                 mirrored onto the view model as a property that would only ever return the same thing. -->
+            <ComboBox Width="150"
+                      Margin="0,0,6,0"
+                      ItemsSource="{x:Static local:AspectRatioChoice.All}"
+                      SelectedItem="{Binding SelectedAspectRatio}"
+                      ToolTip="Correct a stretched picture  ·  A">
+              <ComboBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type local:AspectRatioChoice}">
+                  <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <Button Style="{StaticResource OverlayButton}"
+                    Command="{Binding ToggleMuteCommand}"
+                    ToolTip="Mute  ·  M">
+              <TextBlock>
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                    <Setter Property="Text" Value="🔊" />
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding IsMuted}" Value="True">
+                        <Setter Property="Text" Value="🔇" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
+            </Button>
+
+            <Slider Width="90"
+                    Margin="0,0,6,0"
+                    VerticalAlignment="Center"
+                    Focusable="False"
+                    Minimum="0"
+                    Maximum="100"
+                    Value="{Binding Volume, Mode=TwoWay}"
+                    ToolTip="Volume  ·  + and −" />
+
+            <Button Style="{StaticResource OverlayButton}"
+                    Content="⛶"
+                    ToolTip="Fullscreen  ·  F, or double-click the picture"
+                    Command="{Binding ToggleFullscreenCommand}" />
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

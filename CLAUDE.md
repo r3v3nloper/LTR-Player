@@ -18,37 +18,47 @@ exists and not what was considered finished.
 | **M2** Sources complete — M3U, several sources, favourites, search, categories | done | |
 | **M3** Guide — XMLTV import, now/next, timeline, detail | done | see the caveat below |
 | **M4** VOD + series — catalogue, seasons, resume | done | `Docs/vod.md` |
-| **M5** Player polish — OSD, fullscreen, keyboard, tracks | not started | next; the seek bar belongs here |
-| **M6** Hardening — error handling, settings, packaging | not started | the corrupt-database quarantine landed early, with M3 |
+| **M5** Player polish — OSD, fullscreen, keyboard, tracks | done | `Docs/player.md`; the live-caching value still wants measuring |
+| **M6** Hardening — error handling, settings, packaging | not started | next; the corrupt-database quarantine landed early, with M3 |
 
 M3's timeline scrolls its channel names out of view with the programme blocks, and draws at most 200 rows.
 Both are stated on screen and carried as ranks 11 and 18 in `Docs/refactoring-backlog.md`; neither is
 considered a gap in the milestone.
 
-M4 resumes but does not seek: a viewer can carry on where they left off, and cannot scrub. That is M5's OSD
-work, not an omission from M4. M4 is merged into `main`; ranks 1–7 of the post-M4 review are cleared, and
-nothing left in the backlog has an effect while the player is running.
+M4 is merged into `main`; ranks 1–7 of the post-M4 review are cleared. M5 cleared rank 15 as well, which is
+why it belonged there: recording progress at the end of a film needed the session to say *why* it stopped,
+and the seek bar needed the same widening of the playback surface.
 
-### Starting M5
+### What M5 settled, and the one thing it did not
 
-The plan calls for the OSD inside `VideoView.Content`, fullscreen, keyboard control (zap, volume, fullscreen,
-info), audio and subtitle track selection, aspect ratio, and lower zapping latency. What M4 leaves in place
-for it:
+`Docs/player.md` has the design. The parts worth knowing before touching them again:
 
-- **`PlaybackCoordinator` is where playback lives.** It owns the session, the position sampling and the
-  progress recorder, and it is the only thing that opens a stream. An OSD needs the position, the duration
-  and a seek — the first two are already there; a seek is not, and `IMediaEngine` has no `SeekTo`.
-- **Seeking is unbuilt on purpose.** `MediaRequest.StartAt` covers resuming and is honoured by seeking right
-  after the first `Playing` event, for a measured reason recorded in `LibVlcMediaEngine.ApplyStartPosition`.
-  A seek bar wants the same call exposed through `IPlaybackSession`.
-- **The position timer already exists** — `MainWindow` samples every five seconds for the resume recorder.
-  An OSD wants something faster while it is visible, and that is a second interval rather than a new timer.
-- **Backlog rank 15 belongs to M5.** Recording progress when a film reaches its own end needs
-  `IPlaybackSession` to say *why* it stopped, which is the same change a seek bar wants.
-- **`MediaTrack` and `IMediaEngine.GetTracks`/`SelectTrack` exist and are unused by the window.** The CLI's
-  `play-test` prints them, which is the only thing exercising them today.
-- **Overlays go inside `VideoView.Content`.** `Views/GuideOverlayView.xaml` is the worked example; the window
-  hosts it, and the reason is the first WPF trap below.
+- **The transport lives on `IPlaybackSession`, not on the engine and not on the coordinator.** Pause, seek,
+  volume, tracks and aspect ratio are all there. The division that matters: `PlaybackCoordinator` decides
+  *what* plays and still owns the only call to `SwitchToAsync`, while `PlayerOverlayViewModel` acts on a
+  stream already open. An overlay holding the engine is how the one-connection guarantee gets bypassed by
+  the next thing that needs "just one" call.
+- **Nothing in the overlay subscribes to the session's events.** An engine raises them on its own threads;
+  WPF marshals a property change for a plain binding but *not* for a collection, so a track list rebuilt from
+  an engine callback takes the window down. Everything is read in `Sample()`, from the window's timer.
+- **The same timer runs at two rates** — five seconds for the resume recorder, half a second while the
+  controls are visible. Not two timers: both jobs read the same figures from the same place.
+- **A film reaching its own end is flagged, not acted on.** `PlaybackCoordinator` sets a flag from the engine
+  thread and `SampleAsync` closes the stream off on the next tick, because what follows is a database write
+  and three lists rereading themselves.
+- **Keys are resolved by `PlayerKeyMap` and carried out by `PlayerActions`.** Not `KeyBinding`s in markup:
+  an input binding is offered the key before the focused element sees it, so declaring one for `A` would mean
+  the search box could never contain that letter. `MainWindow` checks what has focus, which is the whole
+  reason it cannot be declarative. Arrow keys are deliberately *not* mapped to zapping — they belong to the
+  channel list. `PlayerActions` splits where the design already does: four actions come back to the shell
+  because they decide *what* plays, and the rest go to the overlay because they act on an open stream.
+- **`MainViewModel` regrows, every milestone, by the same mechanism** — it is the only place that can reach
+  everything. 395 lines at the M4 merge, 483 after M5, 439 after extracting the key dispatch. Check it at the
+  start of a milestone, not the end.
+- **`LiveNetworkCachingMilliseconds` defaults to 600 ms and is a guess, not a measurement.** It is the only
+  part of a zap that can be shortened; the stop that precedes it is required by the connection limit. Raise
+  it if channels stutter in their first seconds — that symptom is this value being too low. `PlaybackSession`
+  now logs how long each open took, which is what makes tuning it possible at all.
 
 ## Layout
 
@@ -66,9 +76,10 @@ LTR.Playback.LibVlc            LibVLC engine
 LTR.Security.Dpapi             Windows credential protection, kept out of Core on purpose
 LTR.Cli                        Headless verification of everything below the UI (§2.12)
 LTR.Player.Wpf                 The only project that references WPF. MainViewModel composes the four
-                               catalogue sections and the guide and is their ISourceCoordinator; the
-                               sections never reference each other. Views/ holds one UserControl per
-                               section, so MainWindow.xaml is composition only
+                               catalogue sections, the guide and the on-screen controls, and is the
+                               sections' ISourceCoordinator; the sections never reference each other.
+                               Views/ holds one UserControl per section and per overlay, so
+                               MainWindow.xaml is composition only
 ```
 
 Dependency direction: apps → Catalogue/Providers/Playback → *.Abstractions → Core. Core knows nobody.
@@ -132,7 +143,9 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
 ## WPF traps, each of which shipped a bug once
 
 - **Overlays belong inside `VideoView.Content`**, not beside it. `VideoView` hosts a separate native
-  window over the WPF tree; a sibling element is invisible behind the video.
+  window over the WPF tree; a sibling element is invisible behind the video. That hosting has a second
+  consequence found in M5: input over the overlay does not reach the shell window's handlers either, which is
+  why `PlayerOverlayView` handles its own pointer events while the keyboard stays with the window.
 - **Every command guard needs `[NotifyCanExecuteChangedFor]` on every property it reads.** Three
   defects came from omitting it. Note that `CanExecute` invokes the guard directly and therefore passes
   even with the bug — tests must assert the *notification*. The attribute cannot cross an object
@@ -162,6 +175,12 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   that is the one where nothing samples between playing and stopping.
 - **`Progress<T>` delivers through a synchronisation context.** In a test with none, a stage message can land
   after the result message an assertion is reading. The guide-import fake reports progress only when asked.
+- **A retemplated `Slider` needs its grid explicitly hit-testable.** Without a background on the template's
+  root the bar can only be grabbed on the four pixels of the track itself. Both sliders are also
+  `Focusable="False"`, because a focused one answers the arrow keys and those are the skip keys.
+- **`FakePlaybackSession` releases before it opens, as the real session does.** It did not, and that gap let
+  a mutation through: with no intermediate `Stopped`, no test could tell a channel change from the end of a
+  film. A fake that skips an invariant hides exactly the bug the invariant exists for.
 
 ## Verifying
 
@@ -175,7 +194,11 @@ dotnet run --project src/LTR.Cli -- guide import --source-id ID
 dotnet run --project src/LTR.Cli -- sources refresh ID
 dotnet run --project src/LTR.Cli -- vod episodes --source-id ID --series-id LOCAL_ID
 dotnet run --project src/LTR.Cli -- vod play-test --source-id ID --movie-id LOCAL_ID --start-at 2400
+dotnet run --project src/LTR.Cli -- vod play-test --source-id ID --movie-id LOCAL_ID --seek-to 1800 --seconds 20
 ```
+
+`--seek-to` is the only headless check of the seek bar's own call, which is a different path from `--start-at`:
+that one is honoured while the stream opens, this one against a stream already playing.
 
 `play-test`'s last line is the real test: it polls the panel until it reports the connection released.
 `guide import`'s `Matched N of M` is the equivalent for the guide — everything else about an import can

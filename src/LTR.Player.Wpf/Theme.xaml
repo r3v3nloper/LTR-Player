@@ -96,6 +96,101 @@
   </Style>
 
   <!--
+    A transport button over the picture. Flat and transparent rather than the accent pill used in the
+    panel: eight coloured buttons in a row over a film is chrome competing with the picture, which is the
+    thing an OSD is supposed to stay out of the way of.
+  -->
+  <Style x:Key="OverlayButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="Padding" Value="9,4" />
+    <Setter Property="MinWidth" Value="34" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="Root"
+                  Background="{TemplateBinding Background}"
+                  CornerRadius="4"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Root" Property="Background" Value="#33FFFFFF" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="Root" Property="Opacity" Value="0.35" />
+              <Setter Property="Cursor" Value="Arrow" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!--
+    Slider is retemplated for the same reason ComboBox is: the default template paints system-coloured
+    chrome, and on the near-black overlay its track is invisible while its thumb is a light lozenge.
+    The played portion carries the accent, which is the only thing a seek bar has to communicate.
+  -->
+  <Style x:Key="BareRepeatButton" TargetType="RepeatButton">
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="IsTabStop" Value="False" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RepeatButton">
+          <Border Background="{TemplateBinding Background}"
+                  CornerRadius="2"
+                  Height="4"
+                  VerticalAlignment="Center" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="Slider">
+    <Setter Property="IsMoveToPointEnabled" Value="True" />
+    <Setter Property="MinHeight" Value="18" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Slider">
+          <!-- Transparent, not unset: the grid has to be hit-testable across its whole height or the
+               bar can only be grabbed on the four pixels of the track itself. -->
+          <Grid Background="Transparent" VerticalAlignment="Center">
+            <Border Height="4"
+                    CornerRadius="2"
+                    VerticalAlignment="Center"
+                    Background="{StaticResource BorderBrush}" />
+
+            <Track x:Name="PART_Track">
+              <Track.DecreaseRepeatButton>
+                <RepeatButton Style="{StaticResource BareRepeatButton}"
+                              Command="Slider.DecreaseLarge"
+                              Background="{StaticResource AccentBrush}" />
+              </Track.DecreaseRepeatButton>
+              <Track.IncreaseRepeatButton>
+                <RepeatButton Style="{StaticResource BareRepeatButton}"
+                              Command="Slider.IncreaseLarge"
+                              Background="Transparent" />
+              </Track.IncreaseRepeatButton>
+              <Track.Thumb>
+                <Thumb Width="12" Height="12">
+                  <Thumb.Template>
+                    <ControlTemplate TargetType="Thumb">
+                      <Ellipse Fill="{StaticResource TextBrush}" />
+                    </ControlTemplate>
+                  </Thumb.Template>
+                </Thumb>
+              </Track.Thumb>
+            </Track>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!--
     ComboBox is fully retemplated rather than restyled. Setting Background alone recolours the closed
     box but not the drop-down, whose chrome comes from the default template's own popup border — and
     with the implicit TextBlock style painting text light, the result is light text on the default white

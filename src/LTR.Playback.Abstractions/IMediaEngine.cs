@@ -49,6 +49,16 @@ public interface IMediaEngine : IAsyncDisposable
     /// <summary>Whether the current stream can be positioned at all, which live streams cannot.</summary>
     bool IsSeekable { get; }
 
+    /// <summary>
+    /// How the picture is fitted to the window.
+    /// </summary>
+    /// <remarks>
+    /// Kept by the engine rather than reapplied by the caller on every stream, because engines reset it
+    /// when media is opened and a viewer who corrected a stretched channel expects the correction to
+    /// survive a channel change.
+    /// </remarks>
+    VideoAspectRatio AspectRatio { get; set; }
+
     event EventHandler<PlaybackStateChangedEventArgs>? StateChanged;
 
     /// <summary>
@@ -77,11 +87,37 @@ public interface IMediaEngine : IAsyncDisposable
     void SetPaused(bool isPaused);
 
     /// <summary>
+    /// Moves playback to <paramref name="position"/>, and does nothing when the stream cannot be
+    /// positioned.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="MediaRequest.StartAt"/>, which resumes a part-watched film while opening
+    /// it. This is the one a seek bar uses, on a stream that is already playing; the distinction matters
+    /// because the two are honoured at different moments and only the opening one can be relied upon to
+    /// land before the first frame.
+    /// </remarks>
+    void SeekTo(TimeSpan position);
+
+    /// <summary>
     /// Tracks discovered in the stream currently open. Empty until playback has started, since
     /// MPEG-TS announces its tracks only as they are encountered.
     /// </summary>
     IReadOnlyList<MediaTrack> GetTracks(MediaTrackKind kind);
 
-    /// <summary>Selects a track previously reported by <see cref="GetTracks"/>.</summary>
+    /// <summary>
+    /// Which track of <paramref name="kind"/> is playing, or <see cref="MediaTrack.DisabledId"/> when
+    /// none is.
+    /// </summary>
+    /// <remarks>
+    /// Asked rather than assumed, because the engine chooses the initial track and its choice is the one a
+    /// menu has to show. A menu that presented the first listed track as selected would say "German" over a
+    /// stream playing English, which is worse than offering no menu.
+    /// </remarks>
+    int GetSelectedTrack(MediaTrackKind kind);
+
+    /// <summary>
+    /// Selects a track previously reported by <see cref="GetTracks"/>, or
+    /// <see cref="MediaTrack.DisabledId"/> to switch the kind off.
+    /// </summary>
     void SelectTrack(MediaTrackKind kind, int trackId);
 }

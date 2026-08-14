@@ -30,6 +30,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 {
     private readonly PlaybackCoordinator _playback;
     private readonly GuideImportCoordinator _guideImport;
+    private readonly PlayerActions _playerActions;
     private readonly ILogger<MainViewModel> _logger;
 
     /// <summary>
@@ -64,6 +65,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         ContinueWatchingViewModel continueWatching,
         StatusLine status,
         PlaybackCoordinator playback,
+        PlayerOverlayViewModel playerOverlay,
         GuideImportCoordinator guideImport,
         ILogger<MainViewModel> logger)
     {
@@ -74,6 +76,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         SeriesCatalogue = series;
         ContinueWatching = continueWatching;
         Status = status;
+        PlayerOverlay = playerOverlay;
 
         _playback = playback;
         _guideImport = guideImport;
@@ -91,6 +94,9 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
         // The coordinator writes positions; the three lists that display one are known only here.
         _playback.ProgressRecorded = RefreshWhatShowsProgressAsync;
+
+        // Built here rather than injected, because the three operations it needs are this class's own.
+        _playerActions = new PlayerActions(PlayerOverlay, StopAsync, ZapAsync, ToggleGuideAsync);
     }
 
     public SourceManagementViewModel SourceManagement { get; }
@@ -106,6 +112,9 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     public ContinueWatchingViewModel ContinueWatching { get; }
 
     public StatusLine Status { get; }
+
+    /// <summary>The controls drawn over the picture.</summary>
+    public PlayerOverlayViewModel PlayerOverlay { get; }
 
     /// <summary>What is playing, for the overlay over the video.</summary>
     public string NowPlaying => _playback.NowPlaying;
@@ -172,10 +181,50 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         }
     }
 
-    /// <summary>Samples where playback has reached. Driven by a timer the window owns.</summary>
-    public void ObservePlaybackPosition()
+    /// <summary>
+    /// Rereads where playback has reached, for the resume recorder and for the on-screen controls.
+    /// </summary>
+    /// <remarks>
+    /// Driven by a timer the window owns, which runs faster while the controls are visible. One tick serves
+    /// both: the recorder needs a sample every few seconds whatever is on screen, and the controls need one
+    /// several times a second while they are.
+    /// </remarks>
+    public async Task SamplePlaybackAsync()
     {
-        _playback.ObservePosition();
+        try
+        {
+            await _playback.SampleAsync(_shellLifetime.Token).ConfigureAwait(true);
+
+            // Inside the guard with the rest, not after it. This rebuilds the track menus, and the caller is
+            // an async void timer tick — so anything escaping here reaches the dispatcher's unhandled
+            // handler as a dialog rather than the log, twice a second.
+            PlayerOverlay.Sample();
+        }
+        catch (OperationCanceledException)
+        {
+            // The window is closing. Raised from a timer tick, so an unhandled one would take the process
+            // down on the way out.
+        }
+        catch (Exception exception)
+        {
+            // Closing off a stream that ended writes to the database and rereads three lists, and a failure
+            // in any of that must not put a dialog in front of someone watching television.
+            PlayerLog.PlaybackSampleFailed(_logger, exception);
+        }
+    }
+
+    /// <summary>
+    /// Carries out what a keystroke asked for.
+    /// </summary>
+    /// <remarks>
+    /// The window resolves a key to a <see cref="PlayerAction"/> and hands it here, so that what each action
+    /// does is stated once, in a place a test can reach, rather than in a switch inside a key handler. The
+    /// statement itself is <see cref="PlayerActions"/>; only the four actions that need the shell come back
+    /// here.
+    /// </remarks>
+    public Task PerformAsync(PlayerAction action, CancellationToken cancellationToken)
+    {
+        return _playerActions.PerformAsync(action, cancellationToken);
     }
 
     /// <summary>
@@ -260,6 +309,44 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     private bool HasSelectedChannel()
     {
         return Channels.SelectedChannel is not null;
+    }
+
+    /// <summary>
+    /// Moves to the next channel and plays it.
+    /// </summary>
+    /// <remarks>
+    /// Concurrent execution allowed for the same reason <see cref="PlaySelectedAsync"/> allows it: holding
+    /// the command closed while a stream opens is what makes zapping past a slow channel impossible, and
+    /// the session's supersession handling exists precisely so that repeated presses are safe.
+    /// </remarks>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private Task ZapNextAsync(CancellationToken cancellationToken)
+    {
+        return ZapAsync(offset: 1, cancellationToken);
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private Task ZapPreviousAsync(CancellationToken cancellationToken)
+    {
+        return ZapAsync(offset: -1, cancellationToken);
+    }
+
+    /// <remarks>
+    /// Zapping only makes sense in the channel list, so it switches back to it — pressing next-channel while
+    /// looking at the film catalogue and having the picture change but the list not is disorienting. Nothing
+    /// is played when the selection could not move, which is what makes the ends of the list quiet rather
+    /// than reopening the same channel.
+    /// </remarks>
+    private async Task ZapAsync(int offset, CancellationToken cancellationToken)
+    {
+        SelectedSection = CatalogueSection.Live;
+
+        if (!Channels.SelectAdjacent(offset))
+        {
+            return;
+        }
+
+        await PlaySelectedAsync(cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>Plays the selected film, picking up where it was left if it was started before.</summary>
@@ -618,9 +705,19 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     /// </remarks>
     private void OnPlaybackPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is null or "" or nameof(PlaybackCoordinator.NowPlaying))
+        if (e.PropertyName is not (null or "" or nameof(PlaybackCoordinator.NowPlaying)))
         {
-            OnPropertyChanged(nameof(NowPlaying));
+            return;
+        }
+
+        OnPropertyChanged(nameof(NowPlaying));
+
+        // Something new was started, so say what it is. The controls take themselves away again after a few
+        // seconds; a channel change that announced nothing would leave the viewer to recognise the channel
+        // from the picture.
+        if (!string.IsNullOrEmpty(_playback.NowPlaying))
+        {
+            PlayerOverlay.Reveal();
         }
     }
 

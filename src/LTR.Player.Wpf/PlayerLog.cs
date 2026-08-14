@@ -102,6 +102,16 @@ internal static partial class PlayerLog
         string kind,
         int itemId);
 
+    /// <remarks>
+    /// Warning rather than error, for the same reason as the guide refresh: this is a timer tick, and one
+    /// that fails leaves the position it was following to the next one a few seconds later.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 3013,
+        Level = LogLevel.Warning,
+        Message = "Sampling where playback has reached failed.")]
+    public static partial void PlaybackSampleFailed(ILogger logger, Exception exception);
+
     [LoggerMessage(
         EventId = 3012,
         Level = LogLevel.Information,
