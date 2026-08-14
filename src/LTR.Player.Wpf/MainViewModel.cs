@@ -1,30 +1,35 @@
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using LTR.Catalogue;
 using LTR.Core.Content;
 using LTR.Core.Playback;
 using LTR.Core.Sources;
-using LTR.Playback;
-using LTR.Providers;
 using Microsoft.Extensions.Logging;
 
 namespace LTR.Player.Wpf;
 
 /// <summary>
-/// Drives the main window: composes the catalogue sections and the guide, and owns playback.
+/// Drives the main window: composes the catalogue sections and the guide, and turns what the viewer does
+/// into work for the coordinators.
 /// </summary>
 /// <remarks>
-/// It is also the sections' <see cref="ISourceCoordinator"/>, which is what keeps them from knowing about
-/// one another. Only this class can reach the lists, the guide and the stream at once, and those are
-/// exactly the things source management has to trigger.
+/// <para>
+/// It is also the sections' <see cref="ISourceCoordinator"/>, which is what keeps them from knowing about one
+/// another. Only this class can reach the lists, the guide and playback at once, and those are exactly the
+/// things source management has to trigger.
+/// </para>
+/// <para>
+/// Deliberately thin now. Opening a stream and remembering a position belong to
+/// <see cref="PlaybackCoordinator"/>, running a guide import to <see cref="GuideImportCoordinator"/>; what is
+/// left here is composition, the section selection, and commands that are two lines each. It had grown to
+/// four responsibilities twice, and both times the same way — by being the only place that could reach
+/// everything.
+/// </para>
 /// </remarks>
 public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator, IAsyncDisposable
 {
-    private readonly IProviderRegistry _providers;
-    private readonly IPlaybackSession _session;
+    private readonly PlaybackCoordinator _playback;
     private readonly GuideImportCoordinator _guideImport;
-    private readonly WatchProgressRecorder _progress;
     private readonly ILogger<MainViewModel> _logger;
 
     /// <summary>
@@ -48,9 +53,6 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     private readonly PendingWork _sectionWork = new();
 
     [ObservableProperty]
-    private string _nowPlaying = string.Empty;
-
-    [ObservableProperty]
     private CatalogueSection _selectedSection = CatalogueSection.Live;
 
     public MainViewModel(
@@ -61,10 +63,8 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         SeriesCatalogueViewModel series,
         ContinueWatchingViewModel continueWatching,
         StatusLine status,
-        IProviderRegistry providers,
-        IPlaybackSession session,
+        PlaybackCoordinator playback,
         GuideImportCoordinator guideImport,
-        WatchProgressRecorder progress,
         ILogger<MainViewModel> logger)
     {
         SourceManagement = sources;
@@ -75,10 +75,8 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         ContinueWatching = continueWatching;
         Status = status;
 
-        _providers = providers;
-        _session = session;
+        _playback = playback;
         _guideImport = guideImport;
-        _progress = progress;
         _logger = logger;
 
         Channels.PropertyChanged += OnChannelListPropertyChanged;
@@ -87,9 +85,12 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         SeriesCatalogue.PropertyChanged += OnSeriesPropertyChanged;
         ContinueWatching.PropertyChanged += OnContinueWatchingPropertyChanged;
         _guideImport.PropertyChanged += OnGuideImportPropertyChanged;
-        _session.StateChanged += OnPlaybackStateChanged;
+        _playback.PropertyChanged += OnPlaybackPropertyChanged;
 
         SourceManagement.Coordinator = this;
+
+        // The coordinator writes positions; the three lists that display one are known only here.
+        _playback.ProgressRecorded = RefreshWhatShowsProgressAsync;
     }
 
     public SourceManagementViewModel SourceManagement { get; }
@@ -106,8 +107,13 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
     public StatusLine Status { get; }
 
+    /// <summary>What is playing, for the overlay over the video.</summary>
+    public string NowPlaying => _playback.NowPlaying;
+
     /// <summary>The guide import in flight, or an already completed task.</summary>
     public Task GuideImportCompletion => _guideImport.Completion;
+
+    public bool IsImportingGuide => _guideImport.IsImporting;
 
     /// <summary>
     /// Completes once the shell has finished reacting to the last selection or search.
@@ -118,8 +124,6 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     /// wait for the previous one, and neither does anything in the application.
     /// </remarks>
     public Task SectionWorkCompletion => _sectionWork.Completion;
-
-    public bool IsImportingGuide => _guideImport.IsImporting;
 
     /// <summary>
     /// Loads the configured sources, so a restart lands straight in the channel list.
@@ -157,38 +161,25 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         }
     }
 
-    /// <summary>
-    /// Samples where playback has reached, so a position survives the stream being closed.
-    /// </summary>
-    /// <remarks>
-    /// Driven by a timer, because by the time playback has stopped the engine no longer has a position to
-    /// report — a recorder that only looked when asked to save would always save nothing.
-    /// </remarks>
+    /// <summary>Samples where playback has reached. Driven by a timer the window owns.</summary>
     public void ObservePlaybackPosition()
     {
-        if (_progress.IsTracking)
-        {
-            _progress.Observe(_session.Position, _session.Duration);
-        }
+        _playback.ObservePosition();
     }
 
     /// <summary>
     /// Hands the provider connection back before the window goes away.
     /// </summary>
     /// <remarks>
-    /// Not a command, because it is not a user action. The playback release itself is deliberately not
-    /// cancellable — a subscription permitting a single connection is unusable for minutes if the player
-    /// exits still holding one — but everything else the shell has in flight is abandoned first, so closing
-    /// the window does not wait on a catalogue load or a guide download.
+    /// Not a command, because it is not a user action. Everything the shell has in flight is abandoned first,
+    /// so closing the window does not wait on a catalogue load or a guide download — but the release itself
+    /// is not cancellable, because a subscription permitting a single connection is unusable for minutes if
+    /// the player exits still holding one.
     /// </remarks>
     public async Task ShutdownAsync()
     {
-        // Sampled once more first: the last tick may be seconds old, and those seconds are the viewer's
-        // place in the film they were watching when they closed the window.
-        ObservePlaybackPosition();
-
         await _shellLifetime.CancelAsync().ConfigureAwait(true);
-        await ReleasePlaybackAsync(CancellationToken.None).ConfigureAwait(true);
+        await _playback.ShutdownAsync().ConfigureAwait(true);
     }
 
     async Task ISourceCoordinator.ShowCatalogueAsync(PlaylistSource? source, CancellationToken cancellationToken)
@@ -229,7 +220,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
     Task ISourceCoordinator.ReleasePlaybackAsync(CancellationToken cancellationToken)
     {
-        return ReleasePlaybackAsync(cancellationToken);
+        return _playback.StopAsync(cancellationToken);
     }
 
     void ISourceCoordinator.CatalogueImported(PlaylistSource source)
@@ -251,12 +242,8 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             return;
         }
 
-        // Recorded before the switch, while the samples still describe what was playing. A channel has
-        // nothing to record, so this is a no-op unless a film was open.
-        await RecordProgressAsync(cancellationToken).ConfigureAwait(true);
-
-        var request = _providers.GetStreamUrlResolver(source).ResolveLive(source, item.Channel);
-        await StartAsync(request, item.Name, cancellationToken).ConfigureAwait(true);
+        await _playback.PlayChannelAsync(source, item.Channel, item.Name, cancellationToken)
+            .ConfigureAwait(true);
     }
 
     private bool HasSelectedChannel()
@@ -264,16 +251,14 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         return Channels.SelectedChannel is not null;
     }
 
-    /// <summary>
-    /// Plays the selected film, picking up where it was left if it was started before.
-    /// </summary>
+    /// <summary>Plays the selected film, picking up where it was left if it was started before.</summary>
     [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(HasSelectedMovie))]
     private Task PlayMovieAsync(CancellationToken cancellationToken)
     {
         return PlaySelectedMovieAsync(fromStart: false, cancellationToken);
     }
 
-    /// <summary>Plays the selected film from the beginning, discarding its resume point.</summary>
+    /// <summary>Plays the selected film from the beginning, ignoring its resume point.</summary>
     [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(CanRestartMovie))]
     private Task RestartMovieAsync(CancellationToken cancellationToken)
     {
@@ -298,16 +283,12 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             return;
         }
 
-        var startAt = ResumeFrom(episode.Episode.ResumePositionSeconds);
-        var request = _providers.GetStreamUrlResolver(source)
-            .ResolveEpisode(source, episode.Episode, startAt);
-
-        await PlayVodAsync(
-                ContentKind.Series,
-                episode.Id,
-                request,
+        await _playback
+            .PlayEpisodeAsync(
+                source,
+                episode.Episode,
+                ResumeFrom(episode.Episode.ResumePositionSeconds),
                 $"{OpenSeriesName()}{episode.Label} · {episode.Title}",
-                startAt,
                 cancellationToken)
             .ConfigureAwait(true);
     }
@@ -317,7 +298,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     /// </summary>
     /// <remarks>
     /// The entry holds the identity of a film or of an episode, never of a series, so the item it refers to
-    /// is loaded and resolved directly. Nothing about its series or season is needed to play it.
+    /// is loaded and played directly. Nothing about its series or season is needed.
     /// </remarks>
     [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task ResumeEntryAsync(ContinueWatchingEntry? entry, CancellationToken cancellationToken)
@@ -328,7 +309,6 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         }
 
         var startAt = ResumePolicy.StartFrom(entry.Position);
-        var resolver = _providers.GetStreamUrlResolver(source);
 
         if (entry.Kind == ContentKind.Movie)
         {
@@ -341,13 +321,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
                 return;
             }
 
-            await PlayVodAsync(
-                    ContentKind.Movie,
-                    movie.Id,
-                    resolver.ResolveMovie(source, movie, startAt),
-                    movie.Name,
-                    startAt,
-                    cancellationToken)
+            await _playback.PlayMovieAsync(source, movie, startAt, movie.Name, cancellationToken)
                 .ConfigureAwait(true);
 
             return;
@@ -362,13 +336,8 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             return;
         }
 
-        await PlayVodAsync(
-                ContentKind.Series,
-                episode.Id,
-                resolver.ResolveEpisode(source, episode, startAt),
-                $"{entry.Title} · {entry.Subtitle}",
-                startAt,
-                cancellationToken)
+        await _playback
+            .PlayEpisodeAsync(source, episode, startAt, $"{entry.Title} · {entry.Subtitle}", cancellationToken)
             .ConfigureAwait(true);
     }
 
@@ -388,12 +357,9 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             return;
         }
 
-        // Anything being followed for this item has to stop being followed, or stopping playback afterwards
-        // would write the position straight back.
-        if (_progress.IsTracking)
-        {
-            _progress.Forget();
-        }
+        // Anything being followed has to stop being followed, or stopping playback afterwards would write
+        // the position straight back.
+        _playback.StopFollowing();
 
         try
         {
@@ -406,7 +372,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         }
         catch (Exception exception)
         {
-                PlayerLog.ProgressNotRecorded(_logger, exception, entry.Kind.ToString(), entry.ItemId);
+            PlayerLog.ProgressNotRecorded(_logger, exception, entry.Kind.ToString(), entry.ItemId);
             Status.Text = "That could not be taken off the list. Details are in the log.";
         }
     }
@@ -414,7 +380,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     [RelayCommand]
     private Task StopAsync(CancellationToken cancellationToken)
     {
-        return ReleasePlaybackAsync(cancellationToken);
+        return _playback.StopAsync(cancellationToken);
     }
 
     /// <summary>
@@ -479,9 +445,8 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         }
 
         var startAt = fromStart ? null : ResumeFrom(row.Movie.ResumePositionSeconds);
-        var request = _providers.GetStreamUrlResolver(source).ResolveMovie(source, row.Movie, startAt);
 
-        await PlayVodAsync(ContentKind.Movie, row.Id, request, row.Name, startAt, cancellationToken)
+        await _playback.PlayMovieAsync(source, row.Movie, startAt, row.Name, cancellationToken)
             .ConfigureAwait(true);
     }
 
@@ -506,90 +471,6 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     }
 
     /// <summary>
-    /// Starts a film or episode and begins following where it gets to.
-    /// </summary>
-    private async Task PlayVodAsync(
-        ContentKind kind,
-        int itemId,
-        MediaRequest request,
-        string displayName,
-        TimeSpan? startAt,
-        CancellationToken cancellationToken)
-    {
-        await RecordProgressAsync(cancellationToken).ConfigureAwait(true);
-
-        // Tracked from the position playback was asked to start at, not from zero. A viewer who resumes at
-        // forty minutes and closes the window before the first sample arrives would otherwise have their
-        // place reset to the beginning.
-        _progress.Track(kind, itemId, startAt ?? TimeSpan.Zero);
-
-        if (!await StartAsync(request, displayName, cancellationToken).ConfigureAwait(true))
-        {
-            // Nothing was watched, so there is nothing to remember — and leaving the recorder tracking a
-            // film that never opened would attribute the next stop to it.
-            _progress.Forget();
-        }
-    }
-
-    /// <summary>
-    /// Opens a stream and reports whether it started.
-    /// </summary>
-    private async Task<bool> StartAsync(
-        MediaRequest request,
-        string displayName,
-        CancellationToken cancellationToken)
-    {
-        NowPlaying = displayName;
-
-        try
-        {
-            await _session.SwitchToAsync(request, cancellationToken).ConfigureAwait(true);
-            return true;
-        }
-        catch (PlaybackFailedException exception)
-        {
-            // Expected in daily use: providers take channels offline without notice, and a subscription
-            // permitting one connection refuses the next stream until it notices the last one closed.
-            PlayerLog.ChannelUnplayable(_logger, exception, displayName);
-            Status.Text = $"{displayName} could not be played. It may be offline, or the subscription's "
-                + "one connection may still be in use.";
-            NowPlaying = string.Empty;
-
-            return false;
-        }
-        catch (OperationCanceledException)
-        {
-            // Zapping onwards cancels the open that was still in flight. That is the intended
-            // behaviour of a channel change, not a failure — and left unhandled it surfaces as an
-            // error dialog for an ordinary key press.
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Writes down where the viewer got to, and brings what shows it up to date.
-    /// </summary>
-    private async Task RecordProgressAsync(CancellationToken cancellationToken)
-    {
-        if (!_progress.IsTracking)
-        {
-            return;
-        }
-
-        ObservePlaybackPosition();
-        await _progress.RecordAsync(cancellationToken).ConfigureAwait(true);
-
-        try
-        {
-            await RefreshWhatShowsProgressAsync(cancellationToken).ConfigureAwait(true);
-        }
-        catch (OperationCanceledException)
-        {
-            // The window is closing; the position itself is already written.
-        }
-    }
-
-    /// <summary>
     /// Rereads the three places a stored position is displayed.
     /// </summary>
     /// <remarks>
@@ -611,14 +492,6 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             CatalogueSection.Series => SeriesCatalogue.IsAvailable,
             _ => true,
         };
-    }
-
-    private async Task ReleasePlaybackAsync(CancellationToken cancellationToken)
-    {
-        await _session.StopAsync(cancellationToken).ConfigureAwait(true);
-        NowPlaying = string.Empty;
-
-        await RecordProgressAsync(cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -728,6 +601,18 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         ImportGuideCommand.NotifyCanExecuteChanged();
     }
 
+    /// <remarks>
+    /// The overlay binds <see cref="NowPlaying"/> here rather than reaching into the coordinator, so the
+    /// change has to be forwarded — the same object-boundary problem as the command guards above.
+    /// </remarks>
+    private void OnPlaybackPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is null or "" or nameof(PlaybackCoordinator.NowPlaying))
+        {
+            OnPropertyChanged(nameof(NowPlaying));
+        }
+    }
+
     /// <summary>
     /// Runs work triggered by a property change, which cannot be awaited where it is raised.
     /// </summary>
@@ -740,14 +625,6 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     private void Run(Func<CancellationToken, Task> work)
     {
         _sectionWork.Add(work(_shellLifetime.Token));
-    }
-
-    private void OnPlaybackStateChanged(object? sender, PlaybackStateChangedEventArgs e)
-    {
-        if (e.Current == PlaybackState.Playing)
-        {
-            Status.Text = $"Playing {NowPlaying}";
-        }
     }
 
     /// <summary>

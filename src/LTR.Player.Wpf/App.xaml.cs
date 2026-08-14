@@ -86,7 +86,7 @@ public partial class App : Application
         services.AddSingleton<SeriesCatalogueViewModel>();
         services.AddSingleton<ContinueWatchingViewModel>();
         services.AddSingleton<GuideImportCoordinator>();
-        services.AddSingleton<WatchProgressRecorder>();
+        services.AddSingleton<PlaybackCoordinator>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 

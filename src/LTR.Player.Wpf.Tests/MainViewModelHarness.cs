@@ -53,10 +53,13 @@ internal sealed class MainViewModelHarness
             new SeriesCatalogueViewModel(Store, VodDetail, NullLogger<SeriesCatalogueViewModel>.Instance),
             new ContinueWatchingViewModel(Store),
             status,
-            new StubProviderRegistry(),
-            Session,
+            new PlaybackCoordinator(
+                new StubProviderRegistry(),
+                Session,
+                Progress,
+                status,
+                NullLogger<PlaybackCoordinator>.Instance),
             new GuideImportCoordinator(GuideImport, status, NullLogger<GuideImportCoordinator>.Instance),
-            Progress,
             NullLogger<MainViewModel>.Instance);
     }
 }

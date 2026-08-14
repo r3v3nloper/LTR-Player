@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using LTR.Catalogue;
 using LTR.Core.Content;
@@ -8,45 +7,18 @@ using Microsoft.Extensions.Logging;
 namespace LTR.Player.Wpf;
 
 /// <summary>
-/// Presents one source's films: a search, a category picker and the film that is selected.
+/// Presents one source's films, and the detail of the one that is selected.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Unlike the channel list, this one does not hold the catalogue. A real subscription's film section runs
-/// to tens of thousands of entries — sixty-six thousand for the one this was built against — and nobody
-/// browses that by scrolling, so the section answers a search and says how much it is not showing.
-/// </para>
-/// <para>
-/// Selecting a film fetches its detail, which is a network call. That is why selection is asynchronous
-/// here and instant in the channel list.
-/// </para>
+/// The search, the category picker and the count all come from
+/// <see cref="CatalogueSectionViewModel{TRow}"/>. What is particular to films is here: selecting one fetches
+/// its detail, which is a network call — that is why selection is asynchronous here and instant in the
+/// channel list.
 /// </remarks>
-public sealed partial class MovieListViewModel : ObservableObject
+public sealed partial class MovieListViewModel : CatalogueSectionViewModel<MovieItemViewModel>
 {
-    /// <summary>
-    /// How many results a search shows.
-    /// </summary>
-    /// <remarks>
-    /// Enough that a search for a title lands it on screen, small enough that the list stays instant. What
-    /// is left out is stated rather than silently dropped.
-    /// </remarks>
-    public const int ResultLimit = 200;
-
-    private readonly ICatalogueStore _catalogue;
     private readonly IVodDetailService _detail;
     private readonly ILogger<MovieListViewModel> _logger;
-
-    private PlaylistSource? _source;
-
-    [ObservableProperty]
-    private CategoryChoice _selectedCategory = CategoryChoice.All;
-
-    [ObservableProperty]
-    private string _searchText = string.Empty;
-
-    /// <summary>What the section is showing, or why it is showing nothing.</summary>
-    [ObservableProperty]
-    private string _notice = string.Empty;
 
     [ObservableProperty]
     private MovieItemViewModel? _selectedMovie;
@@ -65,93 +37,21 @@ public sealed partial class MovieListViewModel : ObservableObject
         ICatalogueStore catalogue,
         IVodDetailService detail,
         ILogger<MovieListViewModel> logger)
+        : base(catalogue)
     {
-        _catalogue = catalogue;
         _detail = detail;
         _logger = logger;
     }
 
-    public ObservableCollection<CategoryChoice> Categories { get; } = [CategoryChoice.All];
-
-    public ObservableCollection<MovieItemViewModel> Movies { get; } = [];
-
-    /// <summary>Whether the source offers films at all, which decides whether the section is shown.</summary>
-    public bool IsAvailable => _source?.Capabilities.SupportsVod ?? false;
-
     /// <summary>
-    /// Points the section at a source, loading its categories and a first page of results.
+    /// The films currently shown. An alias for the base collection, kept because "Movies.Movies" is what the
+    /// view binds and reads better there than "Movies.Rows".
     /// </summary>
-    public async Task ShowAsync(PlaylistSource? source, CancellationToken cancellationToken)
-    {
-        // Detached first, and that ordering is deliberate: clearing the criteria below raises the property
-        // changes the shell answers with a search, and a section with no source answers nothing. Otherwise
-        // switching subscriptions would run three searches to display one.
-        _source = null;
+    public IReadOnlyList<MovieItemViewModel> Movies => Rows;
 
-        SelectedMovie = null;
-        DetailedMovie = null;
-        SearchText = string.Empty;
+    protected override ContentKind CategoryKind => ContentKind.Movie;
 
-        Movies.Clear();
-        Categories.Clear();
-        Categories.Add(CategoryChoice.All);
-
-        if (source is null)
-        {
-            SelectedCategory = CategoryChoice.All;
-            Notice = string.Empty;
-            OnPropertyChanged(nameof(IsAvailable));
-            return;
-        }
-
-        // Read through the parameter rather than the field, which is still null: the picker has to be
-        // complete before anything selects in it.
-        var categories = await _catalogue
-            .GetCategoriesAsync(source.Id, ContentKind.Movie, cancellationToken)
-            .ConfigureAwait(true);
-
-        foreach (var category in categories)
-        {
-            Categories.Add(new CategoryChoice(category.Name, category.ExternalId));
-        }
-
-        // Selected last, and that is not cosmetic. Emptying the bound collection makes the ComboBox write a
-        // null selection back through the binding, so a selection made before the picker is refilled is
-        // discarded and the control renders blank — while the filter, reading the same null, still returns
-        // every category. The list looks right and the picker looks broken.
-        SelectedCategory = CategoryChoice.All;
-
-        _source = source;
-        OnPropertyChanged(nameof(IsAvailable));
-
-        await SearchAsync(cancellationToken).ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// Reruns the search with the current criteria.
-    /// </summary>
-    public async Task SearchAsync(CancellationToken cancellationToken)
-    {
-        if (_source is null)
-        {
-            return;
-        }
-
-        var filter = new CatalogueFilter(SearchText, SelectedCategory?.ExternalId);
-
-        var page = await _catalogue
-            .SearchMoviesAsync(_source.Id, filter, ResultLimit, cancellationToken)
-            .ConfigureAwait(true);
-
-        Movies.Clear();
-
-        foreach (var movie in page.Items)
-        {
-            Movies.Add(new MovieItemViewModel(movie));
-        }
-
-        Notice = Describe(page, filter);
-    }
+    protected override string EntryNoun => "films";
 
     /// <summary>
     /// Reads the selected film's detail, so the synopsis and the container extension are known.
@@ -163,7 +63,7 @@ public sealed partial class MovieListViewModel : ObservableObject
     /// </remarks>
     public async Task LoadSelectedDetailAsync(CancellationToken cancellationToken)
     {
-        if (_source is null || SelectedMovie is not { } selected)
+        if (Source is not { } source || SelectedMovie is not { } selected)
         {
             DetailedMovie = null;
             return;
@@ -175,7 +75,7 @@ public sealed partial class MovieListViewModel : ObservableObject
         try
         {
             var detailed = await _detail
-                .GetMovieAsync(_source, selected.Id, cancellationToken)
+                .GetMovieAsync(source, selected.Id, cancellationToken)
                 .ConfigureAwait(true);
 
             if (detailed is not null && SelectedMovie?.Id == selected.Id)
@@ -204,7 +104,7 @@ public sealed partial class MovieListViewModel : ObservableObject
             return;
         }
 
-        var refreshed = await _catalogue.GetMovieAsync(SelectedMovie.Id, cancellationToken)
+        var refreshed = await Catalogue.GetMovieAsync(SelectedMovie.Id, cancellationToken)
             .ConfigureAwait(true);
 
         if (refreshed is not null && SelectedMovie?.Id == refreshed.Id)
@@ -213,17 +113,27 @@ public sealed partial class MovieListViewModel : ObservableObject
         }
     }
 
-    private static string Describe(CataloguePage<VodItem> page, CatalogueFilter filter)
+    protected override async Task<CataloguePage<MovieItemViewModel>> SearchAsync(
+        int sourceId,
+        CatalogueFilter filter,
+        CancellationToken cancellationToken)
     {
-        if (page.TotalMatching == 0)
-        {
-            return filter.IsActive
-                ? "No films match. Try fewer words, or another category."
-                : "This subscription's film catalogue is empty. Refresh the source to fetch it.";
-        }
+        var page = await Catalogue.SearchMoviesAsync(sourceId, filter, ResultLimit, cancellationToken)
+            .ConfigureAwait(true);
 
-        return page.IsTruncated
-            ? $"Showing {page.Items.Count} of {page.TotalMatching} films. Narrow the search to see the rest."
-            : $"{page.TotalMatching} films.";
+        return new CataloguePage<MovieItemViewModel>(
+            [.. page.Items.Select(movie => new MovieItemViewModel(movie))],
+            page.TotalMatching);
+    }
+
+    protected override bool SupportsSection(PlaylistSource source)
+    {
+        return source.Capabilities.SupportsVod;
+    }
+
+    protected override void ClearSelection()
+    {
+        SelectedMovie = null;
+        DetailedMovie = null;
     }
 }

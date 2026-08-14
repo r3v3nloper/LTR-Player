@@ -9,37 +9,23 @@ using Microsoft.Extensions.Logging;
 namespace LTR.Player.Wpf;
 
 /// <summary>
-/// Presents one source's series, and the seasons and episodes of the one that is selected.
+/// Presents one source's series, and the seasons and episodes of the one that is open.
 /// </summary>
 /// <remarks>
-/// Selecting a series is the expensive act here: its seasons are not part of an import and have to be
-/// fetched from the panel the first time, which is why <see cref="LoadSelectedAsync"/> exists and is
-/// awaited by the shell rather than run from a property setter.
+/// The search, the category picker and the count come from <see cref="CatalogueSectionViewModel{TRow}"/>.
+/// What is particular to series is here, and it is the expensive part: opening one fetches its seasons from
+/// the panel the first time, which is why <see cref="LoadSelectedAsync"/> exists and is awaited by the shell
+/// rather than run from a property setter.
 /// </remarks>
-public sealed partial class SeriesCatalogueViewModel : ObservableObject
+public sealed partial class SeriesCatalogueViewModel : CatalogueSectionViewModel<SeriesItemViewModel>
 {
-    /// <summary>How many results a search shows, for the same reason as in the film list.</summary>
-    public const int ResultLimit = 200;
-
-    private readonly ICatalogueStore _catalogue;
     private readonly IVodDetailService _detail;
     private readonly ILogger<SeriesCatalogueViewModel> _logger;
-
-    private PlaylistSource? _source;
-
-    [ObservableProperty]
-    private CategoryChoice _selectedCategory = CategoryChoice.All;
-
-    [ObservableProperty]
-    private string _searchText = string.Empty;
-
-    [ObservableProperty]
-    private string _notice = string.Empty;
 
     [ObservableProperty]
     private SeriesItemViewModel? _selectedSeries;
 
-    /// <summary>The selected series once its seasons are known, or null while none is selected.</summary>
+    /// <summary>The selected series once its seasons are known, or null while none is open.</summary>
     [ObservableProperty]
     private Series? _openSeries;
 
@@ -65,92 +51,29 @@ public sealed partial class SeriesCatalogueViewModel : ObservableObject
         ICatalogueStore catalogue,
         IVodDetailService detail,
         ILogger<SeriesCatalogueViewModel> logger)
+        : base(catalogue)
     {
-        _catalogue = catalogue;
         _detail = detail;
         _logger = logger;
     }
 
-    public ObservableCollection<CategoryChoice> Categories { get; } = [CategoryChoice.All];
-
-    public ObservableCollection<SeriesItemViewModel> Series { get; } = [];
+    /// <summary>The series currently shown, named as the view reads it.</summary>
+    public IReadOnlyList<SeriesItemViewModel> Series => Rows;
 
     public ObservableCollection<SeasonChoice> Seasons { get; } = [];
 
     public ObservableCollection<EpisodeItemViewModel> Episodes { get; } = [];
 
-    public bool IsAvailable => _source?.Capabilities.SupportsSeries ?? false;
+    protected override ContentKind CategoryKind => ContentKind.Series;
 
-    public async Task ShowAsync(PlaylistSource? source, CancellationToken cancellationToken)
-    {
-        // Detached first, for the same reason as in the film list: the resets below raise property changes
-        // the shell answers with a search, and a section with no source answers nothing.
-        _source = null;
-
-        ClearSelection();
-        SearchText = string.Empty;
-
-        Series.Clear();
-        Categories.Clear();
-        Categories.Add(CategoryChoice.All);
-
-        if (source is null)
-        {
-            SelectedCategory = CategoryChoice.All;
-            Notice = string.Empty;
-            OnPropertyChanged(nameof(IsAvailable));
-            return;
-        }
-
-        var categories = await _catalogue
-            .GetCategoriesAsync(source.Id, ContentKind.Series, cancellationToken)
-            .ConfigureAwait(true);
-
-        foreach (var category in categories)
-        {
-            Categories.Add(new CategoryChoice(category.Name, category.ExternalId));
-        }
-
-        // Selected only once the picker is complete, for the reason recorded in the film list: emptying the
-        // bound collection makes the ComboBox write a null selection back, so selecting before refilling
-        // leaves the control blank while the list itself looks perfectly correct.
-        SelectedCategory = CategoryChoice.All;
-
-        _source = source;
-        OnPropertyChanged(nameof(IsAvailable));
-
-        await SearchAsync(cancellationToken).ConfigureAwait(true);
-    }
-
-    public async Task SearchAsync(CancellationToken cancellationToken)
-    {
-        if (_source is null)
-        {
-            return;
-        }
-
-        var filter = new CatalogueFilter(SearchText, SelectedCategory?.ExternalId);
-
-        var page = await _catalogue
-            .SearchSeriesAsync(_source.Id, filter, ResultLimit, cancellationToken)
-            .ConfigureAwait(true);
-
-        Series.Clear();
-
-        foreach (var series in page.Items)
-        {
-            Series.Add(new SeriesItemViewModel(series));
-        }
-
-        Notice = Describe(page, filter);
-    }
+    protected override string EntryNoun => "series";
 
     /// <summary>
     /// Opens the selected series, fetching its seasons when the stored copy will not do.
     /// </summary>
     public async Task LoadSelectedAsync(CancellationToken cancellationToken)
     {
-        if (_source is null || SelectedSeries is not { } selected)
+        if (Source is not { } source || SelectedSeries is not { } selected)
         {
             ClearSelection();
             return;
@@ -161,7 +84,7 @@ public sealed partial class SeriesCatalogueViewModel : ObservableObject
         try
         {
             var series = await _detail
-                .GetSeriesAsync(_source, selected.Id, cancellationToken)
+                .GetSeriesAsync(source, selected.Id, cancellationToken)
                 .ConfigureAwait(true);
 
             // Discarded when the selection moved on while the panel was being asked, which is what stops a
@@ -171,15 +94,7 @@ public sealed partial class SeriesCatalogueViewModel : ObservableObject
                 return;
             }
 
-            OpenSeries = series;
-            Seasons.Clear();
-
-            foreach (var season in series.Seasons)
-            {
-                Seasons.Add(new SeasonChoice(season));
-            }
-
-            SelectedSeason = Seasons.FirstOrDefault();
+            ShowSeasons(series);
 
             if (Seasons.Count == 0)
             {
@@ -206,33 +121,21 @@ public sealed partial class SeriesCatalogueViewModel : ObservableObject
     /// </summary>
     public async Task RefreshOpenSeriesAsync(CancellationToken cancellationToken)
     {
-        if (_source is null || OpenSeries is not { } open)
+        if (Source is not { } source || OpenSeries is not { } open)
         {
             return;
         }
 
         // Goes through the detail service rather than reaching for the store, and costs nothing extra: the
         // stored detail is current by definition here, so this is a read rather than a fetch.
-        var reloaded = await _detail.GetSeriesAsync(_source, open.Id, cancellationToken).ConfigureAwait(true);
+        var reloaded = await _detail.GetSeriesAsync(source, open.Id, cancellationToken).ConfigureAwait(true);
 
         if (reloaded is null || OpenSeries?.Id != reloaded.Id)
         {
             return;
         }
 
-        // The season is reselected by number so that the episode rows do not jump back to season one when a
-        // position is recorded.
-        var seasonNumber = SelectedSeason?.Number;
-        OpenSeries = reloaded;
-        Seasons.Clear();
-
-        foreach (var season in reloaded.Seasons)
-        {
-            Seasons.Add(new SeasonChoice(season));
-        }
-
-        SelectedSeason = Seasons.FirstOrDefault(season => season.Number == seasonNumber)
-            ?? Seasons.FirstOrDefault();
+        ShowSeasons(reloaded);
     }
 
     /// <summary>
@@ -248,6 +151,58 @@ public sealed partial class SeriesCatalogueViewModel : ObservableObject
     {
         // Clearing the selection is what closes it: the shell answers the change by reloading nothing.
         SelectedSeries = null;
+    }
+
+    protected override async Task<CataloguePage<SeriesItemViewModel>> SearchAsync(
+        int sourceId,
+        CatalogueFilter filter,
+        CancellationToken cancellationToken)
+    {
+        var page = await Catalogue.SearchSeriesAsync(sourceId, filter, ResultLimit, cancellationToken)
+            .ConfigureAwait(true);
+
+        return new CataloguePage<SeriesItemViewModel>(
+            [.. page.Items.Select(series => new SeriesItemViewModel(series))],
+            page.TotalMatching);
+    }
+
+    protected override bool SupportsSection(PlaylistSource source)
+    {
+        return source.Capabilities.SupportsSeries;
+    }
+
+    protected override void ClearSelection()
+    {
+        SelectedSeries = null;
+        OpenSeries = null;
+        SelectedSeason = null;
+        SelectedEpisode = null;
+        Seasons.Clear();
+        Episodes.Clear();
+    }
+
+    /// <summary>
+    /// Rebuilds the season picker, keeping the season the viewer was looking at.
+    /// </summary>
+    /// <remarks>
+    /// Reselecting by number rather than by reference matters: the choices are new objects after a reload, and
+    /// a picker that fell back to season one would move the episode rows out from under the viewer every time
+    /// a position was recorded.
+    /// </remarks>
+    private void ShowSeasons(Series series)
+    {
+        var seasonNumber = SelectedSeason?.Number;
+
+        OpenSeries = series;
+        Seasons.Clear();
+
+        foreach (var season in series.Seasons)
+        {
+            Seasons.Add(new SeasonChoice(season));
+        }
+
+        SelectedSeason = Seasons.FirstOrDefault(season => season.Number == seasonNumber)
+            ?? Seasons.FirstOrDefault();
     }
 
     partial void OnSelectedSeasonChanged(SeasonChoice? value)
@@ -266,29 +221,5 @@ public sealed partial class SeriesCatalogueViewModel : ObservableObject
         {
             Episodes.Add(new EpisodeItemViewModel(episode, value.Number));
         }
-    }
-
-    private void ClearSelection()
-    {
-        SelectedSeries = null;
-        OpenSeries = null;
-        SelectedSeason = null;
-        SelectedEpisode = null;
-        Seasons.Clear();
-        Episodes.Clear();
-    }
-
-    private static string Describe(CataloguePage<Series> page, CatalogueFilter filter)
-    {
-        if (page.TotalMatching == 0)
-        {
-            return filter.IsActive
-                ? "No series match. Try fewer words, or another category."
-                : "This subscription's series catalogue is empty. Refresh the source to fetch it.";
-        }
-
-        return page.IsTruncated
-            ? $"Showing {page.Items.Count} of {page.TotalMatching} series. Narrow the search to see the rest."
-            : $"{page.TotalMatching} series.";
     }
 }
