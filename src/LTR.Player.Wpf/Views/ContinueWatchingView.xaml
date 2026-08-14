@@ -63,15 +63,29 @@
                            BorderThickness="0" />
             </StackPanel>
 
-            <Button Grid.Column="2"
-                    Content="▶"
-                    Padding="8,4"
-                    Margin="6,0,0,0"
-                    Background="{StaticResource BorderBrush}"
-                    ToolTip="Carry on watching"
-                    Command="{Binding DataContext.ResumeEntryCommand,
-                                      ElementName=SectionRoot}"
-                    CommandParameter="{Binding}" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+              <Button Content="▶"
+                      Padding="8,4"
+                      Margin="6,0,0,0"
+                      Background="{StaticResource BorderBrush}"
+                      ToolTip="Carry on watching"
+                      Command="{Binding DataContext.ResumeEntryCommand,
+                                        ElementName=SectionRoot}"
+                      CommandParameter="{Binding}" />
+
+              <!--
+                For the film that did not hold the viewer's attention. No confirmation: it forgets a position,
+                not the film, and starting it again is one click away.
+              -->
+              <Button Content="✕"
+                      Padding="8,4"
+                      Margin="4,0,0,0"
+                      Background="{StaticResource BorderBrush}"
+                      ToolTip="Take this off the list"
+                      Command="{Binding DataContext.ForgetEntryCommand,
+                                        ElementName=SectionRoot}"
+                      CommandParameter="{Binding}" />
+            </StackPanel>
           </Grid>
         </DataTemplate>
       </ListBox.ItemTemplate>

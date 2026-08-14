@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using LTR.Catalogue;
 using LTR.Core.Content;
+using LTR.Core.Playback;
 using LTR.Core.Sources;
 
 namespace LTR.Player.Wpf;
@@ -59,6 +60,43 @@ public sealed partial class ContinueWatchingViewModel : ObservableObject
     public Task<Episode?> FindEpisodeAsync(int episodeId, CancellationToken cancellationToken)
     {
         return _catalogue.GetEpisodeAsync(episodeId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Forgets where the viewer got to, taking the entry off the list.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For the film that did not hold their attention. Without this the list keeps offering to resume
+    /// something nobody intends to return to, and it is the one list in the window whose whole value is that
+    /// everything on it is worth carrying on with.
+    /// </para>
+    /// <para>
+    /// Recorded as <see cref="WatchOutcome.Discard"/>, which is not a stretch: it means "too little happened
+    /// to be worth remembering", and that is exactly the judgement being made — deliberately, this time,
+    /// rather than by a threshold. Note what it does *not* do. It does not mark the item watched, because the
+    /// viewer did not watch it, and a film labelled "Watched" that nobody has seen is a worse lie than a
+    /// stale resume point.
+    /// </para>
+    /// </remarks>
+    public async Task ForgetAsync(ContinueWatchingEntry entry, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        if (entry.Kind == ContentKind.Movie)
+        {
+            await _catalogue
+                .RecordMovieProgressAsync(entry.ItemId, WatchOutcome.Discard, TimeSpan.Zero, cancellationToken)
+                .ConfigureAwait(true);
+        }
+        else
+        {
+            await _catalogue
+                .RecordEpisodeProgressAsync(entry.ItemId, WatchOutcome.Discard, TimeSpan.Zero, cancellationToken)
+                .ConfigureAwait(true);
+        }
+
+        await ReloadAsync(cancellationToken).ConfigureAwait(true);
     }
 
     public async Task ReloadAsync(CancellationToken cancellationToken)

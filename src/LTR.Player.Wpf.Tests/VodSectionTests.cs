@@ -539,6 +539,110 @@ public sealed class VodSectionTests
     }
 
     [Fact]
+    public async Task ForgetEntry_ClearsTheStoredPositionWithoutMarkingItWatched()
+    {
+        // Arrange: for the film that did not hold the viewer's attention. Marking it watched would be the
+        // worse lie of the two — nobody saw it.
+        var context = new MainViewModelHarness();
+        context.Store.Sources.Add(CreateSource());
+        context.Store.Movies.Add(Movie(1, "Arrival"));
+
+        var entry = new ContinueWatchingEntry(
+            ContentKind.Movie,
+            ItemId: 1,
+            Title: "Arrival",
+            Subtitle: string.Empty,
+            CoverUrl: null,
+            PositionSeconds: 2_400,
+            DurationSeconds: 6_000,
+            LastWatchedUtc: MainViewModelHarness.Now);
+
+        context.Store.ContinueWatching.Add(entry);
+
+        var viewModel = context.Build();
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+        viewModel.ContinueWatching.Entries.ShouldHaveSingleItem();
+
+        // Act
+        await viewModel.ForgetEntryCommand.ExecuteAsync(entry);
+
+        // Assert
+        var write = context.Store.ProgressWrites.ShouldHaveSingleItem();
+        write.Kind.ShouldBe(ContentKind.Movie);
+        write.ItemId.ShouldBe(1);
+        write.Outcome.ShouldBe(WatchOutcome.Discard, "the position goes; the film is not marked watched");
+        context.Session.Started.ShouldBeEmpty("removing something is not playing it");
+    }
+
+    [Fact]
+    public async Task ForgetEntry_ForAnEpisode_ClearsThatEpisode()
+    {
+        // Arrange
+        var context = new MainViewModelHarness();
+        context.Store.Sources.Add(CreateSource());
+
+        var entry = new ContinueWatchingEntry(
+            ContentKind.Series,
+            ItemId: 7,
+            Title: "Breaking Bad",
+            Subtitle: "S01E01 · Pilot",
+            CoverUrl: null,
+            PositionSeconds: 600,
+            DurationSeconds: 2_820,
+            LastWatchedUtc: MainViewModelHarness.Now);
+
+        context.Store.ContinueWatching.Add(entry);
+
+        var viewModel = context.Build();
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        await viewModel.ForgetEntryCommand.ExecuteAsync(entry);
+
+        // Assert
+        var write = context.Store.ProgressWrites.ShouldHaveSingleItem();
+        write.Kind.ShouldBe(ContentKind.Series);
+        write.ItemId.ShouldBe(7);
+    }
+
+    /// <summary>
+    /// Removing the film that is playing has to stop it being followed as well, or stopping playback
+    /// afterwards writes the position straight back and the entry returns.
+    /// </summary>
+    [Fact]
+    public async Task ForgetEntry_ForTheFilmThatIsPlaying_IsNotUndoneByStopping()
+    {
+        // Arrange
+        var context = new MainViewModelHarness();
+        context.Store.Sources.Add(CreateSource());
+        context.Store.Movies.Add(Movie(1, "Arrival"));
+
+        var viewModel = await OpenFilmAsync(context);
+        await viewModel.PlayMovieCommand.ExecuteAsync(null);
+
+        context.Session.Position = TimeSpan.FromMinutes(20);
+        context.Session.Duration = FilmLength;
+        viewModel.ObservePlaybackPosition();
+
+        var entry = new ContinueWatchingEntry(
+            ContentKind.Movie,
+            ItemId: 1,
+            Title: "Arrival",
+            Subtitle: string.Empty,
+            CoverUrl: null,
+            PositionSeconds: 1_200,
+            DurationSeconds: 6_000,
+            LastWatchedUtc: MainViewModelHarness.Now);
+
+        // Act
+        await viewModel.ForgetEntryCommand.ExecuteAsync(entry);
+        await viewModel.StopCommand.ExecuteAsync(null);
+
+        // Assert
+        context.Store.ProgressWrites.ShouldHaveSingleItem().Outcome.ShouldBe(WatchOutcome.Discard);
+    }
+
+    [Fact]
     public async Task ResumeEntry_ForSomethingNoLongerStored_SaysSoInsteadOfFailing()
     {
         // Arrange: a refresh removes what the provider has withdrawn, and the list is a moment behind it.

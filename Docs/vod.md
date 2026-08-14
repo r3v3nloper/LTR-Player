@@ -110,6 +110,28 @@ second of the opening playing first, which is a great deal better than a resume 
 An unknown duration is treated as resumable rather than finished. Remembering a position is recoverable;
 wrongly declaring something finished loses the viewer's place.
 
+**A deep seek can take longer than the first few seconds of playback**, during which the engine reports no
+position at all. That is why the recorder is seeded with the position playback was *asked* to start at: a
+viewer who resumes at forty minutes and closes the player before the first sample arrives would otherwise
+have their place reset to the beginning. The same file was observed to reach `00:05:04` within eight seconds
+when asked for five minutes, and to report nothing at all after ten seconds when asked for ten.
+
+## Leaving the list
+
+An entry can be taken off the continue-watching list, because a film that did not hold the viewer's
+attention would otherwise sit there for good — and the list's whole value is that everything on it is worth
+carrying on with.
+
+Removal is recorded as `WatchOutcome.Discard`, the same verdict the policy reaches for something barely
+started. It clears the position and deliberately does **not** mark the item watched: nobody watched it, and a
+film labelled "Watched" that nobody has seen is a worse lie than a stale resume point. Nothing is confirmed
+first — it forgets a position, not the film, and starting it again is one click away.
+
+Two details the shell has to get right. It stops *following* the item first, or stopping playback afterwards
+would write the position straight back; and it refreshes all three places a position is displayed — the film
+row, the episode row and the list — because forgetting it in one and leaving it in the others reads as the
+removal not having worked.
+
 ## What a refresh may and may not overwrite
 
 One rule runs through every write in `LtrDbContext.Vod`:

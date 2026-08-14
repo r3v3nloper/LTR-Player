@@ -33,6 +33,11 @@ internal sealed class VodCommandHandler
     private readonly IPlaybackSession _session;
     private readonly ConnectionReleaseCheck _releaseCheck;
 
+    /// <summary>
+    /// What a play-test should remember afterwards, when it was asked to remember anything.
+    /// </summary>
+    private (ContentKind Kind, int ItemId)? _watched;
+
     public VodCommandHandler(
         ICatalogueStore catalogue,
         IVodDetailService detail,
@@ -240,6 +245,53 @@ internal sealed class VodCommandHandler
     }
 
     /// <summary>
+    /// Forgets where the viewer got to, taking an item off the continue-watching list.
+    /// </summary>
+    /// <remarks>
+    /// The command-line counterpart of the list's own remove button, and what makes the resume loop
+    /// verifiable end to end without the window: play with <c>--remember</c>, see it under
+    /// <c>vod continue</c>, take it off with this.
+    /// </remarks>
+    public async Task<int> ForgetAsync(
+        int sourceId,
+        int? movieId,
+        int? episodeId,
+        CancellationToken cancellationToken)
+    {
+        if (await FindSourceAsync(sourceId, cancellationToken).ConfigureAwait(false) is null)
+        {
+            return 1;
+        }
+
+        if ((movieId is null) == (episodeId is null))
+        {
+            Console.Error.WriteLine("Pass exactly one of --movie-id and --episode-id.");
+            return 1;
+        }
+
+        // Discard is the same verdict the policy reaches for something barely started: the position goes and
+        // the item is not marked watched, because nobody watched it.
+        if (movieId is { } film)
+        {
+            await _catalogue
+                .RecordMovieProgressAsync(film, WatchOutcome.Discard, TimeSpan.Zero, cancellationToken)
+                .ConfigureAwait(false);
+
+            Console.WriteLine($"Film {film} is no longer part-watched.");
+        }
+        else
+        {
+            await _catalogue
+                .RecordEpisodeProgressAsync(episodeId!.Value, WatchOutcome.Discard, TimeSpan.Zero, cancellationToken)
+                .ConfigureAwait(false);
+
+            Console.WriteLine($"Episode {episodeId} is no longer part-watched.");
+        }
+
+        return 0;
+    }
+
+    /// <summary>
     /// Opens a stored film or episode for a few seconds and releases it again.
     /// </summary>
     /// <remarks>
@@ -248,12 +300,17 @@ internal sealed class VodCommandHandler
     /// that a resume position is honoured — a film asked to start forty minutes in that begins at zero
     /// looks perfectly healthy from every other angle.
     /// </remarks>
+    /// <param name="remember">
+    /// Whether to record where playback got to, as the window does. Off by default so that a play-test stays
+    /// a read-only check; on, it is what lets the continue-watching list be exercised without the window.
+    /// </param>
     public async Task<int> PlayTestAsync(
         int sourceId,
         int? movieId,
         int? episodeId,
         int seconds,
         int startAtSeconds,
+        bool remember,
         CancellationToken cancellationToken)
     {
         if (await FindSourceAsync(sourceId, cancellationToken).ConfigureAwait(false) is not { } source)
@@ -282,6 +339,7 @@ internal sealed class VodCommandHandler
             }
 
             request = resolver.ResolveMovie(source, movie, startAt);
+            _watched = remember ? (ContentKind.Movie, movie.Id) : null;
         }
         else
         {
@@ -295,6 +353,7 @@ internal sealed class VodCommandHandler
             }
 
             request = resolver.ResolveEpisode(source, episode, startAt);
+            _watched = remember ? (ContentKind.Series, episode.Id) : null;
         }
 
         return await PlayAsync(source, request, seconds, cancellationToken).ConfigureAwait(false);
@@ -338,6 +397,14 @@ internal sealed class VodCommandHandler
             // can never be recognised as finished, and one reporting no position can never be resumed.
             Console.WriteLine($"Position   {DescribeTime(_session.Position)}");
             Console.WriteLine($"Duration   {DescribeTime(_session.Duration)}");
+
+            // Read before the stream is released, because the engine has neither afterwards — the same
+            // reason the window samples on a timer rather than at the moment of saving.
+            await RememberAsync(
+                    _session.Position ?? request.StartAt,
+                    _session.Duration,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {
@@ -349,6 +416,48 @@ internal sealed class VodCommandHandler
         await _releaseCheck.ReportAsync(source, cancellationToken).ConfigureAwait(false);
 
         return 0;
+    }
+
+    /// <summary>
+    /// Records where a play-test got to, so the continue-watching list can be exercised headlessly.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The classification comes from <see cref="ResumePolicy"/>, which is the same rule the window applies —
+    /// only the plumbing differs, because the window samples on a timer over minutes and this holds one
+    /// stream for a few seconds and reads it once.
+    /// </para>
+    /// <para>
+    /// A position the engine cannot yet state falls back to the position playback was asked to start at, for
+    /// the same reason the window's recorder is seeded with it: a deep seek over HTTP can take longer than
+    /// this command holds the stream, and reading that as "back at the beginning" would throw the viewer's
+    /// place away.
+    /// </para>
+    /// </remarks>
+    private async Task RememberAsync(
+        TimeSpan? position,
+        TimeSpan? duration,
+        CancellationToken cancellationToken)
+    {
+        if (_watched is not { } watched || position is not { } reached)
+        {
+            return;
+        }
+
+        var outcome = ResumePolicy.Classify(reached, duration ?? TimeSpan.Zero);
+
+        if (watched.Kind == ContentKind.Movie)
+        {
+            await _catalogue.RecordMovieProgressAsync(watched.ItemId, outcome, reached, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            await _catalogue.RecordEpisodeProgressAsync(watched.ItemId, outcome, reached, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        Console.WriteLine($"Remembered {outcome} at {DescribeTime(reached)}.");
     }
 
     /// <summary>

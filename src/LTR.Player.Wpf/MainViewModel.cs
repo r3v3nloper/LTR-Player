@@ -353,6 +353,45 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             .ConfigureAwait(true);
     }
 
+    /// <summary>
+    /// Takes an entry off the continue-watching list.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than on the section alone, because the resume point it forgets is shown in two more
+    /// places: the film row's "Resume at" line and the episode list's. Forgetting it in one and leaving it in
+    /// the others is the kind of disagreement that reads as the removal not having worked.
+    /// </remarks>
+    [RelayCommand]
+    private async Task ForgetEntryAsync(ContinueWatchingEntry? entry, CancellationToken cancellationToken)
+    {
+        if (entry is null)
+        {
+            return;
+        }
+
+        // Anything being followed for this item has to stop being followed, or stopping playback afterwards
+        // would write the position straight back.
+        if (_progress.IsTracking)
+        {
+            _progress.Forget();
+        }
+
+        try
+        {
+            await ContinueWatching.ForgetAsync(entry, cancellationToken).ConfigureAwait(true);
+            await RefreshWhatShowsProgressAsync(cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            // The window is closing.
+        }
+        catch (Exception exception)
+        {
+            PlayerLog.ProgressNotRecorded(_logger, exception, entry.Kind.ToString(), entry.ItemId);
+            Status.Text = "That could not be taken off the list. Details are in the log.";
+        }
+    }
+
     [RelayCommand]
     private Task StopAsync(CancellationToken cancellationToken)
     {
@@ -523,14 +562,26 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
         try
         {
-            await Movies.RefreshSelectedAsync(cancellationToken).ConfigureAwait(true);
-            await SeriesCatalogue.RefreshOpenSeriesAsync(cancellationToken).ConfigureAwait(true);
-            await ContinueWatching.ReloadAsync(cancellationToken).ConfigureAwait(true);
+            await RefreshWhatShowsProgressAsync(cancellationToken).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
             // The window is closing; the position itself is already written.
         }
+    }
+
+    /// <summary>
+    /// Rereads the three places a stored position is displayed.
+    /// </summary>
+    /// <remarks>
+    /// A resume point appears on a film row, on an episode row and as a continue-watching entry. Any change
+    /// to one has to reach all three, or the same position is offered in one place and gone from another.
+    /// </remarks>
+    private async Task RefreshWhatShowsProgressAsync(CancellationToken cancellationToken)
+    {
+        await Movies.RefreshSelectedAsync(cancellationToken).ConfigureAwait(true);
+        await SeriesCatalogue.RefreshOpenSeriesAsync(cancellationToken).ConfigureAwait(true);
+        await ContinueWatching.ReloadAsync(cancellationToken).ConfigureAwait(true);
     }
 
     private bool IsSectionAvailable(CatalogueSection section)

@@ -220,11 +220,29 @@ static Command BuildVodCommand(IServiceProvider services)
             parseResult.GetValue(sourceIdOption),
             cancellationToken))));
 
+    var forgetMovieOption = new Option<int?>("--movie-id") { Description = "Local film id." };
+    var forgetEpisodeOption = new Option<int?>("--episode-id") { Description = "Local episode id." };
+
+    var forgetCommand = new Command(
+        "forget",
+        "Takes a film or episode off the continue-watching list, keeping it in the catalogue.");
+
+    forgetCommand.Options.Add(sourceIdOption);
+    forgetCommand.Options.Add(forgetMovieOption);
+    forgetCommand.Options.Add(forgetEpisodeOption);
+    forgetCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithCatalogue<VodCommandHandler>(services, handler => handler.ForgetAsync(
+            parseResult.GetValue(sourceIdOption),
+            parseResult.GetValue(forgetMovieOption),
+            parseResult.GetValue(forgetEpisodeOption),
+            cancellationToken))));
+
     command.Subcommands.Add(listCommand);
     command.Subcommands.Add(seriesCommand);
     command.Subcommands.Add(episodesCommand);
     command.Subcommands.Add(showCommand);
     command.Subcommands.Add(continueCommand);
+    command.Subcommands.Add(forgetCommand);
     command.Subcommands.Add(BuildVodPlayTestCommand(services, sourceIdOption));
 
     return command;
@@ -255,6 +273,11 @@ static Command BuildVodPlayTestCommand(IServiceProvider services, Option<int> so
         Description = "Start this many seconds in, which is how resuming is verified.",
     };
 
+    var rememberOption = new Option<bool>("--remember")
+    {
+        Description = "Record where playback got to, as the window does, so 'vod continue' shows it.",
+    };
+
     var command = new Command(
         "play-test",
         "Opens a stored film or episode headlessly, reports its position, then releases it.");
@@ -264,6 +287,7 @@ static Command BuildVodPlayTestCommand(IServiceProvider services, Option<int> so
     command.Options.Add(episodeIdOption);
     command.Options.Add(secondsOption);
     command.Options.Add(startAtOption);
+    command.Options.Add(rememberOption);
 
     command.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
         WithCatalogue<VodCommandHandler>(services, handler => handler.PlayTestAsync(
@@ -272,6 +296,7 @@ static Command BuildVodPlayTestCommand(IServiceProvider services, Option<int> so
             parseResult.GetValue(episodeIdOption),
             parseResult.GetValue(secondsOption),
             parseResult.GetValue(startAtOption),
+            parseResult.GetValue(rememberOption),
             cancellationToken))));
 
     return command;

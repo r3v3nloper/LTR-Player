@@ -130,11 +130,29 @@ dotnet run --project src/LTR.Cli -- vod play-test --source-id 1 --movie-id 18848
 Opens a stored film or episode (`--episode-id`), holds it, then releases it and asks the panel about its
 connections, exactly as the live `play-test` does.
 
-**`Position` is the line to read.** With `--start-at 2400` it must report roughly `00:40:00`; reporting
-`unknown` means the resume seek did not take, and a film that silently restarts from the beginning looks
-perfectly healthy from every other angle. `Duration` matters for the other half of resuming — an item
-whose length is unknown can never be recognised as finished, so it stays on the continue-watching list
-for good.
+**`Position` is the line to read.** With `--start-at 2400` it should report roughly `00:40:00`, which is the
+proof the resume seek took — a film that silently restarts from the beginning looks perfectly healthy from
+every other angle.
+
+`unknown` is *not* proof of failure, and this was learned the hard way: a deep seek over HTTP can take
+longer than the command holds the stream, and the same file that reported `00:05:04` at `--start-at 300`
+reported `unknown` at `--start-at 600`. Hold it longer (`--seconds 30`) before concluding anything. Both the
+window and `--remember` fall back to the position playback was asked to start at for exactly this reason, so
+a slow seek costs a viewer nothing.
+
+`Duration` matters for the other half of resuming — an item whose length is unknown can never be recognised
+as finished, so it stays on the continue-watching list for good.
+
+```bash
+dotnet run --project src/LTR.Cli -- vod play-test --source-id 1 --episode-id 63 --start-at 600 --remember
+dotnet run --project src/LTR.Cli -- vod continue --source-id 1
+dotnet run --project src/LTR.Cli -- vod forget   --source-id 1 --episode-id 63
+```
+
+`--remember` records the position as the window does, which is what makes the whole resume loop checkable
+without the UI: play, see it listed, take it off again. `forget` is the command-line counterpart of the
+list's own remove button — it clears the position and deliberately does **not** mark the item watched,
+because nobody watched it.
 
 > **Run these one at a time.** A subscription permitting a single connection answers the next stream with
 > HTTP 200 and an empty body while it still counts the previous one, and nothing about that reads as a
