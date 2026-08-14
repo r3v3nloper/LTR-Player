@@ -31,17 +31,20 @@ internal sealed class VodCommandHandler
     private readonly IVodDetailService _detail;
     private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
+    private readonly ConnectionReleaseCheck _releaseCheck;
 
     public VodCommandHandler(
         ICatalogueStore catalogue,
         IVodDetailService detail,
         IProviderRegistry providers,
-        IPlaybackSession session)
+        IPlaybackSession session,
+        ConnectionReleaseCheck releaseCheck)
     {
         _catalogue = catalogue;
         _detail = detail;
         _providers = providers;
         _session = session;
+        _releaseCheck = releaseCheck;
     }
 
     public async Task<int> ListMoviesAsync(
@@ -294,10 +297,14 @@ internal sealed class VodCommandHandler
             request = resolver.ResolveEpisode(source, episode, startAt);
         }
 
-        return await PlayAsync(request, seconds, cancellationToken).ConfigureAwait(false);
+        return await PlayAsync(source, request, seconds, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<int> PlayAsync(MediaRequest request, int seconds, CancellationToken cancellationToken)
+    private async Task<int> PlayAsync(
+        PlaylistSource source,
+        MediaRequest request,
+        int seconds,
+        CancellationToken cancellationToken)
     {
         Console.WriteLine($"Opening '{request.DisplayName}' as {request.Format}...");
 
@@ -313,6 +320,14 @@ internal sealed class VodCommandHandler
             if (state != PlaybackState.Playing)
             {
                 Console.Error.WriteLine($"Playback did not start; final state was {state}.");
+
+                // Named explicitly because it is the likeliest cause and the least obvious. A
+                // one-connection subscription refuses the next stream with an empty body for as long as
+                // the panel still counts the previous one, which reads exactly like a broken film.
+                Console.Error.WriteLine(
+                    "If a previous play-test ran moments ago, the panel may still be counting its "
+                    + "connection. 'probe' reports how many it thinks are open.");
+
                 return 1;
             }
 
@@ -331,6 +346,8 @@ internal sealed class VodCommandHandler
         }
 
         Console.WriteLine("Stream released.");
+        await _releaseCheck.ReportAsync(source, cancellationToken).ConfigureAwait(false);
+
         return 0;
     }
 

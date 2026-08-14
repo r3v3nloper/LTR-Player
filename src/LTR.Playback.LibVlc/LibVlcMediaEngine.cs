@@ -94,15 +94,6 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         // filter on the agent, and a global setting would be wrong for a second source.
         media.AddOption($":http-user-agent={request.UserAgent}");
 
-        if (request.StartAt is { TotalSeconds: > 0 } startAt)
-        {
-            // Stated as a media option rather than seeked to after the fact, for the reason recorded on
-            // MediaRequest.StartAt. LibVLC takes it in seconds, and invariant formatting is not optional:
-            // under a German locale the decimal comma makes the option unparseable and it is ignored
-            // silently, so playback would simply start at the beginning.
-            media.AddOption(FormattableString.Invariant($":start-time={startAt.TotalSeconds:F3}"));
-        }
-
         _currentMedia?.Dispose();
         _currentMedia = media;
 
@@ -138,6 +129,43 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
                 + "may have refused the connection.",
                 request);
         }
+
+        ApplyStartPosition(request);
+    }
+
+    /// <summary>
+    /// Moves to a resume position once the stream is open.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// After opening rather than through LibVLC's <c>start-time</c> option, and that order was arrived at
+    /// by measurement rather than by preference. Handed <c>start-time</c>, the Matroska demuxer issues its
+    /// seek before it has read the file's cues and answers it by prerolling from byte 1036 — reading the
+    /// whole file forward to reach the requested moment. Against a remote film that never arrives: the
+    /// stream reports itself as playing while its position stays unknown for minutes on end.
+    /// </para>
+    /// <para>
+    /// Issued after the first Playing event, the same seek uses the loaded index and lands immediately. The
+    /// cost is that a fraction of a second of the opening plays first, which is a great deal better than a
+    /// resume that never completes.
+    /// </para>
+    /// </remarks>
+    private void ApplyStartPosition(MediaRequest request)
+    {
+        if (request.StartAt is not { TotalMilliseconds: > 0 } startAt)
+        {
+            return;
+        }
+
+        if (!_mediaPlayer.IsSeekable)
+        {
+            // Live streams, and the occasional film served without range support. Nothing to be done, and
+            // playing from the start beats refusing to play.
+            LibVlcLog.ResumeNotSeekable(_logger, request.DisplayName);
+            return;
+        }
+
+        _mediaPlayer.Time = (long)startAt.TotalMilliseconds;
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)

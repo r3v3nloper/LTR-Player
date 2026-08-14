@@ -17,11 +17,11 @@ namespace LTR.Core.Playback;
 /// Where playback should begin, for resuming a part-watched film or episode.
 /// </param>
 /// <remarks>
-/// <see cref="StartAt"/> travels with the request rather than being seeked to after playback starts,
-/// and that is not a convenience: a seek issued before the engine has opened the media is discarded,
-/// one issued after it has opened plays a second of the beginning first and then jumps, and deciding
-/// when "after" has arrived means watching for a state change the engine reports at a different moment
-/// for every container. Stating the position up front leaves the engine to honour it while opening.
+/// <see cref="StartAt"/> travels with the request rather than being applied by the caller afterwards, so
+/// that resuming is one operation and cannot be half-done: a caller that had to seek separately would
+/// have to know when the engine has opened enough to accept one. How the engine honours it is its own
+/// business — the LibVLC one seeks immediately after the stream reports itself playing, for reasons
+/// recorded there.
 /// </remarks>
 public sealed record MediaRequest(
     Uri Url,
