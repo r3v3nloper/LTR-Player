@@ -19,6 +19,19 @@ public interface IPlaybackSession : IAsyncDisposable
     /// <summary>The stream currently held, or <see langword="null"/> when nothing is open.</summary>
     MediaRequest? Current { get; }
 
+    /// <summary>
+    /// How far into the current stream playback has reached, or <see langword="null"/> when there is no
+    /// such thing — which is the normal answer for live television.
+    /// </summary>
+    /// <remarks>
+    /// Surfaced here rather than leaving callers to reach for the engine, because the session is the one
+    /// point through which playback is addressed and the engine is not meant to be held elsewhere.
+    /// </remarks>
+    TimeSpan? Position { get; }
+
+    /// <summary>The current stream's total length, as the engine measures it.</summary>
+    TimeSpan? Duration { get; }
+
     event EventHandler<PlaybackStateChangedEventArgs>? StateChanged;
 
     /// <summary>

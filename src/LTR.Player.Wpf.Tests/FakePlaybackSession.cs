@@ -19,6 +19,11 @@ internal sealed class FakePlaybackSession : IPlaybackSession
 
     public MediaRequest? Current { get; private set; }
 
+    /// <summary>Where the fake reports playback to have reached, set by a test.</summary>
+    public TimeSpan? Position { get; set; }
+
+    public TimeSpan? Duration { get; set; }
+
     public event EventHandler<PlaybackStateChangedEventArgs>? StateChanged;
 
     public Task<PlaybackState> SwitchToAsync(MediaRequest request, CancellationToken cancellationToken)
@@ -39,6 +44,12 @@ internal sealed class FakePlaybackSession : IPlaybackSession
     {
         StopCount++;
         Current = null;
+
+        // Cleared as a real engine does, which is what makes the last polled position the only figure a
+        // caller can record progress from once playback has stopped.
+        Position = null;
+        Duration = null;
+
         Transition(PlaybackState.Stopped);
 
         return Task.CompletedTask;

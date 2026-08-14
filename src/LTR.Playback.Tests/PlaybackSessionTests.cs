@@ -212,6 +212,57 @@ public sealed class PlaybackSessionTests
         observed.ShouldContain(PlaybackState.Playing);
     }
 
+    [Fact]
+    public async Task SwitchToAsync_CarriesAResumePositionIntoTheOpen()
+    {
+        // Arrange: honoured while opening rather than by a seek afterwards. A seek before the media is
+        // open is discarded, and one after it has opened plays a second of the beginning and then jumps.
+        var engine = new FakeMediaEngine();
+        await using var session = CreateSession(engine);
+
+        var request = Request("Arrival") with { StartAt = TimeSpan.FromMinutes(40) };
+
+        // Act
+        await session.SwitchToAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        engine.RequestedStartPositions.ShouldBe([TimeSpan.FromMinutes(40)]);
+    }
+
+    [Fact]
+    public async Task PositionAndDuration_AreReportedFromTheEngine()
+    {
+        // Arrange: the session is the one point through which playback is addressed, so the figures the
+        // resume decision is made against have to be readable there.
+        var engine = new FakeMediaEngine
+        {
+            Position = TimeSpan.FromMinutes(12),
+            Duration = TimeSpan.FromMinutes(100),
+        };
+
+        await using var session = CreateSession(engine);
+        await session.SwitchToAsync(Request("Arrival"), TestContext.Current.CancellationToken);
+
+        // Act & Assert
+        session.Position.ShouldBe(TimeSpan.FromMinutes(12));
+        session.Duration.ShouldBe(TimeSpan.FromMinutes(100));
+    }
+
+    [Fact]
+    public async Task PositionAndDuration_AfterDisposal_ReportNothing()
+    {
+        // Arrange: read from a timer, which can tick once more while the window is closing.
+        var engine = new FakeMediaEngine { Position = TimeSpan.FromMinutes(12) };
+        var session = CreateSession(engine);
+
+        // Act
+        await session.DisposeAsync();
+
+        // Assert
+        session.Position.ShouldBeNull();
+        session.Duration.ShouldBeNull();
+    }
+
     private static PlaybackSession CreateSession(FakeMediaEngine engine)
     {
         return new PlaybackSession(engine, NullLogger<PlaybackSession>.Instance, ShortStopTimeout);

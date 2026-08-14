@@ -69,6 +69,17 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         set => _mediaPlayer.Mute = value;
     }
 
+    /// <remarks>
+    /// LibVLC answers with a negative number of milliseconds for a stream it cannot position, which is
+    /// every live stream and any file it has not yet read enough of. That is reported as no position
+    /// rather than as a time before the epoch.
+    /// </remarks>
+    public TimeSpan? Position => _isDisposed ? null : FromMilliseconds(_mediaPlayer.Time);
+
+    public TimeSpan? Duration => _isDisposed ? null : FromMilliseconds(_mediaPlayer.Length);
+
+    public bool IsSeekable => !_isDisposed && _mediaPlayer.IsSeekable;
+
     public async Task PlayAsync(MediaRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -82,6 +93,15 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         // A per-input option, marked by the leading colon, so it applies to this stream only. Panels
         // filter on the agent, and a global setting would be wrong for a second source.
         media.AddOption($":http-user-agent={request.UserAgent}");
+
+        if (request.StartAt is { TotalSeconds: > 0 } startAt)
+        {
+            // Stated as a media option rather than seeked to after the fact, for the reason recorded on
+            // MediaRequest.StartAt. LibVLC takes it in seconds, and invariant formatting is not optional:
+            // under a German locale the decimal comma makes the option unparseable and it is ignored
+            // silently, so playback would simply start at the beginning.
+            media.AddOption(FormattableString.Invariant($":start-time={startAt.TotalSeconds:F3}"));
+        }
 
         _currentMedia?.Dispose();
         _currentMedia = media;
@@ -249,6 +269,14 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         _currentMedia = null;
         _mediaPlayer.Dispose();
         _libVlc.Dispose();
+    }
+
+    /// <summary>
+    /// Turns LibVLC's millisecond figure into a duration, treating anything not positive as unknown.
+    /// </summary>
+    private static TimeSpan? FromMilliseconds(long milliseconds)
+    {
+        return milliseconds > 0 ? TimeSpan.FromMilliseconds(milliseconds) : null;
     }
 
     private static MediaTrack ToMediaTrack(VlcTrackDescription description, MediaTrackKind kind)

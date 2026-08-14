@@ -69,6 +69,10 @@ public sealed class PlaybackSession : IPlaybackSession
 
     public MediaRequest? Current => _current;
 
+    public TimeSpan? Position => _isDisposed ? null : _engine.Position;
+
+    public TimeSpan? Duration => _isDisposed ? null : _engine.Duration;
+
     public async Task<PlaybackState> SwitchToAsync(MediaRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
