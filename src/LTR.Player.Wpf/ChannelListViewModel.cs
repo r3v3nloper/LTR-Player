@@ -27,7 +27,7 @@ public sealed partial class ChannelListViewModel : ObservableObject
     /// <summary>
     /// The filter the current view is using. Rebuilt once per refresh rather than per row.
     /// </summary>
-    private ChannelFilter _activeFilter = ChannelFilter.None;
+    private CatalogueFilter _activeFilter = CatalogueFilter.None;
 
     [ObservableProperty]
     private CategoryChoice _selectedCategory = CategoryChoice.All;
@@ -242,7 +242,7 @@ public sealed partial class ChannelListViewModel : ObservableObject
     {
         var previouslySelected = SelectedChannel;
 
-        _activeFilter = new ChannelFilter(ChannelFilterText, SelectedCategory?.ExternalId, ShowFavoritesOnly);
+        _activeFilter = new CatalogueFilter(ChannelFilterText, SelectedCategory?.ExternalId, ShowFavoritesOnly);
         ChannelView.Refresh();
 
         if (previouslySelected is not null && MatchesCurrentFilter(previouslySelected))

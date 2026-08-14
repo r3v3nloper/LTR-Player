@@ -1,13 +1,13 @@
 namespace LTR.Core.Content;
 
-public sealed class ChannelFilterTests
+public sealed class CatalogueFilterTests
 {
     [Fact]
     public void None_AdmitsEverything()
     {
         // Arrange & Act & Assert
-        ChannelFilter.None.Matches(Channel("FR: TF1 HD")).ShouldBeTrue();
-        ChannelFilter.None.IsActive.ShouldBeFalse();
+        CatalogueFilter.None.Matches(Channel("FR: TF1 HD")).ShouldBeTrue();
+        CatalogueFilter.None.IsActive.ShouldBeFalse();
     }
 
     [Theory]
@@ -19,7 +19,7 @@ public sealed class ChannelFilterTests
     public void SearchText_MatchesAnywhereInTheNameIgnoringCase(string searchText, bool expected)
     {
         // Arrange: users type fragments, not prefixes.
-        var filter = new ChannelFilter(SearchText: searchText);
+        var filter = new CatalogueFilter(SearchText: searchText);
 
         // Act & Assert
         filter.Matches(Channel("FR: TF1 HD")).ShouldBe(expected);
@@ -32,7 +32,7 @@ public sealed class ChannelFilterTests
     public void SearchText_WhenBlank_IsIgnored(string? searchText)
     {
         // Arrange
-        var filter = new ChannelFilter(SearchText: searchText);
+        var filter = new CatalogueFilter(SearchText: searchText);
 
         // Act & Assert
         filter.Matches(Channel("Anything")).ShouldBeTrue();
@@ -43,7 +43,7 @@ public sealed class ChannelFilterTests
     public void CategoryExternalId_RestrictsToThatCategory()
     {
         // Arrange
-        var filter = new ChannelFilter(CategoryExternalId: "10");
+        var filter = new CatalogueFilter(CategoryExternalId: "10");
 
         // Act & Assert
         filter.Matches(Channel("A", categoryExternalId: "10")).ShouldBeTrue();
@@ -54,7 +54,7 @@ public sealed class ChannelFilterTests
     public void CategoryExternalId_ExcludesUncategorisedChannels()
     {
         // Arrange: a channel referencing a category the provider omitted has none of its own.
-        var filter = new ChannelFilter(CategoryExternalId: "10");
+        var filter = new CatalogueFilter(CategoryExternalId: "10");
 
         // Act & Assert
         filter.Matches(Channel("Orphan", categoryExternalId: null)).ShouldBeFalse();
@@ -64,7 +64,7 @@ public sealed class ChannelFilterTests
     public void FavoritesOnly_RestrictsToMarkedChannels()
     {
         // Arrange
-        var filter = new ChannelFilter(FavoritesOnly: true);
+        var filter = new CatalogueFilter(FavoritesOnly: true);
 
         // Act & Assert
         filter.Matches(Channel("A", isFavorite: true)).ShouldBeTrue();
@@ -75,7 +75,7 @@ public sealed class ChannelFilterTests
     public void Criteria_CombineAsAConjunction()
     {
         // Arrange: all three set at once is the case the UI actually produces.
-        var filter = new ChannelFilter(SearchText: "tf1", CategoryExternalId: "10", FavoritesOnly: true);
+        var filter = new CatalogueFilter(SearchText: "tf1", CategoryExternalId: "10", FavoritesOnly: true);
 
         // Act & Assert
         filter.Matches(Channel("FR: TF1 HD", "10", isFavorite: true)).ShouldBeTrue();
@@ -88,10 +88,10 @@ public sealed class ChannelFilterTests
     public void IsActive_ReportsWhetherAnyCriterionIsSet()
     {
         // Arrange & Act & Assert
-        new ChannelFilter(SearchText: "a").IsActive.ShouldBeTrue();
-        new ChannelFilter(CategoryExternalId: "10").IsActive.ShouldBeTrue();
-        new ChannelFilter(FavoritesOnly: true).IsActive.ShouldBeTrue();
-        new ChannelFilter().IsActive.ShouldBeFalse();
+        new CatalogueFilter(SearchText: "a").IsActive.ShouldBeTrue();
+        new CatalogueFilter(CategoryExternalId: "10").IsActive.ShouldBeTrue();
+        new CatalogueFilter(FavoritesOnly: true).IsActive.ShouldBeTrue();
+        new CatalogueFilter().IsActive.ShouldBeFalse();
     }
 
     private static Channel Channel(string name, string? categoryExternalId = null, bool isFavorite = false)
