@@ -14,14 +14,22 @@ namespace LTR.Catalogue;
 /// Identity of the stored source. Zero when nothing was stored because the account was unusable.
 /// </param>
 /// <param name="ChannelCount">Channels stored.</param>
-/// <param name="CategoryCount">Categories stored.</param>
+/// <param name="CategoryCount">Categories stored, across every kind the import covered.</param>
+/// <param name="MovieCount">Films stored. Zero for a source that offers none.</param>
+/// <param name="SeriesCount">Series stored, counted shallowly: their seasons are fetched on demand.</param>
 public sealed record SourceImportResult(
     ProviderAccount Account,
     int SourceId,
     int ChannelCount,
-    int CategoryCount)
+    int CategoryCount,
+    int MovieCount = 0,
+    int SeriesCount = 0)
 {
     public bool Succeeded => Account.IsUsable;
+
+    /// <summary>Whether anything beyond live television was stored, which is what decides whether the
+    /// film and series sections are worth showing at all.</summary>
+    public bool HasVod => MovieCount > 0 || SeriesCount > 0;
 
     public static SourceImportResult Rejected(ProviderAccount account)
     {

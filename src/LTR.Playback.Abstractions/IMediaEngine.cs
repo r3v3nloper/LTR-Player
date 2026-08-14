@@ -25,11 +25,40 @@ public interface IMediaEngine : IAsyncDisposable
 
     bool IsMuted { get; set; }
 
+    /// <summary>
+    /// How far into the current stream playback has reached, or <see langword="null"/> when the engine
+    /// cannot say.
+    /// </summary>
+    /// <remarks>
+    /// Null is the normal answer for a live stream, and also the answer for the first moments of a film
+    /// before the engine has read enough of it. Callers therefore have to treat "no position" as an
+    /// ordinary state rather than as a fault.
+    /// </remarks>
+    TimeSpan? Position { get; }
+
+    /// <summary>
+    /// The current stream's total length, or <see langword="null"/> when it has none or none is known.
+    /// </summary>
+    /// <remarks>
+    /// This is the figure resume decisions are made against, and it is the engine's rather than the
+    /// provider's on purpose: a panel's stated running time is frequently absent or simply wrong, while
+    /// this one comes from the file being open.
+    /// </remarks>
+    TimeSpan? Duration { get; }
+
+    /// <summary>Whether the current stream can be positioned at all, which live streams cannot.</summary>
+    bool IsSeekable { get; }
+
     event EventHandler<PlaybackStateChangedEventArgs>? StateChanged;
 
     /// <summary>
     /// Opens <paramref name="request"/> and returns once the engine has begun playing or failed.
     /// </summary>
+    /// <remarks>
+    /// An implementation honours <see cref="MediaRequest.StartAt"/> while opening rather than by seeking
+    /// afterwards. The reason is stated on the property: a seek before the media is open is discarded,
+    /// and one after it has opened shows a second of the beginning first.
+    /// </remarks>
     Task PlayAsync(MediaRequest request, CancellationToken cancellationToken);
 
     /// <summary>

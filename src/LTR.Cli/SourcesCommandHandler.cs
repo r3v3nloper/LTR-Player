@@ -94,6 +94,51 @@ internal sealed class SourcesCommandHandler
         return 0;
     }
 
+    /// <summary>
+    /// Re-imports a stored source's catalogue, whatever its protocol.
+    /// </summary>
+    /// <remarks>
+    /// The one way to import an Xtream catalogue without the window, which is what makes the film and
+    /// series sections verifiable headlessly at all (§2.12). Safe to expose for Xtream even though adding
+    /// one is not: the credentials are already stored, so nothing appears in shell history.
+    /// </remarks>
+    public async Task<int> RefreshAsync(int sourceId, CancellationToken cancellationToken)
+    {
+        var sources = await _catalogue.GetSourcesAsync(cancellationToken).ConfigureAwait(false);
+        var source = sources.FirstOrDefault(candidate => candidate.Id == sourceId);
+
+        if (source is null)
+        {
+            Console.Error.WriteLine($"No source with id {sourceId}. Run 'sources list' to see what there is.");
+            return 1;
+        }
+
+        Console.WriteLine($"Refreshing '{source.Name}'.");
+
+        var progress = new Progress<SourceImportStage>(stage => Console.WriteLine($"  {stage}..."));
+        var result = await _import.RefreshAsync(source, progress, cancellationToken).ConfigureAwait(false);
+
+        if (!result.Succeeded)
+        {
+            Console.Error.WriteLine(
+                $"The subscription could not be used: {result.Account.Status}. Nothing was changed.");
+            return 1;
+        }
+
+        Console.WriteLine(
+            $"{result.ChannelCount} channels, {result.MovieCount} films, {result.SeriesCount} series, "
+            + $"{result.CategoryCount} categories.");
+
+        if (!result.HasVod)
+        {
+            Console.WriteLine(
+                "No films or series were stored. Either the panel offers none, or the probe found the "
+                + "endpoints absent — 'probe' reports which.");
+        }
+
+        return 0;
+    }
+
     public async Task<int> RemoveAsync(int sourceId, CancellationToken cancellationToken)
     {
         await _catalogue.DeleteSourceAsync(sourceId, cancellationToken).ConfigureAwait(false);

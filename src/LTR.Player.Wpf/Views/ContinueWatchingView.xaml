@@ -1,0 +1,94 @@
+<UserControl x:Class="LTR.Player.Wpf.Views.ContinueWatchingView"
+             x:Name="SectionRoot"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:content="clr-namespace:LTR.Core.Content;assembly=LTR.Core">
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Grid.Row="0"
+               Text="Nothing is part-watched yet. Films and episodes appear here once you have started one."
+               Style="{StaticResource MutedText}"
+               TextWrapping="Wrap"
+               Margin="0,4,0,0"
+               Visibility="{Binding ContinueWatching.HasEntries,
+                                    Converter={StaticResource InverseBooleanToVisibility}}" />
+
+    <ListBox Grid.Row="1"
+             ItemsSource="{Binding ContinueWatching.Entries}"
+             SelectedItem="{Binding ContinueWatching.SelectedEntry}"
+             ItemContainerStyle="{StaticResource CatalogueItem}"
+             Background="Transparent"
+             BorderThickness="0"
+             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+             MouseDoubleClick="OnEntryActivated">
+      <ListBox.ItemTemplate>
+        <DataTemplate DataType="{x:Type content:ContinueWatchingEntry}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0"
+                    Width="40"
+                    Height="60"
+                    Margin="0,0,8,0"
+                    Background="{StaticResource SurfaceBrush}">
+              <Image Source="{Binding CoverUrl, Converter={StaticResource RowCover}}"
+                     Stretch="UniformToFill" />
+            </Border>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding Subtitle}"
+                         Style="{StaticResource MutedText}"
+                         TextTrimming="CharacterEllipsis"
+                         Visibility="{Binding Subtitle,
+                                              Converter={StaticResource NonEmptyStringToVisibility}}" />
+
+              <!-- How far in, which is the only thing this list is for. -->
+              <ProgressBar Height="2"
+                           Margin="0,4,0,0"
+                           Minimum="0"
+                           Maximum="1"
+                           Value="{Binding Progress, Mode=OneWay}"
+                           Background="{StaticResource BorderBrush}"
+                           Foreground="{StaticResource AccentBrush}"
+                           BorderThickness="0" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+              <Button Content="▶"
+                      Padding="8,4"
+                      Margin="6,0,0,0"
+                      Background="{StaticResource BorderBrush}"
+                      ToolTip="Carry on watching"
+                      Command="{Binding DataContext.ResumeEntryCommand,
+                                        ElementName=SectionRoot}"
+                      CommandParameter="{Binding}" />
+
+              <!--
+                For the film that did not hold the viewer's attention. No confirmation: it forgets a position,
+                not the film, and starting it again is one click away.
+              -->
+              <Button Content="✕"
+                      Padding="8,4"
+                      Margin="4,0,0,0"
+                      Background="{StaticResource BorderBrush}"
+                      ToolTip="Take this off the list"
+                      Command="{Binding DataContext.ForgetEntryCommand,
+                                        ElementName=SectionRoot}"
+                      CommandParameter="{Binding}" />
+            </StackPanel>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </Grid>
+</UserControl>

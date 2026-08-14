@@ -142,6 +142,35 @@ internal sealed class M3uContentProvider : IContentProvider
     }
 
     /// <summary>
+    /// Always empty: a playlist has no notion of films.
+    /// </summary>
+    /// <remarks>
+    /// Entries do sometimes point at film files, but a playlist states nothing that would let them be
+    /// told apart from live channels reliably — no stream type, no cover, no running time. Guessing from
+    /// group names would file half a subscription's channels under films, so nothing is guessed.
+    /// </remarks>
+    public Task<IReadOnlyList<VodItem>> FetchMoviesAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<VodItem>>([]);
+    }
+
+    /// <summary>Always empty: a playlist has no notion of series, seasons or episodes.</summary>
+    public Task<IReadOnlyList<Series>> FetchSeriesAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<Series>>([]);
+    }
+
+    public Task<MovieDetail?> FetchMovieDetailAsync(string externalId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<MovieDetail?>(null);
+    }
+
+    public Task<SeriesDetail?> FetchSeriesDetailAsync(string externalId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<SeriesDetail?>(null);
+    }
+
+    /// <summary>
     /// Produces an identity that is stable across refreshes and unique within the playlist.
     /// </summary>
     /// <remarks>

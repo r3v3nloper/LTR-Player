@@ -1,4 +1,5 @@
 using LTR.Core.Content;
+using LTR.Core.Playback;
 using LTR.Core.Sources;
 
 namespace LTR.Catalogue;
@@ -19,7 +20,17 @@ public interface ICatalogueStore
 
     Task<IReadOnlyList<Channel>> GetLiveChannelsAsync(int sourceId, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<Category>> GetLiveCategoriesAsync(int sourceId, CancellationToken cancellationToken);
+    /// <summary>
+    /// A source's categories of one kind, in the order the provider intended.
+    /// </summary>
+    /// <remarks>
+    /// Taken by kind rather than one method per kind. A panel numbers its categories per section, so the
+    /// kind is part of the question and not a variation on it.
+    /// </remarks>
+    Task<IReadOnlyList<Category>> GetCategoriesAsync(
+        int sourceId,
+        ContentKind kind,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// What is on now and next on every channel of a source that has a guide.
@@ -58,4 +69,72 @@ public interface ICatalogueStore
     Task SetFavoriteAsync(int channelId, bool isFavorite, CancellationToken cancellationToken);
 
     Task DeleteSourceAsync(int sourceId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<VodItem>> GetMoviesAsync(int sourceId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Answers a search over a source's films, bounded by <paramref name="limit"/>.
+    /// </summary>
+    /// <remarks>
+    /// What the film list uses, rather than <see cref="GetMoviesAsync"/>. A real subscription holds tens of
+    /// thousands of films, so the section answers a search instead of presenting everything — and the count
+    /// of what matched comes back with the page so the caller can say how much it is not showing.
+    /// </remarks>
+    Task<CataloguePage<VodItem>> SearchMoviesAsync(
+        int sourceId,
+        CatalogueFilter filter,
+        int limit,
+        CancellationToken cancellationToken);
+
+    Task<CataloguePage<Series>> SearchSeriesAsync(
+        int sourceId,
+        CatalogueFilter filter,
+        int limit,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// A source's series, without their seasons.
+    /// </summary>
+    /// <remarks>
+    /// Shallow because that is how they are stored: seasons arrive from a separate call made when a series
+    /// is opened. <see cref="IVodDetailService"/> is what produces a series with its seasons.
+    /// </remarks>
+    Task<IReadOnlyList<Series>> GetSeriesAsync(int sourceId, CancellationToken cancellationToken);
+
+    Task<VodItem?> GetMovieAsync(int movieId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// One episode on its own, which is what resuming a continue-watching row needs.
+    /// </summary>
+    /// <remarks>
+    /// An episode's address is built from its own identifier, so nothing about its series or season has to
+    /// be loaded to play it.
+    /// </remarks>
+    Task<Episode?> GetEpisodeAsync(int episodeId, CancellationToken cancellationToken);
+
+    /// <summary>What the viewer is part-way through, most recently watched first.</summary>
+    Task<IReadOnlyList<ContinueWatchingEntry>> GetContinueWatchingAsync(
+        int sourceId,
+        int limit,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Records where the viewer left a film.
+    /// </summary>
+    /// <remarks>
+    /// Takes the outcome rather than a set of column values, so that what "finished" means to a row is
+    /// decided in one place. <see cref="LTR.Core.Playback.ResumePolicy"/> is what produces it.
+    /// </remarks>
+    Task RecordMovieProgressAsync(
+        int movieId,
+        WatchOutcome outcome,
+        TimeSpan position,
+        CancellationToken cancellationToken);
+
+    /// <summary>Records where the viewer left an episode.</summary>
+    Task RecordEpisodeProgressAsync(
+        int episodeId,
+        WatchOutcome outcome,
+        TimeSpan position,
+        CancellationToken cancellationToken);
 }

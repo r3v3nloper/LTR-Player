@@ -69,6 +69,17 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         set => _mediaPlayer.Mute = value;
     }
 
+    /// <remarks>
+    /// LibVLC answers with a negative number of milliseconds for a stream it cannot position, which is
+    /// every live stream and any file it has not yet read enough of. That is reported as no position
+    /// rather than as a time before the epoch.
+    /// </remarks>
+    public TimeSpan? Position => _isDisposed ? null : FromMilliseconds(_mediaPlayer.Time);
+
+    public TimeSpan? Duration => _isDisposed ? null : FromMilliseconds(_mediaPlayer.Length);
+
+    public bool IsSeekable => !_isDisposed && _mediaPlayer.IsSeekable;
+
     public async Task PlayAsync(MediaRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -118,6 +129,43 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
                 + "may have refused the connection.",
                 request);
         }
+
+        ApplyStartPosition(request);
+    }
+
+    /// <summary>
+    /// Moves to a resume position once the stream is open.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// After opening rather than through LibVLC's <c>start-time</c> option, and that order was arrived at
+    /// by measurement rather than by preference. Handed <c>start-time</c>, the Matroska demuxer issues its
+    /// seek before it has read the file's cues and answers it by prerolling from byte 1036 — reading the
+    /// whole file forward to reach the requested moment. Against a remote film that never arrives: the
+    /// stream reports itself as playing while its position stays unknown for minutes on end.
+    /// </para>
+    /// <para>
+    /// Issued after the first Playing event, the same seek uses the loaded index and lands immediately. The
+    /// cost is that a fraction of a second of the opening plays first, which is a great deal better than a
+    /// resume that never completes.
+    /// </para>
+    /// </remarks>
+    private void ApplyStartPosition(MediaRequest request)
+    {
+        if (request.StartAt is not { TotalMilliseconds: > 0 } startAt)
+        {
+            return;
+        }
+
+        if (!_mediaPlayer.IsSeekable)
+        {
+            // Live streams, and the occasional film served without range support. Nothing to be done, and
+            // playing from the start beats refusing to play.
+            LibVlcLog.ResumeNotSeekable(_logger, request.DisplayName);
+            return;
+        }
+
+        _mediaPlayer.Time = (long)startAt.TotalMilliseconds;
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -249,6 +297,14 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         _currentMedia = null;
         _mediaPlayer.Dispose();
         _libVlc.Dispose();
+    }
+
+    /// <summary>
+    /// Turns LibVLC's millisecond figure into a duration, treating anything not positive as unknown.
+    /// </summary>
+    private static TimeSpan? FromMilliseconds(long milliseconds)
+    {
+        return milliseconds > 0 ? TimeSpan.FromMilliseconds(milliseconds) : null;
     }
 
     private static MediaTrack ToMediaTrack(VlcTrackDescription description, MediaTrackKind kind)

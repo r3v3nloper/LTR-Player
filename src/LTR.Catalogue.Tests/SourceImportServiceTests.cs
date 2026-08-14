@@ -36,7 +36,7 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
         await import.ImportAsync(source, progress: null, cancellationToken);
 
         // Assert
-        registry.Calls.ShouldBe(["authenticate", "probe", "categories", "channels"]);
+        registry.Calls.ShouldBe(["authenticate", "probe", "categories:Live", "channels"]);
     }
 
     [Fact]
@@ -167,6 +167,142 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
         (await store.GetSourcesAsync(cancellationToken)).Count.ShouldBe(1);
     }
 
+    [Fact]
+    public async Task ImportAsync_WhenThePanelOffersFilmsAndSeries_FetchesAndStoresThemToo()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var source = CreateSource();
+        var registry = new FakeProviderRegistry(source)
+        {
+            Capabilities = new ProviderCapabilities
+            {
+                SupportsLive = true,
+                SupportsVod = true,
+                SupportsSeries = true,
+            },
+        };
+
+        registry.Categories.Add(CreateCategory("10", "Sport", ContentKind.Live));
+        registry.Categories.Add(CreateCategory("58", "Action", ContentKind.Movie));
+        registry.Categories.Add(CreateCategory("75", "Drama", ContentKind.Series));
+        registry.Channels.Add(CreateChannel("101", "Erste", "10"));
+        registry.Movies.Add(CreateMovie("8412", "Arrival", "58"));
+        registry.Series.Add(CreateSeries("4321", "Breaking Bad", "75"));
+
+        var import = await CreateServiceAsync(registry, cancellationToken);
+
+        // Act
+        var result = await import.ImportAsync(source, progress: null, cancellationToken);
+
+        // Assert
+        result.MovieCount.ShouldBe(1);
+        result.SeriesCount.ShouldBe(1);
+        result.CategoryCount.ShouldBe(3, "across every kind the import covered");
+        result.HasVod.ShouldBeTrue();
+
+        registry.Calls.ShouldBe(
+        [
+            "authenticate",
+            "probe",
+            "categories:Live",
+            "channels",
+            "categories:Movie",
+            "movies",
+            "categories:Series",
+            "series",
+        ]);
+
+        var store = _services!.GetRequiredService<ICatalogueStore>();
+        (await store.GetMoviesAsync(result.SourceId, cancellationToken))
+            .ShouldHaveSingleItem()
+            .Name.ShouldBe("Arrival");
+        (await store.GetSeriesAsync(result.SourceId, cancellationToken))
+            .ShouldHaveSingleItem()
+            .Name.ShouldBe("Breaking Bad");
+    }
+
+    /// <summary>
+    /// Panels that lack these endpoints answer them with the authentication object or with an HTML error
+    /// page, so asking anyway would put two failed requests into every refresh of every playlist source.
+    /// </summary>
+    [Fact]
+    public async Task ImportAsync_WhenThePanelOffersNoFilmsOrSeries_DoesNotAskForThem()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var source = CreateSource();
+        var registry = new FakeProviderRegistry(source)
+        {
+            Capabilities = new ProviderCapabilities { SupportsLive = true },
+        };
+
+        var import = await CreateServiceAsync(registry, cancellationToken);
+
+        // Act
+        var result = await import.ImportAsync(source, progress: null, cancellationToken);
+
+        // Assert
+        registry.Calls.ShouldNotContain("movies");
+        registry.Calls.ShouldNotContain("series");
+        result.HasVod.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task ImportAsync_WithFilms_ReportsTheFilmStageBeforeStoring()
+    {
+        // Arrange: on a subscription that offers them this is the longest step of an import, which is why
+        // it is reported at all.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var source = CreateSource();
+        var registry = new FakeProviderRegistry(source)
+        {
+            Capabilities = new ProviderCapabilities { SupportsLive = true, SupportsVod = true },
+        };
+
+        var import = await CreateServiceAsync(registry, cancellationToken);
+        var stages = new List<SourceImportStage>();
+
+        // Act
+        await import.ImportAsync(source, new SynchronousProgress<SourceImportStage>(stages.Add), cancellationToken);
+
+        // Assert
+        stages.ShouldBe(
+        [
+            SourceImportStage.Authenticating,
+            SourceImportStage.Probing,
+            SourceImportStage.FetchingCatalogue,
+            SourceImportStage.FetchingVod,
+            SourceImportStage.Storing,
+        ]);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenTheSubscriptionStopsOfferingAFilm_RemovesIt()
+    {
+        // Arrange: reconciled on every import even when empty, so a withdrawn section does not leave an
+        // unplayable catalogue behind.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var source = CreateSource();
+        var registry = new FakeProviderRegistry(source)
+        {
+            Capabilities = new ProviderCapabilities { SupportsLive = true, SupportsVod = true },
+        };
+
+        registry.Movies.Add(CreateMovie("8412", "Arrival"));
+
+        var import = await CreateServiceAsync(registry, cancellationToken);
+        var imported = await import.ImportAsync(source, progress: null, cancellationToken);
+
+        // Act
+        registry.Movies.Clear();
+        await import.RefreshAsync(source, progress: null, cancellationToken);
+
+        // Assert
+        var store = _services!.GetRequiredService<ICatalogueStore>();
+        (await store.GetMoviesAsync(imported.SourceId, cancellationToken)).ShouldBeEmpty();
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_services is not null)
@@ -189,9 +325,32 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
         };
     }
 
-    private static Category CreateCategory(string externalId, string name)
+    private static Category CreateCategory(
+        string externalId,
+        string name,
+        ContentKind kind = ContentKind.Live)
     {
-        return new Category { ExternalId = externalId, Name = name, Kind = ContentKind.Live };
+        return new Category { ExternalId = externalId, Name = name, Kind = kind };
+    }
+
+    private static VodItem CreateMovie(string externalId, string name, string? categoryExternalId = null)
+    {
+        return new VodItem
+        {
+            ExternalId = externalId,
+            Name = name,
+            CategoryExternalId = categoryExternalId,
+        };
+    }
+
+    private static Series CreateSeries(string externalId, string name, string? categoryExternalId = null)
+    {
+        return new Series
+        {
+            ExternalId = externalId,
+            Name = name,
+            CategoryExternalId = categoryExternalId,
+        };
     }
 
     private static Channel CreateChannel(string externalId, string name, string? categoryExternalId = null)
@@ -211,6 +370,7 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
         await _connection.OpenAsync(cancellationToken);
 
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<ICredentialProtector, PassThroughCredentialProtector>();
         services.AddSingleton(registry);

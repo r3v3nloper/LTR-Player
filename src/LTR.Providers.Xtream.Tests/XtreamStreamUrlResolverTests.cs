@@ -84,6 +84,114 @@ public sealed class XtreamStreamUrlResolverTests
     }
 
     [Fact]
+    public void ResolveMovie_UsesTheMoviePathAndTheFilmsOwnContainer()
+    {
+        // Arrange
+        var resolver = new XtreamStreamUrlResolver();
+        var source = new XtreamSourceBuilder().WithCredentials("alice", "secret").Build();
+        var movie = new VodItem
+        {
+            SourceId = 1,
+            ExternalId = "8412",
+            Name = "Arrival",
+            ContainerExtension = "mkv",
+        };
+
+        // Act
+        var request = resolver.ResolveMovie(source, movie);
+
+        // Assert
+        request.Url.AbsoluteUri.ShouldBe("http://panel.example:8080/movie/alice/secret/8412.mkv");
+        request.Format.ShouldBe(StreamFormat.ProgressiveFile);
+        request.DisplayName.ShouldBe("Arrival");
+        request.StartAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public void ResolveMovie_WithoutAKnownContainer_AssumesTheCommonOne()
+    {
+        // Arrange: probing the address would occupy one of the account's very few connections, so the
+        // overwhelmingly common container is assumed and a 404 is what corrects it.
+        var resolver = new XtreamStreamUrlResolver();
+        var source = new XtreamSourceBuilder().WithCredentials("alice", "secret").Build();
+        var movie = new VodItem { SourceId = 1, ExternalId = "8412", Name = "Arrival" };
+
+        // Act
+        var request = resolver.ResolveMovie(source, movie);
+
+        // Assert
+        request.Url.AbsoluteUri.ShouldEndWith($"/8412.{XtreamStreamUrlResolver.DefaultContainerExtension}");
+    }
+
+    [Fact]
+    public void ResolveMovie_CarriesTheResumePositionIntoTheRequest()
+    {
+        // Arrange: stated up front rather than seeked to afterwards, because a seek before the engine
+        // has opened the media is discarded and one after it is a visible jump.
+        var resolver = new XtreamStreamUrlResolver();
+        var source = new XtreamSourceBuilder().Build();
+        var movie = new VodItem { SourceId = 1, ExternalId = "1", Name = "Arrival" };
+
+        // Act
+        var request = resolver.ResolveMovie(source, movie, TimeSpan.FromMinutes(40));
+
+        // Assert
+        request.StartAt.ShouldBe(TimeSpan.FromMinutes(40));
+    }
+
+    [Fact]
+    public void ResolveEpisode_UsesTheSeriesPathAndTheEpisodesOwnIdentifier()
+    {
+        // Arrange: an episode's address is built from its own id, never from its series'.
+        var resolver = new XtreamStreamUrlResolver();
+        var source = new XtreamSourceBuilder().WithCredentials("alice", "secret").Build();
+        var episode = new Episode
+        {
+            ExternalId = "1001",
+            Title = "Pilot",
+            Number = 1,
+            ContainerExtension = "mp4",
+        };
+
+        // Act
+        var request = resolver.ResolveEpisode(source, episode);
+
+        // Assert
+        request.Url.AbsoluteUri.ShouldBe("http://panel.example:8080/series/alice/secret/1001.mp4");
+        request.Format.ShouldBe(StreamFormat.ProgressiveFile);
+        request.DisplayName.ShouldBe("Pilot");
+    }
+
+    [Fact]
+    public void ResolveMovie_EscapesCredentialsAndIdentifiers()
+    {
+        // Arrange: credentials sit in path segments, where an unescaped slash silently changes the path.
+        var resolver = new XtreamStreamUrlResolver();
+        var source = new XtreamSourceBuilder().WithCredentials("a/b", "p@ss word").Build();
+        var movie = new VodItem { SourceId = 1, ExternalId = "1", Name = "X", ContainerExtension = "mp4" };
+
+        // Act
+        var request = resolver.ResolveMovie(source, movie);
+
+        // Assert
+        request.Url.AbsoluteUri.ShouldBe("http://panel.example:8080/movie/a%2Fb/p%40ss%20word/1.mp4");
+    }
+
+    [Fact]
+    public void ResolveMovie_ForANonXtreamSource_IsRejected()
+    {
+        // Arrange
+        var resolver = new XtreamStreamUrlResolver();
+        var movie = new VodItem { SourceId = 1, ExternalId = "1", Name = "X" };
+
+        // Act
+        var act = () => resolver.ResolveMovie(CreateM3uSource(), movie);
+
+        // Assert
+        act.ShouldThrow<NotSupportedException>();
+    }
+
+    [Fact]
     public void ChooseStreamFormat_WhenTheSourceHasNotBeenProbed_KeepsThePreference()
     {
         // Arrange: guessing against an unknown panel is worse than honouring the user's choice.

@@ -289,13 +289,23 @@ public sealed partial class SourceManagementViewModel : ObservableObject
         return new Progress<SourceImportStage>(stage => _status.Text = Describe(stage));
     }
 
-    private static string Describe(SourceImportStage stage)
+    /// <summary>
+    /// The sentence shown for each stage of an import.
+    /// </summary>
+    /// <remarks>
+    /// Internal rather than private so that every stage can be proved to have wording of its own.
+    /// <see cref="SourceImportStage.FetchingVod"/> was added with the film catalogue and the CLI was taught
+    /// to print it, while this switch was not — so the longest step of an import on a subscription of sixty
+    /// thousand films said "Working..." and nothing else.
+    /// </remarks>
+    internal static string Describe(SourceImportStage stage)
     {
         return stage switch
         {
             SourceImportStage.Authenticating => "Checking the subscription...",
             SourceImportStage.Probing => "Reading what the source supports...",
             SourceImportStage.FetchingCatalogue => "Loading the channel list...",
+            SourceImportStage.FetchingVod => "Loading the films and series...",
             SourceImportStage.Storing => "Storing the catalogue...",
             _ => "Working...",
         };

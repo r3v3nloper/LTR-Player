@@ -71,19 +71,8 @@ public sealed partial class ChannelItemViewModel : ObservableObject
     {
         NowTitle = slice?.Now?.Title ?? string.Empty;
         NowTimes = slice?.Now is { } now ? $"{Local(now.StartUtc)}–{Local(now.StopUtc)}" : string.Empty;
-        NowProgress = slice?.Now is { } running ? ProgressThrough(running, atUtc) : 0;
+        NowProgress = slice?.Now?.ProgressAt(atUtc) ?? 0;
         NextTitle = slice?.Next is { } next ? $"then {next.Title}" : string.Empty;
-    }
-
-    private static double ProgressThrough(EpgEntry entry, DateTimeOffset atUtc)
-    {
-        var duration = entry.Duration.TotalSeconds;
-
-        // A zero-length programme cannot occur — the import rejects one — but dividing by it here would
-        // take the window down rather than show an odd bar.
-        return duration <= 0
-            ? 0
-            : Math.Clamp((atUtc - entry.StartUtc).TotalSeconds / duration, 0, 1);
     }
 
     /// <summary>

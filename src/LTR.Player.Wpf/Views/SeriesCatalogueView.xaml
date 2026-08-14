@@ -1,0 +1,205 @@
+<UserControl x:Class="LTR.Player.Wpf.Views.SeriesCatalogueView"
+             x:Name="SectionRoot"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:LTR.Player.Wpf">
+
+  <!--
+    The series list and an open series' episodes replace one another rather than sharing the pane. Shown
+    together, the list was reduced to two visible rows — and a catalogue of eleven thousand series browsed
+    through a two-row window is not browsing.
+  -->
+  <Grid>
+    <!-- Browsing -->
+    <Grid Visibility="{Binding SeriesCatalogue.OpenSeries,
+                               Converter={StaticResource NullToVisibility}}">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+
+      <ComboBox Grid.Row="0"
+                ItemsSource="{Binding SeriesCatalogue.Categories}"
+                SelectedItem="{Binding SeriesCatalogue.SelectedCategory}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+
+      <TextBox Grid.Row="1"
+               Text="{Binding SeriesCatalogue.SearchText, UpdateSourceTrigger=PropertyChanged, Delay=300}"
+               Margin="0,8,0,8"
+               ToolTip="Search the series catalogue" />
+
+      <ListBox Grid.Row="2"
+               ItemsSource="{Binding SeriesCatalogue.Series}"
+               SelectedItem="{Binding SeriesCatalogue.SelectedSeries}"
+               ItemContainerStyle="{StaticResource CatalogueItem}"
+               Background="Transparent"
+               BorderThickness="0"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+               VirtualizingPanel.IsVirtualizing="True"
+               VirtualizingPanel.VirtualizationMode="Recycling"
+               VirtualizingPanel.ScrollUnit="Pixel">
+        <ListBox.ItemTemplate>
+          <DataTemplate DataType="{x:Type local:SeriesItemViewModel}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+
+              <Border Grid.Column="0"
+                      Width="40"
+                      Height="60"
+                      Margin="0,0,8,0"
+                      Background="{StaticResource SurfaceBrush}">
+                <Image Source="{Binding CoverUrl, Converter={StaticResource RowCover}}"
+                       Stretch="UniformToFill" />
+              </Border>
+
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Details}"
+                           Style="{StaticResource MutedText}"
+                           Margin="0,2,0,0"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Grid>
+
+    <!-- One series open -->
+    <Grid Visibility="{Binding SeriesCatalogue.OpenSeries,
+                               Converter={StaticResource NotNullToVisibility}}">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+
+      <Grid Grid.Row="0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Button Grid.Column="0"
+                Content="←"
+                Padding="10,6"
+                Background="{StaticResource BorderBrush}"
+                ToolTip="Back to the series list"
+                Command="{Binding SeriesCatalogue.CloseSeriesCommand}" />
+
+        <TextBlock Grid.Column="1"
+                   Text="{Binding SeriesCatalogue.OpenSeries.Name}"
+                   FontWeight="SemiBold"
+                   VerticalAlignment="Center"
+                   Margin="10,0,0,0"
+                   TextTrimming="CharacterEllipsis" />
+      </Grid>
+
+      <TextBlock Grid.Row="1"
+                 Text="{Binding SeriesCatalogue.OpenSeries.Plot}"
+                 Style="{StaticResource MutedText}"
+                 Margin="0,8,0,0"
+                 MaxHeight="56"
+                 TextWrapping="Wrap"
+                 TextTrimming="CharacterEllipsis" />
+
+      <Grid Grid.Row="2" Margin="0,10,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <ComboBox Grid.Column="0"
+                  ItemsSource="{Binding SeriesCatalogue.Seasons}"
+                  SelectedItem="{Binding SeriesCatalogue.SelectedSeason}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="{x:Type local:SeasonChoice}">
+              <TextBlock TextTrimming="CharacterEllipsis">
+                <Run Text="{Binding Name, Mode=OneWay}" />
+                <Run Text="{Binding EpisodeCount, Mode=OneWay}"
+                     Foreground="{StaticResource MutedTextBrush}" />
+              </TextBlock>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <TextBlock Grid.Column="1"
+                   Text="Loading..."
+                   Style="{StaticResource MutedText}"
+                   VerticalAlignment="Center"
+                   Margin="8,0,0,0"
+                   Visibility="{Binding SeriesCatalogue.IsLoadingEpisodes,
+                                        Converter={StaticResource BooleanToVisibility}}" />
+      </Grid>
+
+      <!--
+        Double-clicking a row plays it, as it does in every other list here. Without that the list looked
+        interactive and answered only to the small button at its right edge.
+      -->
+      <ListBox Grid.Row="3"
+               Margin="0,8,0,0"
+               ItemsSource="{Binding SeriesCatalogue.Episodes}"
+               SelectedItem="{Binding SeriesCatalogue.SelectedEpisode}"
+               ItemContainerStyle="{StaticResource CatalogueItem}"
+               Background="Transparent"
+               BorderThickness="0"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+               VirtualizingPanel.IsVirtualizing="True"
+               VirtualizingPanel.VirtualizationMode="Recycling"
+               VirtualizingPanel.ScrollUnit="Pixel"
+               MouseDoubleClick="OnEpisodeActivated">
+        <ListBox.ItemTemplate>
+          <DataTemplate DataType="{x:Type local:EpisodeItemViewModel}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="52" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+
+              <TextBlock Grid.Column="0"
+                         Text="{Binding Label}"
+                         Style="{StaticResource MutedText}"
+                         VerticalAlignment="Center" />
+
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Title}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding Title}" />
+                <TextBlock Text="{Binding ResumeLabel}"
+                           Foreground="{StaticResource AccentBrush}"
+                           FontSize="12"
+                           Visibility="{Binding ResumeLabel,
+                                                Converter={StaticResource NonEmptyStringToVisibility}}" />
+              </StackPanel>
+
+              <!--
+                A button per row rather than a shared one below, because an episode list is acted on by
+                picking one of twenty rather than by selecting and then confirming.
+              -->
+              <Button Grid.Column="2"
+                      Content="▶"
+                      Padding="8,4"
+                      Margin="6,0,0,0"
+                      Background="{StaticResource BorderBrush}"
+                      ToolTip="Play this episode"
+                      Command="{Binding DataContext.PlayEpisodeCommand,
+                                        ElementName=SectionRoot}"
+                      CommandParameter="{Binding}" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Grid>
+  </Grid>
+</UserControl>

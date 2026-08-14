@@ -27,6 +27,7 @@ internal static class XtreamJson
 
         options.Converters.Add(new TolerantInt32Converter());
         options.Converters.Add(new TolerantNullableInt64Converter());
+        options.Converters.Add(new TolerantNullableDoubleConverter());
         options.Converters.Add(new TolerantBooleanConverter());
         options.Converters.Add(new TolerantStringConverter());
 

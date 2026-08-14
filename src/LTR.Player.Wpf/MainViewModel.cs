@@ -1,27 +1,35 @@
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using LTR.Catalogue;
+using LTR.Core.Content;
+using LTR.Core.Playback;
 using LTR.Core.Sources;
-using LTR.Playback;
-using LTR.Providers;
 using Microsoft.Extensions.Logging;
 
 namespace LTR.Player.Wpf;
 
 /// <summary>
-/// Drives the main window: composes source management, the channel list and the guide, and owns playback.
+/// Drives the main window: composes the catalogue sections and the guide, and turns what the viewer does
+/// into work for the coordinators.
 /// </summary>
 /// <remarks>
-/// It is also the halves' <see cref="ISourceCoordinator"/>, which is what keeps them from knowing about one
-/// another. Only this class can reach the channel list, the guide and the stream at once, and those are
-/// exactly the things source management has to trigger.
+/// <para>
+/// It is also the sections' <see cref="ISourceCoordinator"/>, which is what keeps them from knowing about one
+/// another. Only this class can reach the lists, the guide and playback at once, and those are exactly the
+/// things source management has to trigger.
+/// </para>
+/// <para>
+/// Deliberately thin now. Opening a stream and remembering a position belong to
+/// <see cref="PlaybackCoordinator"/>, running a guide import to <see cref="GuideImportCoordinator"/>; what is
+/// left here is composition, the section selection, and commands that are two lines each. It had grown to
+/// four responsibilities twice, and both times the same way — by being the only place that could reach
+/// everything.
+/// </para>
 /// </remarks>
 public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator, IAsyncDisposable
 {
-    private readonly IProviderRegistry _providers;
-    private readonly IPlaybackSession _session;
-    private readonly IGuideImportService _guideImport;
+    private readonly PlaybackCoordinator _playback;
+    private readonly GuideImportCoordinator _guideImport;
     private readonly ILogger<MainViewModel> _logger;
 
     /// <summary>
@@ -36,43 +44,53 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     private readonly CancellationTokenSource _shellLifetime = new();
 
     /// <summary>
-    /// The import in flight, so a second one is not started alongside it and so shutdown can wait for it
-    /// to notice its cancellation.
+    /// The list reloads and detail fetches started in answer to a property change.
     /// </summary>
-    private Task _guideImportTask = Task.CompletedTask;
+    /// <remarks>
+    /// Followed rather than kept: nothing in the application waits on them, but something has to be able to
+    /// ask whether the shell has finished reacting — see <see cref="SectionWorkCompletion"/>.
+    /// </remarks>
+    private readonly PendingWork _sectionWork = new();
 
     [ObservableProperty]
-    private string _nowPlaying = string.Empty;
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ImportGuideCommand))]
-    private bool _isImportingGuide;
+    private CatalogueSection _selectedSection = CatalogueSection.Live;
 
     public MainViewModel(
         SourceManagementViewModel sources,
         ChannelListViewModel channels,
         GuideViewModel guide,
+        MovieListViewModel movies,
+        SeriesCatalogueViewModel series,
+        ContinueWatchingViewModel continueWatching,
         StatusLine status,
-        IProviderRegistry providers,
-        IPlaybackSession session,
-        IGuideImportService guideImport,
+        PlaybackCoordinator playback,
+        GuideImportCoordinator guideImport,
         ILogger<MainViewModel> logger)
     {
         SourceManagement = sources;
         Channels = channels;
         Guide = guide;
+        Movies = movies;
+        SeriesCatalogue = series;
+        ContinueWatching = continueWatching;
         Status = status;
 
-        _providers = providers;
-        _session = session;
+        _playback = playback;
         _guideImport = guideImport;
         _logger = logger;
 
         Channels.PropertyChanged += OnChannelListPropertyChanged;
         SourceManagement.PropertyChanged += OnSourceManagementPropertyChanged;
-        _session.StateChanged += OnPlaybackStateChanged;
+        Movies.PropertyChanged += OnMovieListPropertyChanged;
+        SeriesCatalogue.PropertyChanged += OnSeriesPropertyChanged;
+        ContinueWatching.PropertyChanged += OnContinueWatchingPropertyChanged;
+        _guideImport.PropertyChanged += OnGuideImportPropertyChanged;
+        _playback.PropertyChanged += OnPlaybackPropertyChanged;
 
         SourceManagement.Coordinator = this;
+
+        // The coordinator writes positions; the three lists that display one are known only here.
+        _playback.ProgressRecorded = RefreshWhatShowsProgressAsync;
     }
 
     public SourceManagementViewModel SourceManagement { get; }
@@ -81,17 +99,31 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
     public GuideViewModel Guide { get; }
 
+    public MovieListViewModel Movies { get; }
+
+    public SeriesCatalogueViewModel SeriesCatalogue { get; }
+
+    public ContinueWatchingViewModel ContinueWatching { get; }
+
     public StatusLine Status { get; }
 
+    /// <summary>What is playing, for the overlay over the video.</summary>
+    public string NowPlaying => _playback.NowPlaying;
+
+    /// <summary>The guide import in flight, or an already completed task.</summary>
+    public Task GuideImportCompletion => _guideImport.Completion;
+
+    public bool IsImportingGuide => _guideImport.IsImporting;
+
     /// <summary>
-    /// The guide import in flight, or an already completed task.
+    /// Completes once the shell has finished reacting to the last selection or search.
     /// </summary>
     /// <remarks>
-    /// Exposed because a background task nothing can observe is also a background task nothing can shut
-    /// down or test. <see cref="DisposeAsync"/> waits on it, and so does anything that needs to know the
-    /// import has finished.
+    /// Exposed for tests, which otherwise have no way to tell a section that is still loading from one that
+    /// has loaded nothing. Awaiting it is not part of using the window: a viewer changing the search does not
+    /// wait for the previous one, and neither does anything in the application.
     /// </remarks>
-    public Task GuideImportCompletion => _guideImportTask;
+    public Task SectionWorkCompletion => _sectionWork.Completion;
 
     /// <summary>
     /// Loads the configured sources, so a restart lands straight in the channel list.
@@ -113,6 +145,17 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     {
         Guide.UpdateNowMarker();
 
+        // Nothing is matched, so there is nothing for a reread to change — and the query behind it is the
+        // largest one the player makes. A subscription with no guide imported would otherwise pay for it
+        // every minute for as long as the window is open.
+        //
+        // Only the timer skips. The catalogue load and the post-import reload call the channel list directly,
+        // which is what lets a guide that has just arrived be picked up at all.
+        if (!Channels.HasGuide)
+        {
+            return;
+        }
+
         try
         {
             await Channels.RefreshGuideAsync(_shellLifetime.Token).ConfigureAwait(true);
@@ -129,19 +172,25 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         }
     }
 
+    /// <summary>Samples where playback has reached. Driven by a timer the window owns.</summary>
+    public void ObservePlaybackPosition()
+    {
+        _playback.ObservePosition();
+    }
+
     /// <summary>
     /// Hands the provider connection back before the window goes away.
     /// </summary>
     /// <remarks>
-    /// Not a command, because it is not a user action. The playback release itself is deliberately not
-    /// cancellable — a subscription permitting a single connection is unusable for minutes if the player
-    /// exits still holding one — but everything else the shell has in flight is abandoned first, so closing
-    /// the window does not wait on a catalogue load or a guide download.
+    /// Not a command, because it is not a user action. Everything the shell has in flight is abandoned first,
+    /// so closing the window does not wait on a catalogue load or a guide download — but the release itself
+    /// is not cancellable, because a subscription permitting a single connection is unusable for minutes if
+    /// the player exits still holding one.
     /// </remarks>
     public async Task ShutdownAsync()
     {
         await _shellLifetime.CancelAsync().ConfigureAwait(true);
-        await ReleasePlaybackAsync(CancellationToken.None).ConfigureAwait(true);
+        await _playback.ShutdownAsync().ConfigureAwait(true);
     }
 
     async Task ISourceCoordinator.ShowCatalogueAsync(PlaylistSource? source, CancellationToken cancellationToken)
@@ -155,6 +204,17 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         {
             await Channels.ShowAsync(source, lifetime.Token).ConfigureAwait(true);
             Guide.Attach(source, Channels.VisibleChannels);
+
+            await Movies.ShowAsync(source, lifetime.Token).ConfigureAwait(true);
+            await SeriesCatalogue.ShowAsync(source, lifetime.Token).ConfigureAwait(true);
+            await ContinueWatching.ShowAsync(source, lifetime.Token).ConfigureAwait(true);
+
+            // A section that the new source does not offer must not stay on screen showing the last one's
+            // catalogue.
+            if (!IsSectionAvailable(SelectedSection))
+            {
+                SelectedSection = CatalogueSection.Live;
+            }
         }
         catch (OperationCanceledException)
         {
@@ -171,7 +231,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
     Task ISourceCoordinator.ReleasePlaybackAsync(CancellationToken cancellationToken)
     {
-        return ReleasePlaybackAsync(cancellationToken);
+        return _playback.StopAsync(cancellationToken);
     }
 
     void ISourceCoordinator.CatalogueImported(PlaylistSource source)
@@ -193,26 +253,8 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             return;
         }
 
-        var request = _providers.GetStreamUrlResolver(source).ResolveLive(source, item.Channel);
-        NowPlaying = item.Name;
-
-        try
-        {
-            await _session.SwitchToAsync(request, cancellationToken).ConfigureAwait(true);
-        }
-        catch (PlaybackFailedException exception)
-        {
-            // Expected in daily use: providers take channels offline without notice.
-            PlayerLog.ChannelUnplayable(_logger, exception, item.Name);
-            Status.Text = $"{item.Name} could not be played. The channel may be offline.";
-            NowPlaying = string.Empty;
-        }
-        catch (OperationCanceledException)
-        {
-            // Zapping onwards cancels the open that was still in flight. That is the intended
-            // behaviour of a channel change, not a failure — and left unhandled it surfaces as an
-            // error dialog for an ordinary key press.
-        }
+        await _playback.PlayChannelAsync(source, item.Channel, item.Name, cancellationToken)
+            .ConfigureAwait(true);
     }
 
     private bool HasSelectedChannel()
@@ -220,10 +262,136 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         return Channels.SelectedChannel is not null;
     }
 
+    /// <summary>Plays the selected film, picking up where it was left if it was started before.</summary>
+    [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(HasSelectedMovie))]
+    private Task PlayMovieAsync(CancellationToken cancellationToken)
+    {
+        return PlaySelectedMovieAsync(fromStart: false, cancellationToken);
+    }
+
+    /// <summary>Plays the selected film from the beginning, ignoring its resume point.</summary>
+    [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(CanRestartMovie))]
+    private Task RestartMovieAsync(CancellationToken cancellationToken)
+    {
+        return PlaySelectedMovieAsync(fromStart: true, cancellationToken);
+    }
+
+    private bool HasSelectedMovie()
+    {
+        return Movies.SelectedMovie is not null;
+    }
+
+    private bool CanRestartMovie()
+    {
+        return CurrentMovie()?.HasResumePoint ?? false;
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task PlayEpisodeAsync(EpisodeItemViewModel? episode, CancellationToken cancellationToken)
+    {
+        if (episode is null || SourceManagement.SelectedSource is not { } source)
+        {
+            return;
+        }
+
+        await _playback
+            .PlayEpisodeAsync(
+                source,
+                episode.Episode,
+                ResumeFrom(episode.Episode.ResumePositionSeconds),
+                $"{OpenSeriesName()}{episode.Label} · {episode.Title}",
+                cancellationToken)
+            .ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Resumes a continue-watching entry, whichever kind it is.
+    /// </summary>
+    /// <remarks>
+    /// The entry holds the identity of a film or of an episode, never of a series, so the item it refers to
+    /// is loaded and played directly. Nothing about its series or season is needed.
+    /// </remarks>
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task ResumeEntryAsync(ContinueWatchingEntry? entry, CancellationToken cancellationToken)
+    {
+        if (entry is null || SourceManagement.SelectedSource is not { } source)
+        {
+            return;
+        }
+
+        var startAt = ResumePolicy.StartFrom(entry.Position);
+
+        if (entry.Kind == ContentKind.Movie)
+        {
+            var movie = await ContinueWatching.FindMovieAsync(entry.ItemId, cancellationToken)
+                .ConfigureAwait(true);
+
+            if (movie is null)
+            {
+                Status.Text = "That film is no longer in the catalogue.";
+                return;
+            }
+
+            await _playback.PlayMovieAsync(source, movie, startAt, movie.Name, cancellationToken)
+                .ConfigureAwait(true);
+
+            return;
+        }
+
+        var episode = await ContinueWatching.FindEpisodeAsync(entry.ItemId, cancellationToken)
+            .ConfigureAwait(true);
+
+        if (episode is null)
+        {
+            Status.Text = "That episode is no longer in the catalogue.";
+            return;
+        }
+
+        await _playback
+            .PlayEpisodeAsync(source, episode, startAt, $"{entry.Title} · {entry.Subtitle}", cancellationToken)
+            .ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Takes an entry off the continue-watching list.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than on the section alone, because the resume point it forgets is shown in two more
+    /// places: the film row's "Resume at" line and the episode list's. Forgetting it in one and leaving it in
+    /// the others is the kind of disagreement that reads as the removal not having worked.
+    /// </remarks>
+    [RelayCommand]
+    private async Task ForgetEntryAsync(ContinueWatchingEntry? entry, CancellationToken cancellationToken)
+    {
+        if (entry is null)
+        {
+            return;
+        }
+
+        // Anything being followed has to stop being followed, or stopping playback afterwards would write
+        // the position straight back.
+        _playback.StopFollowing();
+
+        try
+        {
+            await ContinueWatching.ForgetAsync(entry, cancellationToken).ConfigureAwait(true);
+            await RefreshWhatShowsProgressAsync(cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            // The window is closing.
+        }
+        catch (Exception exception)
+        {
+            PlayerLog.ProgressNotRecorded(_logger, exception, entry.Kind.ToString(), entry.ItemId);
+            Status.Text = "That could not be taken off the list. Details are in the log.";
+        }
+    }
+
     [RelayCommand]
     private Task StopAsync(CancellationToken cancellationToken)
     {
-        return ReleasePlaybackAsync(cancellationToken);
+        return _playback.StopAsync(cancellationToken);
     }
 
     /// <summary>
@@ -262,101 +430,79 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
     private bool CanImportGuide()
     {
-        return !IsImportingGuide && SourceManagement.SelectedSource is not null;
+        return !_guideImport.IsImporting && SourceManagement.SelectedSource is not null;
     }
 
-    /// <summary>
-    /// Runs a guide import in the background and reports it through the status line.
-    /// </summary>
-    /// <remarks>
-    /// Not awaited by its caller, which is the point: an import takes minutes and the window has to stay
-    /// usable throughout, including for playback. What keeps that from being fire-and-forget in the bad
-    /// sense is that the task is kept, every failure is caught and reported here, and shutdown cancels it.
-    /// </remarks>
     private void StartGuideImport(PlaylistSource source, bool onlyWhenStale)
     {
-        if (IsImportingGuide)
+        _guideImport.Start(source, onlyWhenStale, ReloadAfterGuideImportAsync, _shellLifetime.Token);
+    }
+
+    private async Task ReloadAfterGuideImportAsync()
+    {
+        await Channels.RefreshGuideAsync(_shellLifetime.Token).ConfigureAwait(true);
+
+        if (Guide.IsVisible)
+        {
+            await Guide.LoadAsync(_shellLifetime.Token).ConfigureAwait(true);
+        }
+    }
+
+    private async Task PlaySelectedMovieAsync(bool fromStart, CancellationToken cancellationToken)
+    {
+        if (CurrentMovie() is not { } row || SourceManagement.SelectedSource is not { } source)
         {
             return;
         }
 
-        IsImportingGuide = true;
-        _guideImportTask = RunGuideImportAsync(source, onlyWhenStale);
+        var startAt = fromStart ? null : ResumeFrom(row.Movie.ResumePositionSeconds);
+
+        await _playback.PlayMovieAsync(source, row.Movie, startAt, row.Name, cancellationToken)
+            .ConfigureAwait(true);
     }
 
-    private async Task RunGuideImportAsync(PlaylistSource source, bool onlyWhenStale)
+    /// <summary>
+    /// The film whose detail is on screen, falling back to the selected row while it is still loading.
+    /// </summary>
+    private MovieItemViewModel? CurrentMovie()
     {
-        var progress = new Progress<GuideImportStage>(stage => Status.Text = Describe(stage));
-
-        try
-        {
-            var result = onlyWhenStale
-                ? await _guideImport
-                    .ImportIfStaleAsync(source, progress, _shellLifetime.Token)
-                    .ConfigureAwait(true)
-                : await _guideImport
-                    .ImportAsync(source, progress, _shellLifetime.Token)
-                    .ConfigureAwait(true);
-
-            Status.Text = Describe(result, source);
-
-            if (result.Succeeded)
-            {
-                await Channels.RefreshGuideAsync(_shellLifetime.Token).ConfigureAwait(true);
-
-                if (Guide.IsVisible)
-                {
-                    await Guide.LoadAsync(_shellLifetime.Token).ConfigureAwait(true);
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Either the window is closing or the source was removed. Neither is worth reporting.
-        }
-        catch (Exception exception)
-        {
-            PlayerLog.GuideImportFailed(_logger, exception, source.Name);
-            Status.Text = "The programme guide could not be loaded. Details are in the log.";
-        }
-        finally
-        {
-            IsImportingGuide = false;
-        }
+        return Movies.DetailedMovie ?? Movies.SelectedMovie;
     }
 
-    private static string Describe(GuideImportStage stage)
+    private string OpenSeriesName()
     {
-        return stage switch
+        return SeriesCatalogue.OpenSeries is { } series ? $"{series.Name} · " : string.Empty;
+    }
+
+    private static TimeSpan? ResumeFrom(int? resumePositionSeconds)
+    {
+        return resumePositionSeconds is { } seconds and > 0
+            ? ResumePolicy.StartFrom(TimeSpan.FromSeconds(seconds))
+            : null;
+    }
+
+    /// <summary>
+    /// Rereads the three places a stored position is displayed.
+    /// </summary>
+    /// <remarks>
+    /// A resume point appears on a film row, on an episode row and as a continue-watching entry. Any change
+    /// to one has to reach all three, or the same position is offered in one place and gone from another.
+    /// </remarks>
+    private async Task RefreshWhatShowsProgressAsync(CancellationToken cancellationToken)
+    {
+        await Movies.RefreshSelectedAsync(cancellationToken).ConfigureAwait(true);
+        await SeriesCatalogue.RefreshOpenSeriesAsync(cancellationToken).ConfigureAwait(true);
+        await ContinueWatching.ReloadAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    private bool IsSectionAvailable(CatalogueSection section)
+    {
+        return section switch
         {
-            GuideImportStage.Locating => "Looking for the programme guide...",
-            GuideImportStage.Reading => "Reading the programme guide...",
-            GuideImportStage.Matching => "Matching the guide to the channel list...",
-            GuideImportStage.Pruning => "Tidying up the guide...",
-            _ => "Working...",
+            CatalogueSection.Movies => Movies.IsAvailable,
+            CatalogueSection.Series => SeriesCatalogue.IsAvailable,
+            _ => true,
         };
-    }
-
-    private static string Describe(GuideImportResult result, PlaylistSource source)
-    {
-        return result.Outcome switch
-        {
-            GuideImportOutcome.Imported when result.MatchedChannelCount == 0 =>
-                "The guide loaded but matched none of the channels. Its channel names do not resemble "
-                + "this subscription's.",
-            GuideImportOutcome.Imported =>
-                $"Guide loaded: {result.ProgrammeCount} programmes on {result.MatchedChannelCount} channels.",
-            GuideImportOutcome.NoGuideAvailable => $"{source.Name} offers no programme guide.",
-            GuideImportOutcome.Empty =>
-                "The guide address answered with something that is not a programme guide.",
-            _ => "The stored programme guide is already up to date.",
-        };
-    }
-
-    private async Task ReleasePlaybackAsync(CancellationToken cancellationToken)
-    {
-        await _session.StopAsync(cancellationToken).ConfigureAwait(true);
-        NowPlaying = string.Empty;
     }
 
     /// <summary>
@@ -401,12 +547,95 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         ImportGuideCommand.NotifyCanExecuteChanged();
     }
 
-    private void OnPlaybackStateChanged(object? sender, PlaybackStateChangedEventArgs e)
+    /// <remarks>
+    /// Also the place the film detail is fetched from. Selecting a film means a network call, which a
+    /// property setter cannot await — so the section reports the selection and the shell, which owns the
+    /// lifetime token, drives the work.
+    /// </remarks>
+    private void OnMovieListPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.Current == PlaybackState.Playing)
+        switch (e.PropertyName)
         {
-            Status.Text = $"Playing {NowPlaying}";
+            case null or "" or nameof(MovieListViewModel.SelectedMovie):
+                PlayMovieCommand.NotifyCanExecuteChanged();
+                RestartMovieCommand.NotifyCanExecuteChanged();
+                Run(Movies.LoadSelectedDetailAsync);
+                break;
+
+            case nameof(MovieListViewModel.DetailedMovie):
+                RestartMovieCommand.NotifyCanExecuteChanged();
+                break;
+
+            case nameof(MovieListViewModel.SearchText) or nameof(MovieListViewModel.SelectedCategory):
+                Run(Movies.SearchAsync);
+                break;
+
+            default:
+                break;
         }
+    }
+
+    private void OnSeriesPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case null or "" or nameof(SeriesCatalogueViewModel.SelectedSeries):
+                Run(SeriesCatalogue.LoadSelectedAsync);
+                break;
+
+            case nameof(SeriesCatalogueViewModel.SearchText)
+                or nameof(SeriesCatalogueViewModel.SelectedCategory):
+                Run(SeriesCatalogue.SearchAsync);
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    private void OnContinueWatchingPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is null or "" or nameof(ContinueWatchingViewModel.SelectedEntry))
+        {
+            ResumeEntryCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private void OnGuideImportPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is not (null or "" or nameof(GuideImportCoordinator.IsImporting)))
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(IsImportingGuide));
+        ImportGuideCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <remarks>
+    /// The overlay binds <see cref="NowPlaying"/> here rather than reaching into the coordinator, so the
+    /// change has to be forwarded — the same object-boundary problem as the command guards above.
+    /// </remarks>
+    private void OnPlaybackPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is null or "" or nameof(PlaybackCoordinator.NowPlaying))
+        {
+            OnPropertyChanged(nameof(NowPlaying));
+        }
+    }
+
+    /// <summary>
+    /// Runs work triggered by a property change, which cannot be awaited where it is raised.
+    /// </summary>
+    /// <remarks>
+    /// Each of these reloads a list, is cancelled by the shell lifetime and handles its own failures, so
+    /// nothing in the application waits on one. It is followed all the same, through
+    /// <see cref="SectionWorkCompletion"/>: a test otherwise has no way to know the shell has finished
+    /// reacting, and the version of this that had none made the tests spin on <c>Task.Yield()</c>.
+    /// </remarks>
+    private void Run(Func<CancellationToken, Task> work)
+    {
+        _sectionWork.Add(work(_shellLifetime.Token));
     }
 
     /// <summary>
@@ -415,16 +644,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     public async ValueTask DisposeAsync()
     {
         await _shellLifetime.CancelAsync().ConfigureAwait(false);
-
-        try
-        {
-            await _guideImportTask.ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            // Already reported by the import itself; failing to shut down over it would be worse.
-            PlayerLog.GuideImportFailed(_logger, exception, string.Empty);
-        }
+        await _guideImport.DrainAsync().ConfigureAwait(false);
 
         _shellLifetime.Dispose();
     }

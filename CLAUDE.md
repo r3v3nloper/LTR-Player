@@ -17,13 +17,16 @@ exists and not what was considered finished.
 | **M1** Vertical slice — login, channel list, picture | done | |
 | **M2** Sources complete — M3U, several sources, favourites, search, categories | done | |
 | **M3** Guide — XMLTV import, now/next, timeline, detail | done | see the caveat below |
-| **M4** VOD + series | not started | next |
-| **M5** Player polish — OSD, fullscreen, keyboard, tracks | not started | |
+| **M4** VOD + series — catalogue, seasons, resume | done | `Docs/vod.md` |
+| **M5** Player polish — OSD, fullscreen, keyboard, tracks | not started | next; the seek bar belongs here |
 | **M6** Hardening — error handling, settings, packaging | not started | the corrupt-database quarantine landed early, with M3 |
 
 M3's timeline scrolls its channel names out of view with the programme blocks, and draws at most 200 rows.
 Both are stated on screen and carried as ranks 14 and 18 in `Docs/refactoring-backlog.md`; neither is
 considered a gap in the milestone.
+
+M4 resumes but does not seek: a viewer can carry on where they left off, and cannot scrub. That is M5's OSD
+work, not an omission from M4.
 
 ## Layout
 
@@ -40,9 +43,10 @@ LTR.Playback[.Abstractions]    Engine-neutral playback policy
 LTR.Playback.LibVlc            LibVLC engine
 LTR.Security.Dpapi             Windows credential protection, kept out of Core on purpose
 LTR.Cli                        Headless verification of everything below the UI (§2.12)
-LTR.Player.Wpf                 The only project that references WPF. MainViewModel composes
-                               SourceManagementViewModel and ChannelListViewModel and is their
-                               ISourceCoordinator; the two halves never reference each other
+LTR.Player.Wpf                 The only project that references WPF. MainViewModel composes the four
+                               catalogue sections and the guide and is their ISourceCoordinator; the
+                               sections never reference each other. Views/ holds one UserControl per
+                               section, so MainWindow.xaml is composition only
 ```
 
 Dependency direction: apps → Catalogue/Providers/Playback → *.Abstractions → Core. Core knows nobody.
@@ -65,6 +69,12 @@ reject unfamiliar user agents, and redirect to streaming nodes.
 **Stream URLs are never probed.** Opening one occupies a connection slot. A probe that locks the user
 out of their own subscription is worse than defaulting to the prefixed `/live/` form and correcting on
 a 404.
+
+**A film's container extension is part of its address, and its seasons are a second call.** `get_vod_streams`
+and `get_series` are cheap; `get_series_info` is one call per series against eleven thousand of them, so
+seasons are fetched when a series is opened and cached against the panel's own `last_modified`. An episode
+listing arrives in three different shapes, which is why `XtreamSeriesInfoResponseDto.Episodes` stays raw
+JSON. `Docs/vod.md` has the rest.
 
 **Real data is messier than fixtures.** A 17,000-channel subscription contains decorative separator
 rows carrying valid stream ids (`ChannelNaming.IsSeparatorLabel`), and 72% of its channels have no
@@ -89,6 +99,13 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   `MigrationUpgradeTests` is the one that matters for shipped installations: SQLite cannot alter a
   constraint in place, so EF implements one by rebuilding the table, and a rebuild is what silently empties
   it. Add a case there for every migration that alters an existing table.
+- **A panel numbers its category identifiers per section,** so `58` is a live category and a film category
+  at once. Category reconciliation is therefore scoped to the *kinds* an import covers, not to the source —
+  scoped to the source, a live refresh deletes every film category — and its lookup is keyed by
+  `(ExternalId, Kind)`, because a dictionary keyed by the identifier alone throws on the duplicate.
+- **A listing may overwrite what a listing owns, and must never blank out what a detail call supplied.**
+  Panels state a synopsis in `get_vod_info` and not in `get_vod_streams`, so a refresh that assigned the
+  listing's fields unconditionally would erase every synopsis the player had fetched.
 
 ## WPF traps, each of which shipped a bug once
 
@@ -106,6 +123,9 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   resolve with `DisplayMemberPath` and leaves the control rendering `ToString()`.
 - **`Progress<T>` and `ICollectionView.Refresh` both matter:** a refresh resets the collection and the
   list box drops its selection, so it has to be restored.
+- **Fill a bound collection before selecting in it.** Emptying one makes a `ComboBox` write a null selection
+  back through the binding, so a selection assigned first is discarded. Both new pickers rendered blank while
+  their lists looked perfectly correct, because the filter read the same null as "every category".
 - **Dispose the DI container asynchronously.** It holds `IAsyncDisposable` singletons; the synchronous
   `Dispose` throws and `PlaybackSession` never releases its stream.
 - **A view model that reads the clock must be given a `TimeProvider`.** `DateTimeOffset.UtcNow` in
@@ -114,6 +134,10 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
 - **`ShowCatalogueAsync` swallows cancellation as well as failure.** Source management starts it without
   awaiting when the selection changes, so anything escaping becomes an unobserved task exception. That only
   became reachable once the shell gained a lifetime token to cancel.
+- **A resume position has to be sampled while playback runs.** By the time a stream is closed the engine
+  has no position to report, so `WatchProgressRecorder` keeps the last sample and a five-second timer feeds
+  it. Anything that reads a position only at the moment of saving saves nothing, and the test that catches
+  that is the one where nothing samples between playing and stopping.
 - **`Progress<T>` delivers through a synchronisation context.** In a test with none, a stage message can land
   after the result message an assertion is reading. The guide-import fake reports progress only when asked.
 
@@ -126,14 +150,24 @@ dotnet run --project src/LTR.Cli -- probe    --url http://HOST:PORT --user U --p
 dotnet run --project src/LTR.Cli -- channels --url http://HOST:PORT --user U --pass P
 dotnet run --project src/LTR.Cli -- play-test --url http://HOST:PORT --user U --pass P --stream-id ID
 dotnet run --project src/LTR.Cli -- guide import --source-id ID
+dotnet run --project src/LTR.Cli -- sources refresh ID
+dotnet run --project src/LTR.Cli -- vod episodes --source-id ID --series-id LOCAL_ID
+dotnet run --project src/LTR.Cli -- vod play-test --source-id ID --movie-id LOCAL_ID --start-at 2400
 ```
 
 `play-test`'s last line is the real test: it polls the panel until it reports the connection released.
 `guide import`'s `Matched N of M` is the equivalent for the guide — everything else about an import can
-succeed while it achieves nothing.
+succeed while it achieves nothing. For films it is `vod play-test`'s `Position`: asked to start forty
+minutes in, a film that reports `unknown` silently restarted from the beginning and looks healthy from
+every other angle.
 
-`sources add-playlist <path-to.m3u>` seeds a source with no credentials, which is how UI behaviour that
-needs a configured source gets verified without a subscription.
+**Run the play-tests one at a time.** A one-connection subscription answers the next stream with HTTP 200
+and an empty body while it still counts the previous one, which reads exactly like a broken film.
+
+`sources refresh ID` is the only way to import an Xtream catalogue without the window, and therefore the
+only way the film and series import is verifiable headlessly. `sources add-playlist <path-to.m3u>` seeds a
+source with no credentials, which is how UI behaviour that needs a configured source gets verified without a
+subscription.
 
 ## Working in this repository
 

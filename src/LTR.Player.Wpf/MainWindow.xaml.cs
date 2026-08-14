@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Threading;
 using LTR.Playback.LibVlc;
 
@@ -21,8 +20,19 @@ public partial class MainWindow : Window
     /// </remarks>
     private static readonly TimeSpan GuideRefreshInterval = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// How often playback's position is sampled, so a resume point survives the stream being closed.
+    /// </summary>
+    /// <remarks>
+    /// Far more often than the guide refresh, and for a different reason: this decides how much of a film
+    /// the viewer loses if the player is closed between two samples. Five seconds is imperceptible on
+    /// resuming and cheap — reading a position from the engine touches nothing but memory.
+    /// </remarks>
+    private static readonly TimeSpan PositionSampleInterval = TimeSpan.FromSeconds(5);
+
     private readonly MainViewModel _viewModel;
     private readonly DispatcherTimer _guideRefreshTimer;
+    private readonly DispatcherTimer _positionSampleTimer;
     private bool _hasReleasedPlayback;
 
     public MainWindow(MainViewModel viewModel, IVlcVideoSink videoSink)
@@ -46,6 +56,9 @@ public partial class MainWindow : Window
         _guideRefreshTimer = new DispatcherTimer { Interval = GuideRefreshInterval };
         _guideRefreshTimer.Tick += OnGuideRefreshTick;
 
+        _positionSampleTimer = new DispatcherTimer { Interval = PositionSampleInterval };
+        _positionSampleTimer.Tick += OnPositionSampleTick;
+
         Loaded += OnLoaded;
     }
 
@@ -53,6 +66,7 @@ public partial class MainWindow : Window
     {
         Loaded -= OnLoaded;
         _guideRefreshTimer.Start();
+        _positionSampleTimer.Start();
 
         await _viewModel.InitializeAsync(CancellationToken.None).ConfigureAwait(true);
     }
@@ -60,6 +74,11 @@ public partial class MainWindow : Window
     private async void OnGuideRefreshTick(object? sender, EventArgs e)
     {
         await _viewModel.RefreshGuideDisplayAsync().ConfigureAwait(true);
+    }
+
+    private void OnPositionSampleTick(object? sender, EventArgs e)
+    {
+        _viewModel.ObservePlaybackPosition();
     }
 
     /// <summary>
@@ -84,6 +103,7 @@ public partial class MainWindow : Window
         // Stopped before anything else: a tick arriving during teardown would query a database whose
         // container is on its way out.
         _guideRefreshTimer.Stop();
+        _positionSampleTimer.Stop();
 
         e.Cancel = true;
         base.OnClosing(e);
@@ -108,27 +128,6 @@ public partial class MainWindow : Window
             // a connection the provider will time out on its own.
             _hasReleasedPlayback = true;
             Close();
-        }
-    }
-
-    /// <summary>
-    /// Pushes the entered password into the view model.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="PasswordBox.Password"/> is deliberately not a dependency property, so it cannot be
-    /// bound. Forwarding it here is the standard workaround and keeps the view model free of any
-    /// reference to a control.
-    /// </remarks>
-    private void OnPasswordChanged(object sender, RoutedEventArgs e)
-    {
-        _viewModel.SourceManagement.Password = PasswordInput.Password;
-    }
-
-    private void OnChannelActivated(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (_viewModel.PlaySelectedCommand.CanExecute(null))
-        {
-            _viewModel.PlaySelectedCommand.Execute(null);
         }
     }
 }

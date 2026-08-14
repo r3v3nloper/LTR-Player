@@ -50,4 +50,50 @@ internal static partial class CatalogueLog
         Level = LogLevel.Debug,
         Message = "The guide for {Source} was imported at {ImportedAt} and is still fresh; skipping.")]
     public static partial void GuideStillFresh(ILogger logger, string source, DateTimeOffset importedAt);
+
+    [LoggerMessage(
+        EventId = 1405,
+        Level = LogLevel.Information,
+        Message = "Fetched the detail of {Series}: {Seasons} seasons, {Episodes} episodes.")]
+    public static partial void SeriesDetailFetched(
+        ILogger logger,
+        string series,
+        int seasons,
+        int episodes);
+
+    [LoggerMessage(
+        EventId = 1406,
+        Level = LogLevel.Warning,
+        Message = "Could not fetch the detail of {Item} from {Source}; showing what is stored.")]
+    public static partial void DetailFetchFailed(
+        ILogger logger,
+        Exception exception,
+        string item,
+        string source);
+
+    /// <remarks>
+    /// Warning, and swallowed at the call site. Recording runs while playback is being released — including
+    /// on the way out of the window — and a lost resume position matters far less than a shutdown that
+    /// stalls.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 1408,
+        Level = LogLevel.Warning,
+        Message = "Where the viewer left {Kind} {ItemId} could not be recorded.")]
+    public static partial void ProgressNotRecorded(
+        ILogger logger,
+        Exception exception,
+        string kind,
+        int itemId);
+
+    [LoggerMessage(
+        EventId = 1407,
+        Level = LogLevel.Information,
+        Message = "Imported {Source}: {Channels} channels, {Movies} films, {Series} series.")]
+    public static partial void CatalogueImported(
+        ILogger logger,
+        string source,
+        int channels,
+        int movies,
+        int series);
 }

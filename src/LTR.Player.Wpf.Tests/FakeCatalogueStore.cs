@@ -1,5 +1,6 @@
 using LTR.Catalogue;
 using LTR.Core.Content;
+using LTR.Core.Playback;
 using LTR.Core.Sources;
 
 namespace LTR.Player.Wpf;
@@ -57,10 +58,13 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
         return [.. Channels.Where(channel => channel.SourceId == sourceId)];
     }
 
-    public Task<IReadOnlyList<Category>> GetLiveCategoriesAsync(int sourceId, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<Category>> GetCategoriesAsync(
+        int sourceId,
+        ContentKind kind,
+        CancellationToken cancellationToken)
     {
         return Task.FromResult<IReadOnlyList<Category>>(
-            [.. Categories.Where(category => category.SourceId == sourceId)]);
+            [.. Categories.Where(category => category.SourceId == sourceId && category.Kind == kind)]);
     }
 
     /// <summary>
@@ -71,11 +75,16 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
     /// It is safe only because the real query is covered directly by the persistence tests against real
     /// SQLite; what these tests care about is that the answer reaches the rows.
     /// </remarks>
+    /// <summary>How many times now-and-next was asked for, so a test can prove it was not.</summary>
+    public int NowAndNextQueries { get; private set; }
+
     public Task<IReadOnlyList<ChannelGuideSlice>> GetNowAndNextAsync(
         int sourceId,
         DateTimeOffset atUtc,
         CancellationToken cancellationToken)
     {
+        NowAndNextQueries++;
+
         var slices = new List<ChannelGuideSlice>();
 
         foreach (var channel in Channels.Where(item => item.SourceId == sourceId && GuideLinks.ContainsKey(item.Id)))
@@ -84,6 +93,7 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
                 .Where(entry => entry.GuideChannelId == GuideLinks[channel.Id] && entry.StopUtc > atUtc)
                 .OrderBy(entry => entry.StartUtc)
                 .Take(2)
+                .Select(entry => new GuideProgrammeSummary(entry.Title, entry.StartUtc, entry.StopUtc))
                 .ToList();
 
             if (upcoming.Count == 0)
@@ -150,6 +160,113 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
     {
         DeletedSourceIds.Add(sourceId);
         Sources.RemoveAll(source => source.Id == sourceId);
+        return Task.CompletedTask;
+    }
+
+    public List<VodItem> Movies { get; } = [];
+
+    public List<Series> SeriesCatalogue { get; } = [];
+
+    public List<Episode> Episodes { get; } = [];
+
+    public List<ContinueWatchingEntry> ContinueWatching { get; } = [];
+
+    /// <summary>
+    /// Progress that was written, so a test can prove a position was persisted and with what verdict.
+    /// </summary>
+    public List<(ContentKind Kind, int ItemId, WatchOutcome Outcome, TimeSpan Position)> ProgressWrites
+    {
+        get;
+    } = [];
+
+    public Task<IReadOnlyList<VodItem>> GetMoviesAsync(int sourceId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<VodItem>>(
+            [.. Movies.Where(movie => movie.SourceId == sourceId)]);
+    }
+
+    public Task<IReadOnlyList<Series>> GetSeriesAsync(int sourceId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<Series>>(
+            [.. SeriesCatalogue.Where(series => series.SourceId == sourceId)]);
+    }
+
+    /// <summary>
+    /// Applies the filter the way the real store's SQL does, and caps the page the same way.
+    /// </summary>
+    /// <remarks>
+    /// The rules are reached for rather than duplicated — <see cref="CatalogueFilter"/> is the same type the
+    /// query is built from — so what differs here is only that this one runs in memory. The database
+    /// translation itself is covered against real SQLite in the persistence tests.
+    /// </remarks>
+    public Task<CataloguePage<VodItem>> SearchMoviesAsync(
+        int sourceId,
+        CatalogueFilter filter,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var matching = Movies
+            .Where(movie => movie.SourceId == sourceId
+                && filter.Matches(movie.Name, movie.CategoryExternalId))
+            .ToList();
+
+        return Task.FromResult(new CataloguePage<VodItem>([.. matching.Take(limit)], matching.Count));
+    }
+
+    public Task<CataloguePage<Series>> SearchSeriesAsync(
+        int sourceId,
+        CatalogueFilter filter,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var matching = SeriesCatalogue
+            .Where(series => series.SourceId == sourceId
+                && filter.Matches(series.Name, series.CategoryExternalId))
+            .ToList();
+
+        return Task.FromResult(new CataloguePage<Series>([.. matching.Take(limit)], matching.Count));
+    }
+
+    public Task<VodItem?> GetMovieAsync(int movieId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(Movies.FirstOrDefault(movie => movie.Id == movieId));
+    }
+
+    public Task<Episode?> GetEpisodeAsync(int episodeId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(Episodes.FirstOrDefault(episode => episode.Id == episodeId));
+    }
+
+    public Task<IReadOnlyList<ContinueWatchingEntry>> GetContinueWatchingAsync(
+        int sourceId,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<ContinueWatchingEntry>>(
+        [
+            .. ContinueWatching
+                .OrderByDescending(entry => entry.LastWatchedUtc)
+                .Take(limit),
+        ]);
+    }
+
+    public Task RecordMovieProgressAsync(
+        int movieId,
+        WatchOutcome outcome,
+        TimeSpan position,
+        CancellationToken cancellationToken)
+    {
+        ProgressWrites.Add((ContentKind.Movie, movieId, outcome, position));
+        return Task.CompletedTask;
+    }
+
+    public Task RecordEpisodeProgressAsync(
+        int episodeId,
+        WatchOutcome outcome,
+        TimeSpan position,
+        CancellationToken cancellationToken)
+    {
+        ProgressWrites.Add((ContentKind.Series, episodeId, outcome, position));
         return Task.CompletedTask;
     }
 }

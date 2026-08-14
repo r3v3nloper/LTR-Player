@@ -41,6 +41,15 @@ internal sealed class FakeProviderRegistry
 
     public List<Channel> Channels { get; } = [];
 
+    public List<VodItem> Movies { get; } = [];
+
+    public List<Series> Series { get; } = [];
+
+    /// <summary>Seasons and episodes handed back for any series asked about.</summary>
+    public SeriesDetail? SeriesDetail { get; set; }
+
+    public MovieDetail? MovieDetail { get; set; }
+
     public ProviderCapabilities Capabilities { get; set; } = new() { SupportsLive = true };
 
     public IContentProvider CreateProvider(PlaylistSource source)
@@ -103,17 +112,54 @@ internal sealed class FakeProviderRegistry
         return Task.FromResult(Capabilities);
     }
 
+    /// <summary>When set, every detail fetch fails, standing in for a panel that cannot be reached.</summary>
+    public bool DetailFetchFails { get; set; }
+
     public Task<IReadOnlyList<Category>> FetchCategoriesAsync(
         ContentKind kind,
         CancellationToken cancellationToken)
     {
-        _calls.Add("categories");
-        return Task.FromResult<IReadOnlyList<Category>>(Categories);
+        // Recorded with its kind: an import asks for three of them, and which kinds it asked for is
+        // exactly what the capability guard is supposed to decide.
+        _calls.Add($"categories:{kind}");
+
+        return Task.FromResult<IReadOnlyList<Category>>(
+            [.. Categories.Where(category => category.Kind == kind)]);
     }
 
     public Task<IReadOnlyList<Channel>> FetchLiveChannelsAsync(CancellationToken cancellationToken)
     {
         _calls.Add("channels");
         return Task.FromResult<IReadOnlyList<Channel>>(Channels);
+    }
+
+    public Task<IReadOnlyList<VodItem>> FetchMoviesAsync(CancellationToken cancellationToken)
+    {
+        _calls.Add("movies");
+        return Task.FromResult<IReadOnlyList<VodItem>>(Movies);
+    }
+
+    public Task<IReadOnlyList<Series>> FetchSeriesAsync(CancellationToken cancellationToken)
+    {
+        _calls.Add("series");
+        return Task.FromResult<IReadOnlyList<Series>>(Series);
+    }
+
+    public Task<MovieDetail?> FetchMovieDetailAsync(string externalId, CancellationToken cancellationToken)
+    {
+        _calls.Add($"movie-detail:{externalId}");
+
+        return DetailFetchFails
+            ? Task.FromException<MovieDetail?>(new HttpRequestException("The panel is unreachable."))
+            : Task.FromResult(MovieDetail);
+    }
+
+    public Task<SeriesDetail?> FetchSeriesDetailAsync(string externalId, CancellationToken cancellationToken)
+    {
+        _calls.Add($"series-detail:{externalId}");
+
+        return DetailFetchFails
+            ? Task.FromException<SeriesDetail?>(new HttpRequestException("The panel is unreachable."))
+            : Task.FromResult(SeriesDetail);
     }
 }

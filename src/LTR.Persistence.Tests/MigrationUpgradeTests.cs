@@ -30,6 +30,9 @@ public sealed class MigrationUpgradeTests
     /// </summary>
     private const string BeforeGuide = "20260813082247_AddChannelStreamUrl";
 
+    /// <summary>The last migration before films and series, which is what an M3-era installation holds.</summary>
+    private const string BeforeVod = "20260813113737_AddGuide";
+
     [Fact]
     public async Task AddGuide_KeepsTheSourcesChannelsAndFavouritesAlreadyStored()
     {
@@ -95,7 +98,7 @@ public sealed class MigrationUpgradeTests
         channels.Count(channel => channel.IsFavorite).ShouldBe(1, "favourites are the user's own data");
         channels.Single(channel => channel.ExternalId == "101").CategoryId.ShouldNotBeNull();
 
-        var categories = await verifyContext.GetLiveCategoriesAsync(source.Id, cancellationToken);
+        var categories = await verifyContext.GetCategoriesAsync(source.Id, ContentKind.Live, cancellationToken);
         categories.ShouldHaveSingleItem().Name.ShouldBe("Sport");
 
         // And the new schema is usable afterwards, not merely present.
@@ -105,6 +108,86 @@ public sealed class MigrationUpgradeTests
             cancellationToken);
 
         (await verifyContext.LinkChannelsToGuideAsync(source.Id, cancellationToken)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The film and series migration only creates tables, so nothing can be rebuilt and nothing lost. The
+    /// case is here anyway, because "it only adds tables" is a claim about the generated migration rather
+    /// than about the model, and the next one to alter a table will be written next to this.
+    /// </summary>
+    [Fact]
+    public async Task AddVodCatalogue_KeepsTheCatalogueAndAcceptsFilmsAfterwards()
+    {
+        // Arrange: a database at the guide-era schema, with a source, a favourited channel and a guide.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("Filename=:memory:");
+        await connection.OpenAsync(cancellationToken);
+
+        var options = new DbContextOptionsBuilder<LtrDbContext>()
+            .UseSqlite(connection)
+            .Options;
+
+        await using (var context = new LtrDbContext(options, new ReversingCredentialProtector()))
+        {
+            await context.GetService<IMigrator>().MigrateAsync(BeforeVod, cancellationToken);
+        }
+
+        // Written as SQL, because the context speaks the current model and the point is a database written
+        // by the previous version.
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO Sources
+                (Id, Name, UserAgent, PreferredStreamFormat, CreatedUtc, Protocol,
+                 Capabilities_SupportsLive, Capabilities_SupportsVod, Capabilities_SupportsSeries,
+                 Capabilities_SupportsXmltvEpg, Capabilities_SupportsShortEpg, Capabilities_SupportsMpegTs,
+                 Capabilities_SupportsHls, Capabilities_RequiresLivePathSegment,
+                 BaseUrl, Username, Password)
+            VALUES
+                (1, 'Existing subscription', 'VLC/3.0.21', 0, '1970-01-01 00:00:00+00:00', 'xtream',
+                 1, 1, 1, 1, 1, 1, 0, 1,
+                 'http://panel.example:8080/', 'alice', 'rev:terc3s');
+
+            INSERT INTO Categories (Id, SourceId, ExternalId, Name, Kind, SortOrder)
+            VALUES (1, 1, '58', 'Sport', 0, 0);
+
+            INSERT INTO Channels
+                (Id, SourceId, CategoryId, CategoryExternalId, ExternalId, Name, HasArchive, IsFavorite,
+                 SortOrder)
+            VALUES (1, 1, 1, '58', '101', 'Erste', 0, 1, 0);
+
+            INSERT INTO GuideChannels (Id, SourceId, ExternalId, DisplayName) VALUES (1, 1, 'erste.de', 'Erste');
+            """,
+            cancellationToken);
+
+        // Act
+        await using (var context = new LtrDbContext(options, new ReversingCredentialProtector()))
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+        }
+
+        // Assert
+        await using var verifyContext = new LtrDbContext(options, new ReversingCredentialProtector());
+
+        var source = (await verifyContext.GetSourcesAsync(cancellationToken)).ShouldHaveSingleItem();
+        var channels = await verifyContext.GetLiveChannelsAsync(source.Id, cancellationToken);
+        channels.ShouldHaveSingleItem().IsFavorite.ShouldBeTrue("favourites are the user's own data");
+        (await verifyContext.GuideChannels.CountAsync(cancellationToken)).ShouldBe(1);
+
+        // And the new schema is usable afterwards, not merely present. The live category keeps external id
+        // "58" here on purpose: a film category of the same number must not collide with it.
+        await verifyContext.ReconcileVodCatalogueAsync(
+            source.Id,
+            [new Category { ExternalId = "58", Name = "Action", Kind = ContentKind.Movie }],
+            [new VodItem { ExternalId = "8412", Name = "Arrival", CategoryExternalId = "58" }],
+            [new Series { ExternalId = "4321", Name = "Breaking Bad" }],
+            cancellationToken);
+
+        var movie = (await verifyContext.GetMoviesAsync(source.Id, cancellationToken)).ShouldHaveSingleItem();
+        movie.CategoryId.ShouldNotBe(channels[0].CategoryId, "the film sits in the film category");
+
+        var categories = await verifyContext.GetCategoriesAsync(source.Id, ContentKind.Live, cancellationToken);
+        categories.ShouldHaveSingleItem().Name.ShouldBe("Sport", "the live category survived");
     }
 
     private static async Task ExecuteAsync(

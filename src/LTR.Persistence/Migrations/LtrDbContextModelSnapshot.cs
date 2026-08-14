@@ -145,10 +145,10 @@ namespace LTR.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("StartUtc")
+                    b.Property<DateTime>("StartUtc")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset>("StopUtc")
+                    b.Property<DateTime>("StopUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Title")
@@ -163,6 +163,65 @@ namespace LTR.Persistence.Migrations
                     b.HasIndex("GuideChannelId", "StartUtc");
 
                     b.ToTable("EpgEntries", (string)null);
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.Episode", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("AddedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContainerExtension")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("DurationSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsWatched")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastWatchedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Plot")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ResumePositionSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SeasonId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StillUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LastWatchedUtc");
+
+                    b.HasIndex("SeasonId", "ExternalId")
+                        .IsUnique();
+
+                    b.ToTable("Episodes", (string)null);
                 });
 
             modelBuilder.Entity("LTR.Core.Content.GuideChannel", b =>
@@ -193,6 +252,201 @@ namespace LTR.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("GuideChannels", (string)null);
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.Season", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CoverUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Plot")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SeriesId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SeriesId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("Seasons", (string)null);
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.Series", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Cast")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CategoryExternalId")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("CategoryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CoverUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DetailFetchedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DetailModifiedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Director")
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Genre")
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastModifiedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Plot")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("Rating")
+                        .HasColumnType("REAL");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SourceId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Year")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("SourceId", "ExternalId")
+                        .IsUnique();
+
+                    b.ToTable("Series", (string)null);
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.VodItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("AddedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Cast")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CategoryExternalId")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("CategoryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContainerExtension")
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CoverUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Director")
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("DurationSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Genre")
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("HasDetail")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsWatched")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastWatchedUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Plot")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("Rating")
+                        .HasColumnType("REAL");
+
+                    b.Property<int?>("ResumePositionSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SourceId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Year")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("SourceId", "ExternalId")
+                        .IsUnique();
+
+                    b.HasIndex("SourceId", "LastWatchedUtc");
+
+                    b.ToTable("Movies", (string)null);
                 });
 
             modelBuilder.Entity("LTR.Core.Sources.PlaylistSource", b =>
@@ -319,6 +573,17 @@ namespace LTR.Persistence.Migrations
                     b.Navigation("GuideChannel");
                 });
 
+            modelBuilder.Entity("LTR.Core.Content.Episode", b =>
+                {
+                    b.HasOne("LTR.Core.Content.Season", "Season")
+                        .WithMany("Episodes")
+                        .HasForeignKey("SeasonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Season");
+                });
+
             modelBuilder.Entity("LTR.Core.Content.GuideChannel", b =>
                 {
                     b.HasOne("LTR.Core.Sources.PlaylistSource", "Source")
@@ -326,6 +591,53 @@ namespace LTR.Persistence.Migrations
                         .HasForeignKey("SourceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Source");
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.Season", b =>
+                {
+                    b.HasOne("LTR.Core.Content.Series", "Series")
+                        .WithMany("Seasons")
+                        .HasForeignKey("SeriesId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Series");
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.Series", b =>
+                {
+                    b.HasOne("LTR.Core.Content.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("LTR.Core.Sources.PlaylistSource", "Source")
+                        .WithMany()
+                        .HasForeignKey("SourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Source");
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.VodItem", b =>
+                {
+                    b.HasOne("LTR.Core.Content.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("LTR.Core.Sources.PlaylistSource", "Source")
+                        .WithMany()
+                        .HasForeignKey("SourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Category");
 
                     b.Navigation("Source");
                 });
@@ -384,6 +696,16 @@ namespace LTR.Persistence.Migrations
             modelBuilder.Entity("LTR.Core.Content.GuideChannel", b =>
                 {
                     b.Navigation("Entries");
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.Season", b =>
+                {
+                    b.Navigation("Episodes");
+                });
+
+            modelBuilder.Entity("LTR.Core.Content.Series", b =>
+                {
+                    b.Navigation("Seasons");
                 });
 
             modelBuilder.Entity("LTR.Core.Sources.PlaylistSource", b =>

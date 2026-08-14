@@ -43,6 +43,14 @@ public sealed partial class LtrDbContext : DbContext
 
     public DbSet<EpgEntry> EpgEntries => Set<EpgEntry>();
 
+    public DbSet<VodItem> Movies => Set<VodItem>();
+
+    public DbSet<Series> Series => Set<Series>();
+
+    public DbSet<Season> Seasons => Set<Season>();
+
+    public DbSet<Episode> Episodes => Set<Episode>();
+
     /// <summary>
     /// Stores a newly configured source, protecting its credentials on the way in.
     /// </summary>
@@ -157,10 +165,14 @@ public sealed partial class LtrDbContext : DbContext
         ArgumentNullException.ThrowIfNull(categories);
         ArgumentNullException.ThrowIfNull(channels);
 
-        var categoryIdsByExternalId = await ReconcileCategoriesAsync(sourceId, categories, cancellationToken)
+        var categoryIds = await ReconcileCategoriesAsync(
+                sourceId,
+                categories,
+                [ContentKind.Live],
+                cancellationToken)
             .ConfigureAwait(false);
 
-        await ReconcileChannelsAsync(sourceId, channels, categoryIdsByExternalId, cancellationToken)
+        await ReconcileChannelsAsync(sourceId, channels, categoryIds, cancellationToken)
             .ConfigureAwait(false);
 
         var source = await Sources.FirstOrDefaultAsync(entity => entity.Id == sourceId, cancellationToken)
@@ -191,15 +203,16 @@ public sealed partial class LtrDbContext : DbContext
     }
 
     /// <summary>
-    /// Loads a source's live categories, ordered the way the provider intended.
+    /// Loads a source's categories of one kind, ordered the way the provider intended.
     /// </summary>
-    public async Task<IReadOnlyList<Category>> GetLiveCategoriesAsync(
+    public async Task<IReadOnlyList<Category>> GetCategoriesAsync(
         int sourceId,
+        ContentKind kind,
         CancellationToken cancellationToken)
     {
         return await Categories
             .AsNoTracking()
-            .Where(category => category.SourceId == sourceId && category.Kind == ContentKind.Live)
+            .Where(category => category.SourceId == sourceId && category.Kind == kind)
             .OrderBy(category => category.SortOrder)
             .ThenBy(category => category.Name)
             .ToListAsync(cancellationToken)
@@ -285,6 +298,7 @@ public sealed partial class LtrDbContext : DbContext
         ConfigureCategories(modelBuilder);
         ConfigureChannels(modelBuilder);
         ConfigureGuide(modelBuilder);
+        ConfigureVod(modelBuilder);
 
         base.OnModelCreating(modelBuilder);
     }
@@ -397,6 +411,19 @@ public sealed partial class LtrDbContext : DbContext
     private static readonly ValueConverter<DateTimeOffset, DateTime> UtcInstantConverter =
         new(instant => instant.UtcDateTime, stored => new DateTimeOffset(stored, TimeSpan.Zero));
 
+    /// <summary>
+    /// The same conversion for a column that may be absent.
+    /// </summary>
+    /// <remarks>
+    /// Stated separately rather than relying on EF wrapping the non-nullable converter, so that what the
+    /// column holds is visible at the point of configuration. The reason is the same one: the
+    /// continue-watching list orders by the time last watched, and that ordering has to happen in SQLite.
+    /// </remarks>
+    private static readonly ValueConverter<DateTimeOffset?, DateTime?> NullableUtcInstantConverter =
+        new(
+            instant => instant.HasValue ? instant.Value.UtcDateTime : null,
+            stored => stored.HasValue ? new DateTimeOffset(stored.Value, TimeSpan.Zero) : null);
+
     private static void ConfigureGuide(ModelBuilder modelBuilder)
     {
         var guideChannel = modelBuilder.Entity<GuideChannel>();
@@ -442,13 +469,26 @@ public sealed partial class LtrDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
     }
 
-    private async Task<Dictionary<string, int>> ReconcileCategoriesAsync(
+    /// <summary>
+    /// Reconciles the categories of the kinds an import covers, and returns their local identities.
+    /// </summary>
+    /// <param name="kinds">
+    /// Which kinds this import is authoritative for. Only categories of those kinds are removed when
+    /// absent from <paramref name="incoming"/>.
+    /// </param>
+    /// <remarks>
+    /// Scoped by kind rather than by source, and that is not cosmetic: the live import and the film import
+    /// each know only about their own kind, so a pass that removed everything it was not told about would
+    /// have the live refresh delete every film category the moment films were added.
+    /// </remarks>
+    private async Task<Dictionary<(string ExternalId, ContentKind Kind), int>> ReconcileCategoriesAsync(
         int sourceId,
         IReadOnlyList<Category> incoming,
+        IReadOnlyCollection<ContentKind> kinds,
         CancellationToken cancellationToken)
     {
         var existing = await Categories
-            .Where(category => category.SourceId == sourceId)
+            .Where(category => category.SourceId == sourceId && kinds.Contains(category.Kind))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -473,13 +513,16 @@ public sealed partial class LtrDbContext : DbContext
         Categories.RemoveRange(
             existing.Where(category => !seen.Contains((category.ExternalId, category.Kind))));
 
-        // Saved before channels are reconciled, because the channels need the generated category keys.
+        // Saved before the entries are reconciled, because they need the generated category keys.
         await SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+        // Keyed by kind as well as by identifier. A panel numbers its category identifiers per section,
+        // so "58" is a live category and a film category at the same time, and a dictionary keyed by the
+        // identifier alone would throw on the duplicate.
         return await Categories
-            .Where(category => category.SourceId == sourceId)
+            .Where(category => category.SourceId == sourceId && kinds.Contains(category.Kind))
             .ToDictionaryAsync(
-                category => category.ExternalId,
+                category => (category.ExternalId, category.Kind),
                 category => category.Id,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -488,7 +531,7 @@ public sealed partial class LtrDbContext : DbContext
     private async Task ReconcileChannelsAsync(
         int sourceId,
         IReadOnlyList<Channel> incoming,
-        Dictionary<string, int> categoryIdsByExternalId,
+        Dictionary<(string ExternalId, ContentKind Kind), int> categoryIds,
         CancellationToken cancellationToken)
     {
         var existing = await Channels
@@ -505,7 +548,7 @@ public sealed partial class LtrDbContext : DbContext
         foreach (var channel in incoming)
         {
             seen.Add(channel.ExternalId);
-            channel.CategoryId = ResolveCategoryId(channel.CategoryExternalId, categoryIdsByExternalId);
+            channel.CategoryId = ResolveCategoryId(channel.CategoryExternalId, ContentKind.Live, categoryIds);
 
             if (existingByExternalId.TryGetValue(channel.ExternalId, out var stored))
             {
@@ -533,14 +576,15 @@ public sealed partial class LtrDbContext : DbContext
 
     private static int? ResolveCategoryId(
         string? categoryExternalId,
-        Dictionary<string, int> categoryIdsByExternalId)
+        ContentKind kind,
+        Dictionary<(string ExternalId, ContentKind Kind), int> categoryIds)
     {
         if (string.IsNullOrEmpty(categoryExternalId))
         {
             return null;
         }
 
-        return categoryIdsByExternalId.TryGetValue(categoryExternalId, out var id) ? id : null;
+        return categoryIds.TryGetValue((categoryExternalId, kind), out var id) ? id : null;
     }
 
     private void RevealCredentials(PlaylistSource source)

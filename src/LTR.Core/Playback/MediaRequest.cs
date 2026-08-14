@@ -13,4 +13,19 @@ namespace LTR.Core.Playback;
 /// </param>
 /// <param name="Format">Container the URL was built to deliver.</param>
 /// <param name="DisplayName">Human-readable label for logs and the on-screen display.</param>
-public sealed record MediaRequest(Uri Url, string UserAgent, StreamFormat Format, string DisplayName);
+/// <param name="StartAt">
+/// Where playback should begin, for resuming a part-watched film or episode.
+/// </param>
+/// <remarks>
+/// <see cref="StartAt"/> travels with the request rather than being applied by the caller afterwards, so
+/// that resuming is one operation and cannot be half-done: a caller that had to seek separately would
+/// have to know when the engine has opened enough to accept one. How the engine honours it is its own
+/// business — the LibVLC one seeks immediately after the stream reports itself playing, for reasons
+/// recorded there.
+/// </remarks>
+public sealed record MediaRequest(
+    Uri Url,
+    string UserAgent,
+    StreamFormat Format,
+    string DisplayName,
+    TimeSpan? StartAt = null);

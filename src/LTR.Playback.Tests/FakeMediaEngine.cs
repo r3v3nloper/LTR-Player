@@ -22,8 +22,21 @@ internal sealed class FakeMediaEngine : IMediaEngine
 
     public bool IsMuted { get; set; }
 
+    /// <summary>Where the fake reports playback to have reached, set by a test.</summary>
+    public TimeSpan? Position { get; set; }
+
+    public TimeSpan? Duration { get; set; }
+
+    public bool IsSeekable { get; set; }
+
     /// <summary>Calls received, in order, as <c>stop</c> and <c>play:{name}</c> entries.</summary>
     public IReadOnlyList<string> Calls => [.. _calls];
+
+    /// <summary>
+    /// The position each opened stream asked to start at, so a test can prove a resume was honoured while
+    /// opening rather than by a later seek.
+    /// </summary>
+    public List<TimeSpan?> RequestedStartPositions { get; } = [];
 
     /// <summary>Whether a stream is currently held open.</summary>
     public bool HasOpenStream => Volatile.Read(ref _openStreams) > 0;
@@ -44,6 +57,7 @@ internal sealed class FakeMediaEngine : IMediaEngine
     public async Task PlayAsync(MediaRequest request, CancellationToken cancellationToken)
     {
         _calls.Enqueue($"play:{request.DisplayName}");
+        RequestedStartPositions.Add(request.StartAt);
 
         if (PlayException is not null)
         {

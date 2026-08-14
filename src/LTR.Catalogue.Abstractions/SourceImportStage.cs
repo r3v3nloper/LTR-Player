@@ -19,6 +19,12 @@ public enum SourceImportStage
     /// <summary>Downloading categories and channels.</summary>
     FetchingCatalogue = 2,
 
+    /// <summary>
+    /// Downloading the film and series catalogues, which is reported separately because it is the longest
+    /// step of an import on a subscription that offers them.
+    /// </summary>
+    FetchingVod = 3,
+
     /// <summary>Reconciling what was fetched against what is stored.</summary>
-    Storing = 3,
+    Storing = 4,
 }

@@ -30,19 +30,36 @@ internal sealed class MainViewModelHarness
 
     public TestClock Clock { get; } = new(Now);
 
+    public FakeVodDetailService VodDetail { get; } = new();
+
+    /// <summary>
+    /// The progress recorder the last built view model was given, so a test can prove a position was
+    /// followed rather than only that a stream was opened.
+    /// </summary>
+    public WatchProgressRecorder? Progress { get; private set; }
+
     public MainViewModel Build()
     {
         // One status line for all of them, exactly as the container hands it out.
         var status = new StatusLine();
 
+        Progress = new WatchProgressRecorder(Store, NullLogger<WatchProgressRecorder>.Instance);
+
         return new MainViewModel(
             new SourceManagementViewModel(Store, Import, status, NullLogger<SourceManagementViewModel>.Instance),
             new ChannelListViewModel(Store, Clock, status, NullLogger<ChannelListViewModel>.Instance),
             new GuideViewModel(Store, Clock),
+            new MovieListViewModel(Store, VodDetail, NullLogger<MovieListViewModel>.Instance),
+            new SeriesCatalogueViewModel(Store, VodDetail, NullLogger<SeriesCatalogueViewModel>.Instance),
+            new ContinueWatchingViewModel(Store),
             status,
-            new StubProviderRegistry(),
-            Session,
-            GuideImport,
+            new PlaybackCoordinator(
+                new StubProviderRegistry(),
+                Session,
+                Progress,
+                status,
+                NullLogger<PlaybackCoordinator>.Instance),
+            new GuideImportCoordinator(GuideImport, status, NullLogger<GuideImportCoordinator>.Instance),
             NullLogger<MainViewModel>.Instance);
     }
 }
