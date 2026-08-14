@@ -124,7 +124,15 @@ public sealed partial class LtrDbContext
     {
         ArgumentNullException.ThrowIfNull(detail);
 
+        // Split, for the same reason the read path is: one query per collection instead of a join that
+        // repeats the series' own synopsis — several kilobytes of it — on each of a dozen seasons' worth of
+        // episodes. EF warns about the joined form on every fetch.
+        //
+        // The usual caveat about split queries does not bite here. They can observe data changed between the
+        // two statements, but this is the write path of a single-writer application: the guide import does not
+        // touch series, and two series fetches cannot run at once because one viewer opens one series.
         var stored = await Series
+            .AsSplitQuery()
             .Include(item => item.Seasons)
             .ThenInclude(season => season.Episodes)
             .FirstOrDefaultAsync(item => item.Id == seriesId, cancellationToken)

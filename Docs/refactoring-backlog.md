@@ -11,14 +11,14 @@ Cleared so far:
 - **By M4 itself:** the shell view model's guide-import lifecycle and the single-file window. Neither was
   tidying — both blocked the milestone, because the view model could not take three more sections at 400
   lines and `MainWindow.xaml` could not take three more lists at 470.
-- **After M4:** ranks 1–5 below.
+- **After M4:** ranks 1–6 below.
 
-**Rank 6 is the only item here with an effect while the player is running.** Everything else is structure, a
+**Rank 7 is the only item here with an effect while the player is running.** Everything else is structure, a
 missing guard, or a limit that is stated on screen.
 
 ---
 
-## Ranks 1–5 · done after M4
+## Ranks 1–6 · done after M4
 
 - **1 · Every import stage has wording.** `SourceImportStage.FetchingVod` arrived with the film catalogue and
   the CLI was taught to print it while the window's switch was not, so the longest step of an import on a
@@ -40,6 +40,11 @@ missing guard, or a limit that is stated on screen.
   search, the bounded page and the count wording; the film and series sections supply only what differs.
   They had the whole shape twice — including the selection-ordering rule whose absence produced the same
   blank-picker defect in both, because the code was in both.
+- **6 · The series write path no longer fetches a cartesian product.** `SaveSeriesDetailAsync` includes two
+  collection navigations and now splits them, as the read path already did. Verified against the real panel:
+  the EF warning that appeared on every series fetch is gone. The usual caveat about split queries observing
+  data changed between statements does not apply here — single-writer application, and the guide import does
+  not touch series.
 
 Worth knowing before touching these again:
 
@@ -52,7 +57,7 @@ Worth knowing before touching these again:
 
 ---
 
-## Rank 6 — Now-and-next transfers far more than it shows
+## Rank 7 — Now-and-next transfers far more than it shows
 
 **Project:** LTR.Persistence, LTR.Player.Wpf · **Area:** Performance · **Criticality:** moderate · **Effort:** medium
 
@@ -62,16 +67,6 @@ titles per row. The timer also runs when nothing is matched at all.
 
 Proposal: project onto a narrow read model (title, start, stop) and skip the refresh entirely while
 `HasGuide` is false. Unmeasured; derived from the figures a 17,000-channel subscription produces.
-
-## Rank 7 — The series write path fetches a cartesian product
-
-**Project:** LTR.Persistence · **Area:** Performance · **Criticality:** minor · **Effort:** low
-
-`SaveSeriesDetailAsync` includes two collection navigations without `AsSplitQuery`, so a series with a dozen
-seasons of twenty episodes repeats its own synopsis — several kilobytes of it — on each of 240 rows. EF logs
-a warning about it on every series fetch; the read path (`GetSeriesDetailAsync`) already splits.
-
-Proposal: `.AsSplitQuery()`. One line, and it silences a warning that is otherwise noise in the log.
 
 ## Rank 8 — Protocol-neutral URL sanitisation
 
