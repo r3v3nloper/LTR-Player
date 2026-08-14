@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using LTR.Catalogue;
 using LTR.Core.Content;
 using LTR.Core.Sources;
@@ -215,6 +216,21 @@ public sealed partial class SeriesCatalogueViewModel : ObservableObject
 
         SelectedSeason = Seasons.FirstOrDefault(season => season.Number == seasonNumber)
             ?? Seasons.FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Goes back to the series list from an open series.
+    /// </summary>
+    /// <remarks>
+    /// The two do not share the pane. Shown together, the series list was reduced to two visible rows by an
+    /// episode list below it — and browsing a catalogue of eleven thousand series through a two-row window
+    /// is not browsing. One replaces the other, and this is the way back.
+    /// </remarks>
+    [RelayCommand]
+    private void CloseSeries()
+    {
+        // Clearing the selection is what closes it: the shell answers the change by reloading nothing.
+        SelectedSeries = null;
     }
 
     partial void OnSelectedSeasonChanged(SeasonChoice? value)

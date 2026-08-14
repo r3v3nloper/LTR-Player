@@ -7,7 +7,8 @@
   <local:StringPresenceToVisibilityConverter x:Key="NonEmptyStringToVisibility" VisibleWhenPresent="True" />
   <local:StringPresenceToVisibilityConverter x:Key="EmptyStringToVisibility" VisibleWhenPresent="False" />
   <local:EnumMatchConverter x:Key="EnumMatch" />
-  <local:NullToVisibilityConverter x:Key="NotNullToVisibility" />
+  <local:NullToVisibilityConverter x:Key="NotNullToVisibility" VisibleWhenPresent="True" />
+  <local:NullToVisibilityConverter x:Key="NullToVisibility" VisibleWhenPresent="False" />
 
   <!-- Two decode widths, because a row's thumbnail and the detail pane's poster differ by a factor of
        three and decoding both at the larger size is what makes a scrolled list of covers expensive. -->

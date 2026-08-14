@@ -1,14 +1,20 @@
 # Refactoring backlog
 
-Reviewed after M3. Ranks 1–8 are done; what follows is what remains, in the order it was prioritised —
-most valuable per unit of effort first.
+Reviewed after M3. Ranks 1–8 were cleared then, and **ranks 10 and 13 were cleared by M4** — not as tidying
+but because they blocked it: the shell view model could not take three more sections at 403 lines, and
+`MainWindow.xaml` could not take three more lists at 470.
 
-Ranking rule: criticality against effort. Renumbered at this review, so a rank quoted in an older commit
-message will not line up.
+What follows is what remains, in the order it was prioritised — most valuable per unit of effort first.
+
+Ranking rule: criticality against effort. Renumbered at the M3 review, so a rank quoted in an older commit
+message will not line up. Ranks are **not** renumbered again here, so that the numbers in M4's commits still
+mean something.
 
 **Rank 9 is the only item here with an effect while the player is running.** Everything else is structure,
 a missing guard, or a limit that is stated on screen. Deferred deliberately after the M3 review rather than
 overlooked: it wants measuring first.
+
+M4 added ranks 19 and 20 at the end. Rank 17 got worse and is restated where it stands.
 
 ---
 
@@ -60,15 +66,15 @@ Proposal: project onto a narrow read model (title, start, stop) and skip the ref
 
 ---
 
-## Rank 10 — MainViewModel does four things
+## Rank 10 — MainViewModel does four things · done in M4
 
-**Project:** LTR.Player.Wpf · **Area:** Maintainability · **Criticality:** moderate · **Effort:** medium
+Lifted into `GuideImportCoordinator`: starting an import, refusing a second, wording every outcome, and
+draining it on shutdown. What happens *after* a successful import stayed with the shell, as a continuation
+it supplies — reloading the channel list and the timeline needs both of those, and reaching for them from
+the coordinator would have put it back in the business of knowing the whole window.
 
-403 lines carrying composition, playback, the guide import lifecycle (start, cancel, report, reload) and the
-status wording for all of it.
-
-Proposal: lift the guide import lifecycle into a `GuideImportCoordinator` and delegate. The shell lifetime
-token belongs with it.
+The shell lifetime token did **not** move with it. It is passed in, because the catalogue load and the film
+detail fetches are linked into the same token and it belongs to whoever owns the window's lifetime.
 
 ---
 
@@ -98,11 +104,17 @@ and that must still be recognised.
 
 ---
 
-## Rank 13 — Split MainWindow.xaml
+## Rank 13 — Split MainWindow.xaml · done in M4
 
-**Project:** LTR.Player.Wpf · **Area:** Maintainability · **Criticality:** moderate · **Effort:** medium
+`Views/` now holds `LiveChannelsView`, `MovieCatalogueView`, `SeriesCatalogueView`, `ContinueWatchingView`,
+`AddSourceView` and `GuideOverlayView`; the window is composition.
 
-472 lines holding the add-source form, the channel list, the player overlay and the guide timeline.
+Two things learned in the doing:
+
+- The guide's header, rows and now-marker reference each other by `ElementName`, so they had to stay in one
+  file — a XAML namescope is per file, and splitting them further would break the bindings silently.
+- The guide overlay is still placed *by the window* inside `VideoView.Content`. Hosting it is the window's
+  business, for the reason below; being a separate file changes nothing about that.
 
 The overlay and the timeline must stay inside `VideoView.Content`. `VideoView` hosts a separate native
 window over the WPF tree, so a sibling element is invisible behind the video.
@@ -140,12 +152,19 @@ leaving `Program` as composition only.
 
 ---
 
-## Rank 17 — Do not materialise the whole catalogue
+## Rank 17 — Do not materialise the whole channel list
 
 **Project:** LTR.Persistence, LTR.Player.Wpf · **Area:** Performance · **Criticality:** moderate · **Effort:** high
 
 Every source switch loads all channels and wraps each in a view model. It works at 17,156. Worth revisiting
 only when it demonstrably hurts — filtering and paging in the store rather than in memory.
+
+**Restated after M4.** The film section did not inherit this: at 66,447 films the approach was not viable, so
+`SearchMoviesAsync` filters and counts in the database and the section shows a bounded page. That is the
+shape this rank proposes, now built and in use — so the remaining work is applying it to the channel list,
+where the numbers are four times smaller and the guide's now/next join makes it harder. Note the one
+behavioural difference to settle first: the film search matches with SQLite's `LIKE`, which is
+case-insensitive for ASCII only, where `CatalogueFilter` in memory is fully case-insensitive.
 
 ---
 
@@ -156,3 +175,34 @@ only when it demonstrably hurts — filtering and paging in the store rather tha
 `GuideViewModel.MaximumRows` draws at most 200 channels and says so on screen. The honest fix is to load rows
 as they are scrolled into view, which needs the store to page and the timeline to build rows lazily. Related
 to rank 17, and worth doing at the same time or not at all.
+
+---
+
+## Rank 19 — A film's detail is fetched again on every viewing when the panel has none
+
+**Project:** LTR.Catalogue · **Area:** Performance · **Criticality:** minor · **Effort:** low
+
+`VodItem.HasDetail` is set only when a detail response arrives. A panel that answers with nothing therefore
+leaves it unset, and selecting that film asks again every time — one `get_vod_info` call per selection, on a
+catalogue where selecting films is the normal way to browse.
+
+The current behaviour is deliberate as far as it goes: an empty answer today is not proof of an empty answer
+next week, and it costs one metadata call. But nothing distinguishes "never asked" from "asked, and there is
+nothing", which is the distinction worth having.
+
+Proposal: record when the detail was last attempted and do not retry within a day. The field exists in
+spirit already — `Series` has `DetailFetchedUtc` for the same purpose.
+
+## Rank 20 — Nothing records progress when a film reaches its own end
+
+**Project:** LTR.Player.Wpf · **Area:** Correctness · **Criticality:** minor · **Effort:** low
+
+Progress is written when playback is switched, stopped or the window closes. A film that plays to its end and
+sits there is none of those, so it stays on the continue-watching list until the next of them happens —
+usually the window closing, which then records it correctly as finished.
+
+So nothing is lost; the list is briefly wrong. Fixing it means recording when the session reports `Stopped`
+after having been `Playing`, and the reason it was not done is that the same transition occurs in the middle
+of every channel change, where progress has already been recorded a moment earlier. Distinguishing the two
+needs the session to say *why* it stopped, which is a change to `IPlaybackSession` and wants doing with M5's
+OSD work rather than on its own.
