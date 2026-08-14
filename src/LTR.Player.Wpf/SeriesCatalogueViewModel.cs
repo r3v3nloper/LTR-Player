@@ -46,6 +46,17 @@ public sealed partial class SeriesCatalogueViewModel : ObservableObject
     [ObservableProperty]
     private SeasonChoice? _selectedSeason;
 
+    /// <summary>
+    /// The episode row the viewer has picked out, which is what double-clicking plays.
+    /// </summary>
+    /// <remarks>
+    /// The row's own play button carries the episode as a command parameter and needs no selection. This
+    /// exists for the gesture every other list in the window answers to, and whose absence here made an
+    /// episode list that looked interactive and did nothing.
+    /// </remarks>
+    [ObservableProperty]
+    private EpisodeItemViewModel? _selectedEpisode;
+
     /// <summary>Whether a season's episodes are still being fetched, so the view can say so.</summary>
     [ObservableProperty]
     private bool _isLoadingEpisodes;
@@ -241,6 +252,9 @@ public sealed partial class SeriesCatalogueViewModel : ObservableObject
 
     partial void OnSelectedSeasonChanged(SeasonChoice? value)
     {
+        // Cleared first: the rows are about to be replaced, and a selection pointing at a row from another
+        // season would have the play command act on an episode that is no longer on screen.
+        SelectedEpisode = null;
         Episodes.Clear();
 
         if (value is null)
@@ -259,6 +273,7 @@ public sealed partial class SeriesCatalogueViewModel : ObservableObject
         SelectedSeries = null;
         OpenSeries = null;
         SelectedSeason = null;
+        SelectedEpisode = null;
         Seasons.Clear();
         Episodes.Clear();
     }

@@ -1,4 +1,5 @@
 <UserControl x:Class="LTR.Player.Wpf.Views.SeriesCatalogueView"
+             x:Name="SectionRoot"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:LTR.Player.Wpf">
@@ -141,16 +142,22 @@
                                         Converter={StaticResource BooleanToVisibility}}" />
       </Grid>
 
+      <!--
+        Double-clicking a row plays it, as it does in every other list here. Without that the list looked
+        interactive and answered only to the small button at its right edge.
+      -->
       <ListBox Grid.Row="3"
                Margin="0,8,0,0"
                ItemsSource="{Binding SeriesCatalogue.Episodes}"
+               SelectedItem="{Binding SeriesCatalogue.SelectedEpisode}"
                ItemContainerStyle="{StaticResource CatalogueItem}"
                Background="Transparent"
                BorderThickness="0"
                ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                VirtualizingPanel.IsVirtualizing="True"
                VirtualizingPanel.VirtualizationMode="Recycling"
-               VirtualizingPanel.ScrollUnit="Pixel">
+               VirtualizingPanel.ScrollUnit="Pixel"
+               MouseDoubleClick="OnEpisodeActivated">
         <ListBox.ItemTemplate>
           <DataTemplate DataType="{x:Type local:EpisodeItemViewModel}">
             <Grid>
@@ -187,7 +194,7 @@
                       Background="{StaticResource BorderBrush}"
                       ToolTip="Play this episode"
                       Command="{Binding DataContext.PlayEpisodeCommand,
-                                        RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        ElementName=SectionRoot}"
                       CommandParameter="{Binding}" />
             </Grid>
           </DataTemplate>

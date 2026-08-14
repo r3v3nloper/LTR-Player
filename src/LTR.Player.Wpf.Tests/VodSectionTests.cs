@@ -437,6 +437,68 @@ public sealed class VodSectionTests
         request.Url.AbsoluteUri.ShouldContain("/series/");
     }
 
+    /// <summary>
+    /// The gesture every other list in the window answers to. Its absence here is what made a viewer report
+    /// that nothing appeared under Continue after starting a series: double-clicking an episode did nothing,
+    /// so nothing was ever watched.
+    /// </summary>
+    [Fact]
+    public async Task TheSelectedEpisode_IsWhatDoubleClickingPlays()
+    {
+        // Arrange
+        var context = new MainViewModelHarness();
+        context.Store.Sources.Add(CreateSource());
+        context.Store.SeriesCatalogue.Add(SeriesEntry(10, "Breaking Bad"));
+
+        var detailed = SeriesEntry(10, "Breaking Bad");
+        detailed.Seasons = [new Season { Number = 1, Episodes = [Episode("1001", "Pilot", 1)] }];
+        context.VodDetail.Series.Add(detailed);
+
+        var viewModel = context.Build();
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+        viewModel.SeriesCatalogue.SelectedSeries = viewModel.SeriesCatalogue.Series[0];
+        await WaitForIdleAsync();
+
+        // Act: what the list box's selection and the view's double-click handler do between them.
+        viewModel.SeriesCatalogue.SelectedEpisode = viewModel.SeriesCatalogue.Episodes[0];
+        await viewModel.PlayEpisodeCommand.ExecuteAsync(viewModel.SeriesCatalogue.SelectedEpisode);
+
+        // Assert
+        context.Session.Started.ShouldHaveSingleItem().Url.AbsoluteUri.ShouldContain("/series/1001");
+    }
+
+    [Fact]
+    public async Task ChangingSeason_ForgetsTheSelectedEpisode()
+    {
+        // Arrange: a selection pointing at a row from another season would have the play command act on an
+        // episode that is no longer on screen.
+        var context = new MainViewModelHarness();
+        context.Store.Sources.Add(CreateSource());
+        context.Store.SeriesCatalogue.Add(SeriesEntry(10, "Breaking Bad"));
+
+        var detailed = SeriesEntry(10, "Breaking Bad");
+        detailed.Seasons =
+        [
+            new Season { Number = 1, Episodes = [Episode("1001", "Pilot", 1)] },
+            new Season { Number = 2, Episodes = [Episode("2001", "Later", 1)] },
+        ];
+
+        context.VodDetail.Series.Add(detailed);
+
+        var viewModel = context.Build();
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+        viewModel.SeriesCatalogue.SelectedSeries = viewModel.SeriesCatalogue.Series[0];
+        await WaitForIdleAsync();
+
+        viewModel.SeriesCatalogue.SelectedEpisode = viewModel.SeriesCatalogue.Episodes[0];
+
+        // Act
+        viewModel.SeriesCatalogue.SelectedSeason = viewModel.SeriesCatalogue.Seasons[1];
+
+        // Assert
+        viewModel.SeriesCatalogue.SelectedEpisode.ShouldBeNull();
+    }
+
     [Fact]
     public async Task ResumeEntry_ForAnEpisode_PlaysThatEpisodeRatherThanItsSeries()
     {
