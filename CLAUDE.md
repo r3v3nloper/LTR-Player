@@ -7,6 +7,24 @@ ship with it.
 The global conventions in `~/.claude/CLAUDE.md` apply. What follows is only what this project knows
 that its code does not state — most of it learned by getting it wrong once.
 
+## Where the project stands
+
+Milestones from the plan, which lives outside the repository. Recorded here because the code shows what
+exists and not what was considered finished.
+
+| | | |
+|---|---|---|
+| **M1** Vertical slice — login, channel list, picture | done | |
+| **M2** Sources complete — M3U, several sources, favourites, search, categories | done | |
+| **M3** Guide — XMLTV import, now/next, timeline, detail | done | see the caveat below |
+| **M4** VOD + series | not started | next |
+| **M5** Player polish — OSD, fullscreen, keyboard, tracks | not started | |
+| **M6** Hardening — error handling, settings, packaging | not started | the corrupt-database quarantine landed early, with M3 |
+
+M3's timeline scrolls its channel names out of view with the programme blocks, and draws at most 200 rows.
+Both are stated on screen and carried as ranks 14 and 18 in `Docs/refactoring-backlog.md`; neither is
+considered a gap in the milestone.
+
 ## Layout
 
 ```

@@ -6,6 +6,10 @@ most valuable per unit of effort first.
 Ranking rule: criticality against effort. Renumbered at this review, so a rank quoted in an older commit
 message will not line up.
 
+**Rank 9 is the only item here with an effect while the player is running.** Everything else is structure,
+a missing guard, or a limit that is stated on screen. Deferred deliberately after the M3 review rather than
+overlooked: it wants measuring first.
+
 ---
 
 ## Ranks 1–8 · done
