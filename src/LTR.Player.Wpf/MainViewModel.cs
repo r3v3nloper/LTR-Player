@@ -30,6 +30,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 {
     private readonly PlaybackCoordinator _playback;
     private readonly GuideImportCoordinator _guideImport;
+    private readonly PlayerActions _playerActions;
     private readonly ILogger<MainViewModel> _logger;
 
     /// <summary>
@@ -93,6 +94,9 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
         // The coordinator writes positions; the three lists that display one are known only here.
         _playback.ProgressRecorded = RefreshWhatShowsProgressAsync;
+
+        // Built here rather than injected, because the three operations it needs are this class's own.
+        _playerActions = new PlayerActions(PlayerOverlay, StopAsync, ZapAsync, ToggleGuideAsync);
     }
 
     public SourceManagementViewModel SourceManagement { get; }
@@ -190,6 +194,11 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         try
         {
             await _playback.SampleAsync(_shellLifetime.Token).ConfigureAwait(true);
+
+            // Inside the guard with the rest, not after it. This rebuilds the track menus, and the caller is
+            // an async void timer tick — so anything escaping here reaches the dispatcher's unhandled
+            // handler as a dialog rather than the log, twice a second.
+            PlayerOverlay.Sample();
         }
         catch (OperationCanceledException)
         {
@@ -202,8 +211,6 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             // in any of that must not put a dialog in front of someone watching television.
             PlayerLog.PlaybackSampleFailed(_logger, exception);
         }
-
-        PlayerOverlay.Sample();
     }
 
     /// <summary>
@@ -211,71 +218,13 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     /// </summary>
     /// <remarks>
     /// The window resolves a key to a <see cref="PlayerAction"/> and hands it here, so that what each action
-    /// does is stated once, in a place a test can reach, rather than in a switch inside a key handler.
+    /// does is stated once, in a place a test can reach, rather than in a switch inside a key handler. The
+    /// statement itself is <see cref="PlayerActions"/>; only the four actions that need the shell come back
+    /// here.
     /// </remarks>
-    public async Task PerformAsync(PlayerAction action, CancellationToken cancellationToken)
+    public Task PerformAsync(PlayerAction action, CancellationToken cancellationToken)
     {
-        switch (action)
-        {
-            case PlayerAction.TogglePause:
-                PlayerOverlay.TogglePauseCommand.Execute(parameter: null);
-                break;
-
-            case PlayerAction.Stop:
-                await StopAsync(cancellationToken).ConfigureAwait(true);
-                break;
-
-            case PlayerAction.ZapNext:
-                await ZapAsync(offset: 1, cancellationToken).ConfigureAwait(true);
-                break;
-
-            case PlayerAction.ZapPrevious:
-                await ZapAsync(offset: -1, cancellationToken).ConfigureAwait(true);
-                break;
-
-            case PlayerAction.VolumeUp:
-                PlayerOverlay.ChangeVolume(PlayerOverlayViewModel.VolumeStep);
-                break;
-
-            case PlayerAction.VolumeDown:
-                PlayerOverlay.ChangeVolume(-PlayerOverlayViewModel.VolumeStep);
-                break;
-
-            case PlayerAction.ToggleMute:
-                PlayerOverlay.ToggleMuteCommand.Execute(parameter: null);
-                break;
-
-            case PlayerAction.SkipBack:
-                PlayerOverlay.Skip(-PlayerOverlayViewModel.SkipStep);
-                break;
-
-            case PlayerAction.SkipForward:
-                PlayerOverlay.Skip(PlayerOverlayViewModel.SkipStep);
-                break;
-
-            case PlayerAction.ToggleFullscreen:
-                PlayerOverlay.ToggleFullscreenCommand.Execute(parameter: null);
-                break;
-
-            case PlayerAction.LeaveFullscreen:
-                PlayerOverlay.LeaveFullscreen();
-                break;
-
-            case PlayerAction.ToggleGuide:
-                await ToggleGuideAsync(cancellationToken).ConfigureAwait(true);
-                break;
-
-            case PlayerAction.ShowInfo:
-                PlayerOverlay.Reveal();
-                break;
-
-            case PlayerAction.CycleAspectRatio:
-                PlayerOverlay.CycleAspectRatio();
-                break;
-
-            default:
-                break;
-        }
+        return _playerActions.PerformAsync(action, cancellationToken);
     }
 
     /// <summary>

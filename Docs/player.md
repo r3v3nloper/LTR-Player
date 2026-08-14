@@ -116,8 +116,12 @@ contain the letter `a`.
 
 So `MainWindow.OnPreviewKeyDown` checks what has focus first, and that check is the reason this cannot be
 declarative. Neither half of the decision is in the handler: `PlayerKeyMap` says which key means what, and
-`MainViewModel.PerformAsync` says what each action does. Both are testable without a window, which is the
-other reason for the split.
+`PlayerActions` says what each action does. Both are testable without a window, which is the other reason for
+the split.
+
+`PlayerActions` splits again along the line this document opened with. Four actions — stop, the two zaps and
+the guide — come back to the shell as delegates, because they decide *what* plays or what the window shows.
+Every other action works on a stream already open, so it goes to the overlay.
 
 | Key | Action |
 |---|---|

@@ -13,11 +13,50 @@ Cleared so far:
   lines and `MainWindow.xaml` could not take three more lists at 470.
 - **After M4:** ranks 1–7 below.
 - **By M5:** rank 15, which is why it was parked there. See below.
+- **In the review after M5:** its own top four. See below.
 
 Everything left is structure, a missing guard, or a limit that is stated on screen. Nothing left has an effect
 while the player is running.
 
 ---
+
+## Done in the review after M5
+
+Four items, all found in M5's own work rather than inherited.
+
+- **The shell view model had regrown past the size that split it.** 395 code lines at the M4 merge, **483
+  after M5** — the same figure rank 4 quoted as its *pre*-refactor size, reached the same way all three times:
+  it is the only place that can reach everything, so everything lands in it. The 64-line keystroke switch is
+  now `PlayerActions`, and the class is at **439**.
+
+  Not back to 395, and the remainder is deliberate. What is left that M5 added is coordination that genuinely
+  needs the list, playback and the section selection at once, which is the class's whole reason to exist. The
+  next real candidate is the block of six `PropertyChanged` handlers, about ninety lines that exist only to
+  forward notifications across object boundaries — coherent enough to name, and left alone because getting it
+  wrong reproduces the defect class this repository has shipped three times. **Measure this class at the start
+  of a milestone, not the end.**
+
+- **`PlayerOverlay.Sample()` sat outside the exception guard** in `SamplePlaybackAsync`, reached from an
+  `async void` timer tick. It rebuilds the track menus, so anything escaping it became a dialog from the
+  dispatcher's unhandled handler rather than a log line — twice a second. One line.
+
+- **Two sources of truth for network caching.** `ToArguments()` emitted a global `--network-caching` while
+  `PlayAsync` set a per-media one on every stream, so the startup argument read as the effective setting and
+  nothing ever consumed it. The global one is gone; the per-stream values are the only statement.
+
+  **Worth verifying against a real panel**, because the fallback if a per-input option were ever ignored is
+  now LibVLC's own default rather than ours. The open-duration log line is the check — see
+  `Docs/verification.md` §4.
+
+- **The two playback test doubles had drifted on the seek rule.** `FakeMediaEngine` left its position where it
+  was after a seek; `FakePlaybackSession` moved it. Neither was load-bearing yet, which is exactly when to fix
+  it. Both now model the same rule, and the one respect in which they differ on purpose — when a released
+  stream forgets its position — is commented in both.
+
+  **The shared-collaborator refactor this was proposed as did not survive contact.** Both doubles implement
+  interfaces that *require* every one of those members, so only the one-line bodies could be shared, and the
+  release semantics genuinely differ by layer. A linked file would have removed six lines of duplication and
+  added an indirection plus forty call-site changes (§2.16). Naming the invariant beat extracting it.
 
 ## Rank 15 · done by M5 — Progress at the end of a film
 

@@ -120,15 +120,27 @@ internal sealed class FakeMediaEngine : IMediaEngine
     }
 
     /// <remarks>
+    /// <para>
     /// Refuses an unseekable stream exactly as the real engine does, so a test asserting that live
-    /// television cannot be positioned is testing the rule rather than the fake.
+    /// television cannot be positioned is testing the rule rather than the fake. The position follows the
+    /// seek, as a real engine's does.
+    /// </para>
+    /// <para>
+    /// Deliberately identical to <c>FakePlaybackSession.SeekTo</c> in the shell's test project. The two
+    /// doubles stand in for different layers and differ on purpose in one respect — that one forgets its
+    /// position when a stream is released and this one does not, because its tests set the position up
+    /// front — but every *rule* they model has to come out the same, or a test proves the double.
+    /// </para>
     /// </remarks>
     public void SeekTo(TimeSpan position)
     {
-        if (IsSeekable)
+        if (!IsSeekable)
         {
-            SeekedTo = position;
+            return;
         }
+
+        SeekedTo = position;
+        Position = position;
     }
 
     public IReadOnlyList<MediaTrack> GetTracks(MediaTrackKind kind)

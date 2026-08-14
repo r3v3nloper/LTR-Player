@@ -92,8 +92,14 @@ internal sealed class FakePlaybackSession : IPlaybackSession
     }
 
     /// <remarks>
+    /// <para>
     /// Refuses an unseekable stream as the real engine does, so a test asserting that live television
     /// cannot be positioned is testing the rule and not the fake.
+    /// </para>
+    /// <para>
+    /// Deliberately identical to <c>FakeMediaEngine.SeekTo</c> in the playback test project — see the note
+    /// there for the one respect in which the two doubles differ on purpose, and why the rules may not.
+    /// </para>
     /// </remarks>
     public void SeekTo(TimeSpan position)
     {

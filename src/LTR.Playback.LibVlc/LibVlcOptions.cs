@@ -18,8 +18,9 @@ public sealed class LibVlcOptions
     /// at the cost of slower channel changes.
     /// </summary>
     /// <remarks>
-    /// Applies to films and episodes. Live television uses
-    /// <see cref="LiveNetworkCachingMilliseconds"/> instead.
+    /// Applies to films and episodes. Live television uses <see cref="LiveNetworkCachingMilliseconds"/>
+    /// instead, and both are applied per stream rather than as a startup argument — see
+    /// <see cref="ToArguments"/> for why that leaves nothing to state globally.
     /// </remarks>
     public int NetworkCachingMilliseconds { get; set; } = 1000;
 
@@ -82,11 +83,16 @@ public sealed class LibVlcOptions
     /// <summary>
     /// Renders these options as LibVLC command line arguments.
     /// </summary>
+    /// <remarks>
+    /// Neither caching value appears here, and that is the point of them being per-stream: live television
+    /// and a film want different buffers, so every stream carries its own <c>:network-caching</c> and a
+    /// global one would be overridden on every open. Stating it in both places made the startup argument
+    /// look like the effective setting while nothing ever read it.
+    /// </remarks>
     public string[] ToArguments()
     {
         var arguments = new List<string>
         {
-            FormattableString.Invariant($"--network-caching={NetworkCachingMilliseconds}"),
             FormattableString.Invariant($"--clock-jitter={ClockJitterMicroseconds}"),
             $"--clock-synchro={(ClockSynchronisation ? 1 : 0).ToString(CultureInfo.InvariantCulture)}",
 

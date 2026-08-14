@@ -46,11 +46,15 @@ and the seek bar needed the same widening of the playback surface.
 - **A film reaching its own end is flagged, not acted on.** `PlaybackCoordinator` sets a flag from the engine
   thread and `SampleAsync` closes the stream off on the next tick, because what follows is a database write
   and three lists rereading themselves.
-- **Keys are resolved by `PlayerKeyMap` and carried out by `MainViewModel.PerformAsync`.** Not
-  `KeyBinding`s in markup: an input binding is offered the key before the focused element sees it, so
-  declaring one for `A` would mean the search box could never contain that letter. `MainWindow` checks what
-  has focus, which is the whole reason it cannot be declarative. Arrow keys are deliberately *not* mapped to
-  zapping — they belong to the channel list.
+- **Keys are resolved by `PlayerKeyMap` and carried out by `PlayerActions`.** Not `KeyBinding`s in markup:
+  an input binding is offered the key before the focused element sees it, so declaring one for `A` would mean
+  the search box could never contain that letter. `MainWindow` checks what has focus, which is the whole
+  reason it cannot be declarative. Arrow keys are deliberately *not* mapped to zapping — they belong to the
+  channel list. `PlayerActions` splits where the design already does: four actions come back to the shell
+  because they decide *what* plays, and the rest go to the overlay because they act on an open stream.
+- **`MainViewModel` regrows, every milestone, by the same mechanism** — it is the only place that can reach
+  everything. 395 lines at the M4 merge, 483 after M5, 439 after extracting the key dispatch. Check it at the
+  start of a milestone, not the end.
 - **`LiveNetworkCachingMilliseconds` defaults to 600 ms and is a guess, not a measurement.** It is the only
   part of a zap that can be shortened; the stop that precedes it is required by the connection limit. Raise
   it if channels stutter in their first seconds — that symptom is this value being too low. `PlaybackSession`
