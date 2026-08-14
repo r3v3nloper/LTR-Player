@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
+using Serilog.Events;
 
 namespace LTR.Player.Wpf;
 
@@ -28,6 +29,17 @@ public partial class App : Application
         // Invariant formatting, so a log file reads the same whatever locale the machine runs under.
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
+
+            // Entity Framework logs every statement it executes at Information, and against this schema
+            // that is most of the file — a single source switch writes the channel query, the category
+            // query, now-and-next, films, series and continue-watching, each several lines of SQL. The log
+            // is the diagnostic trail for a player whose failures are mostly a provider's doing, and a
+            // trail nobody can read is not one. Warning is kept rather than Error on purpose: the
+            // split-query complaint that found a real cartesian product arrives at Warning.
+            //
+            // To get the statements back for a session, lower this line, or use the command line tool,
+            // whose --verbose does the same for the same database.
+            .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
             .WriteTo.File(
                 AppPaths.LogFile,
                 formatProvider: CultureInfo.InvariantCulture,
