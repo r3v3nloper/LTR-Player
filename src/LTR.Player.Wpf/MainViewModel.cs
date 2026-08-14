@@ -145,6 +145,17 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     {
         Guide.UpdateNowMarker();
 
+        // Nothing is matched, so there is nothing for a reread to change — and the query behind it is the
+        // largest one the player makes. A subscription with no guide imported would otherwise pay for it
+        // every minute for as long as the window is open.
+        //
+        // Only the timer skips. The catalogue load and the post-import reload call the channel list directly,
+        // which is what lets a guide that has just arrived be picked up at all.
+        if (!Channels.HasGuide)
+        {
+            return;
+        }
+
         try
         {
             await Channels.RefreshGuideAsync(_shellLifetime.Token).ConfigureAwait(true);

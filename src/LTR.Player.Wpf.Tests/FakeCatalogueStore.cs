@@ -75,11 +75,16 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
     /// It is safe only because the real query is covered directly by the persistence tests against real
     /// SQLite; what these tests care about is that the answer reaches the rows.
     /// </remarks>
+    /// <summary>How many times now-and-next was asked for, so a test can prove it was not.</summary>
+    public int NowAndNextQueries { get; private set; }
+
     public Task<IReadOnlyList<ChannelGuideSlice>> GetNowAndNextAsync(
         int sourceId,
         DateTimeOffset atUtc,
         CancellationToken cancellationToken)
     {
+        NowAndNextQueries++;
+
         var slices = new List<ChannelGuideSlice>();
 
         foreach (var channel in Channels.Where(item => item.SourceId == sourceId && GuideLinks.ContainsKey(item.Id)))
@@ -88,6 +93,7 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
                 .Where(entry => entry.GuideChannelId == GuideLinks[channel.Id] && entry.StopUtc > atUtc)
                 .OrderBy(entry => entry.StartUtc)
                 .Take(2)
+                .Select(entry => new GuideProgrammeSummary(entry.Title, entry.StartUtc, entry.StopUtc))
                 .ToList();
 
             if (upcoming.Count == 0)

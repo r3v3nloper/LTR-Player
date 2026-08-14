@@ -250,9 +250,17 @@ public sealed partial class LtrDbContext
     /// Reports what is on now and next for every channel of a source that has a guide.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// One query for the whole list rather than one per row. The two programmes per channel are selected
     /// by the database, so a guide holding a fortnight of listings transfers the two rows each channel
     /// needs and not the fortnight.
+    /// </para>
+    /// <para>
+    /// And only three columns of each. This runs once a minute for every matched channel — roughly nine
+    /// thousand rows on a real subscription — and returning whole entries meant carrying a description of up
+    /// to four thousand characters, a category, an episode reference and an icon address for each of them, to
+    /// display two titles. Projecting in the query is what keeps that proportionate.
+    /// </para>
     /// </remarks>
     public async Task<IReadOnlyList<ChannelGuideSlice>> GetNowAndNextAsync(
         int sourceId,
@@ -270,6 +278,7 @@ public sealed partial class LtrDbContext
                         && entry.StopUtc > atUtc)
                     .OrderBy(entry => entry.StartUtc)
                     .Take(2)
+                    .Select(entry => new GuideProgrammeSummary(entry.Title, entry.StartUtc, entry.StopUtc))
                     .ToList(),
             })
             .ToListAsync(cancellationToken)

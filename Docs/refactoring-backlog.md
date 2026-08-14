@@ -11,14 +11,14 @@ Cleared so far:
 - **By M4 itself:** the shell view model's guide-import lifecycle and the single-file window. Neither was
   tidying — both blocked the milestone, because the view model could not take three more sections at 400
   lines and `MainWindow.xaml` could not take three more lists at 470.
-- **After M4:** ranks 1–6 below.
+- **After M4:** ranks 1–7 below.
 
-**Rank 7 is the only item here with an effect while the player is running.** Everything else is structure, a
-missing guard, or a limit that is stated on screen.
+Everything left is structure, a missing guard, or a limit that is stated on screen. Rank 7 was the last item
+with an effect while the player is running.
 
 ---
 
-## Ranks 1–6 · done after M4
+## Ranks 1–7 · done after M4
 
 - **1 · Every import stage has wording.** `SourceImportStage.FetchingVod` arrived with the film catalogue and
   the CLI was taught to print it while the window's switch was not, so the longest step of an import on a
@@ -45,6 +45,19 @@ missing guard, or a limit that is stated on screen.
   the EF warning that appeared on every series fetch is gone. The usual caveat about split queries observing
   data changed between statements does not apply here — single-writer application, and the guide import does
   not touch series.
+- **7 · Now-and-next asks for three columns, and only when there is a guide.** The query projects onto
+  `GuideProgrammeSummary` instead of returning whole entries, and the timer skips it entirely while nothing is
+  matched.
+
+  **Measured, and the prediction was half wrong.** Against a real 42,000-programme guide with 4,531 matched
+  channels the query takes the same ~25 ms either way: the database is in-process, so "transferring" a column
+  is a memory copy and not a round trip. The projection's saving is allocation — nine thousand objects a
+  minute, some carrying four thousand characters nobody reads — which matters to a window left open all
+  evening rather than to any single refresh. The skip is the half with a measurable effect: for a subscription
+  with no guide imported it goes from 25 ms and nine thousand objects every minute to nothing.
+
+  Only the timer skips. The catalogue load and the post-import reload call the channel list directly, which is
+  what lets a guide that has just arrived be picked up at all — there is a test for that specifically.
 
 Worth knowing before touching these again:
 
@@ -56,17 +69,6 @@ Worth knowing before touching these again:
   three is the shell's business, not playback's.
 
 ---
-
-## Rank 7 — Now-and-next transfers far more than it shows
-
-**Project:** LTR.Persistence, LTR.Player.Wpf · **Area:** Performance · **Criticality:** moderate · **Effort:** medium
-
-`GetNowAndNextAsync` returns whole `EpgEntry` rows — `Description` included, up to 4,000 characters — for
-every matched channel. Against a real subscription that is roughly 9,000 rows **every minute**, to show two
-titles per row. The timer also runs when nothing is matched at all.
-
-Proposal: project onto a narrow read model (title, start, stop) and skip the refresh entirely while
-`HasGuide` is false. Unmeasured; derived from the figures a 17,000-channel subscription produces.
 
 ## Rank 8 — Protocol-neutral URL sanitisation
 
