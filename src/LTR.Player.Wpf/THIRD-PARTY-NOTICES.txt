@@ -1,0 +1,45 @@
+LTR-Player — third-party notices
+================================
+
+This application is a neutral playback tool. It ships no playlists, no subscriptions and no provider
+lists; the user supplies their own, as with VLC.
+
+
+LibVLC / VLC media player
+-------------------------
+
+LTR-Player plays media through LibVLC, which is used UNMODIFIED and linked DYNAMICALLY. The native
+libraries are shipped as separate files under libvlc\win-x64\ and can be replaced by the user with
+their own build of the same version.
+
+    Copyright (C) 1998-2024 VLC authors and VideoLAN
+    Licensed under the GNU Lesser General Public License, version 2.1 or later.
+
+    Licence text:  https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
+    Source code:   https://code.videolan.org/videolan/vlc
+    Project:       https://www.videolan.org/vlc/
+
+The libraries are obtained through the VideoLAN.LibVLC.Windows NuGet package, which packages the
+official VideoLAN Windows binaries.
+
+
+LibVLCSharp
+-----------
+
+    Copyright (C) VideoLAN
+    Licensed under the GNU Lesser General Public License, version 2.1 or later.
+    https://code.videolan.org/videolan/LibVLCSharp
+
+
+Other components
+----------------
+
+The remaining dependencies are .NET libraries under permissive licences:
+
+    .NET runtime, Entity Framework Core,
+    Microsoft.Extensions.*                MIT      https://github.com/dotnet
+    CommunityToolkit.Mvvm                 MIT      https://github.com/CommunityToolkit/dotnet
+    Serilog and its sinks                 Apache-2.0   https://serilog.net
+    SQLite (via Microsoft.Data.Sqlite)    public domain    https://sqlite.org
+
+Their full licence texts are available at the addresses above.

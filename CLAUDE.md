@@ -19,7 +19,7 @@ exists and not what was considered finished.
 | **M3** Guide — XMLTV import, now/next, timeline, detail | done | see the caveat below |
 | **M4** VOD + series — catalogue, seasons, resume | done | `Docs/vod.md` |
 | **M5** Player polish — OSD, fullscreen, keyboard, tracks | done | `Docs/player.md`; the live-caching value still wants measuring |
-| **M6** Hardening — error handling, settings, packaging | not started | next; the corrupt-database quarantine landed early, with M3 |
+| **M6** Hardening — error handling, settings, packaging | done | `Docs/packaging.md`; the quarantine had landed early, with M3 |
 
 M3's timeline scrolls its channel names out of view with the programme blocks, and draws at most 200 rows.
 Both are stated on screen and carried as ranks 11 and 18 in `Docs/refactoring-backlog.md`; neither is
@@ -58,7 +58,27 @@ and the seek bar needed the same widening of the playback surface.
 - **`LiveNetworkCachingMilliseconds` defaults to 600 ms and is a guess, not a measurement.** It is the only
   part of a zap that can be shortened; the stop that precedes it is required by the connection limit. Raise
   it if channels stutter in their first seconds — that symptom is this value being too low. `PlaybackSession`
-  now logs how long each open took, which is what makes tuning it possible at all.
+  now logs how long each open took, which is what makes tuning it possible at all. M6 put it in the settings
+  pane, so it no longer needs a rebuild to try a figure — but it does need a restart.
+
+## What M6 settled
+
+`Docs/packaging.md` has the shipping story. The rest:
+
+- **A failed stream asks the provider why.** `StreamFailureReason` classifies in Core,
+  `IStreamFailureExplainer` does the asking in LTR.Catalogue, and each front end words it — the split
+  `SourceImportStage` established, with a test that every reason has wording of its own. A playlist source is
+  never asked (no account, and asking re-downloads the document), and a superseded open is not a failure, so
+  zapping does not interrogate the panel once per key press.
+- **Settings are `settings.json` beside the database, not a table in it.** The catalogue is a cache that gets
+  quarantined; settings inside it would go with it. The file is also editable by hand, which is the point when
+  a bad value is what stops the window opening. Reading and writing both refuse to throw, and a bad file is
+  left where it is rather than replaced.
+- **Playback tuning applies on restart, and the pane says so.** Both figures reach LibVLC when the engine is
+  constructed. Volume, mute and aspect ratio apply immediately and are written on the way out of the window.
+- **EF Core is capped at Warning in the log.** A startup used to write ~450 lines, nearly all SQL; it now
+  writes three. Warning rather than Error deliberately — the split-query complaint that found a real
+  cartesian product arrives there. Lower the override, or use the CLI's `--verbose`, to get statements back.
 
 ## Layout
 
@@ -217,7 +237,14 @@ subscription.
 ## Working in this repository
 
 - **The build fails while the app is running.** MSBuild cannot replace locked DLLs; the errors are
-  `MSB3021`/`MSB3027` and they follow a successful compile. Ask for the app to be closed.
+  `MSB3021`/`MSB3027` and they follow a successful compile. Ask for the app to be closed — `build/publish.ps1`
+  refuses outright for the same reason.
+- **`$(Platform)` must read `AnyCPU`, never `Any CPU`.** `VideoLAN.LibVLC.Windows` compares against the
+  former, so the solution's own spelling silently selects no natives at all: the publish then starts, opens,
+  loads the catalogue and plays nothing. `publish.ps1` checks for `libvlc\win-x64\libvlc.dll` by name because
+  of it. The natives live under `libvlc\win-x64\`, not beside the executable.
+- **`SelfContained` cannot go in the csproj.** A self-contained project cannot be referenced by one that is
+  not, so it stops the test project compiling; it lives in the publish profile.
 - **Do not delete `%LOCALAPPDATA%\LTR-Player\logs`.** It is the diagnostic trail, and deleting it to
   make error-checking easier destroyed the evidence for a real question once.
 - **Do not infer database state from the file.** While a process holds it open, Windows reports stale

@@ -1,6 +1,20 @@
 <Project>
 
   <PropertyGroup>
+    <!--
+      One version for everything, so a log line, a file property and an issue report all agree. Bump it
+      here; nothing else states it.
+    -->
+    <Version>0.6.0</Version>
+    <Product>LTR-Player</Product>
+    <Company>LTR-Player</Company>
+
+    <!--
+      The copyright covers this application's own code. LibVLC is LGPL-2.1-or-later and dynamically
+      linked unmodified, which is what keeps that licence off this notice — see Docs/packaging.md.
+    -->
+    <Copyright>Copyright © Erik Klein</Copyright>
+
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

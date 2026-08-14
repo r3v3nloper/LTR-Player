@@ -14,6 +14,7 @@ Cleared so far:
 - **After M4:** ranks 1–7 below.
 - **By M5:** rank 15, which is why it was parked there. See below.
 - **In the review after M5:** its own top four. See below.
+- **By M6:** rank 19, also parked deliberately. Rank 10 got *worse* by a member, by decision — see it.
 
 Everything left is structure, a missing guard, or a limit that is stated on screen. Nothing left has an effect
 while the player is running.
@@ -149,12 +150,20 @@ Proposal: `JsonDocument.ParseAsync` over the content stream. The HTML-detection 
 first bytes of the stream, which is the only fiddly part: panels answer with an HTML error page at HTTP 200
 and that must still be recognised.
 
-## Rank 10 — `ICatalogueStore` has eighteen members
+## Rank 10 — `ICatalogueStore` has nineteen members
 
 **Project:** LTR.Catalogue.Abstractions · **Area:** Maintainability · **Criticality:** moderate · **Effort:** medium
 
 Sources, live channels, the guide, films, series and watch progress in one interface. Every fake has to
 implement all of it (§2.5), which is why the window's test double is the largest file in its project.
+
+**Eighteen at the last review; nineteen since M6** added `UpdateSourceSettingsAsync` for the per-source
+settings. Adding to it was a decision rather than an oversight — splitting the interface in the middle of a
+milestone is the larger risk — but the rank should be read as having got worse rather than stayed still.
+
+The review after M5 also noted `IPlaybackSession` reaching sixteen members, which is the same shape one layer
+down. Worth doing together (see rank 9 of that review): the same argument produces the same split, and doing
+one without the other leaves the codebase inconsistent about it.
 
 Proposal: split into `ISourceStore` / `ILiveCatalogue` / `IGuideCatalogue` / `IVodCatalogue`, composed where
 more than one is needed.
@@ -231,15 +240,14 @@ ASCII only, where `CatalogueFilter` in memory is fully case-insensitive.
 as they are scrolled into view, which needs the store to page and the timeline to build rows lazily. Related
 to rank 17, and worth doing at the same time or not at all.
 
-## Rank 19 — Nothing the player controls is remembered
+## Rank 19 · done by M6 — Nothing the player controls is remembered
 
-**Project:** LTR.Player.Wpf · **Area:** Usability · **Criticality:** minor · **Effort:** low
+Volume, mute and aspect ratio now live in `settings.json` beside the database. The overlay writes them into the
+shared settings object as the viewer changes them and the shell persists it on the way out — saving on change
+would have written a file per pixel of slider drag.
 
-Volume, mute and the aspect ratio correction all reset when the window closes. Volume is the one a viewer
-notices: a player that starts at full volume every evening gets turned down every evening.
-
-Deliberately left for M6, which brings the settings dialog and therefore somewhere for it to live. Doing it
-before that would mean inventing a persistence path for three values.
+Parked for M6 on purpose, and the wait paid: the file it needed existed by then, rather than being invented
+for three values.
 
 ## Rank 20 — Zapping materialises the visible channel list
 
