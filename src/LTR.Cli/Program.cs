@@ -37,6 +37,7 @@ rootCommand.Subcommands.Add(BuildResolveCommand(serviceProvider, sourceOptions))
 rootCommand.Subcommands.Add(BuildPlayTestCommand(serviceProvider, sourceOptions));
 rootCommand.Subcommands.Add(BuildSourcesCommand(serviceProvider));
 rootCommand.Subcommands.Add(BuildGuideCommand(serviceProvider));
+rootCommand.Subcommands.Add(BuildVodCommand(serviceProvider));
 
 return await rootCommand.Parse(args).InvokeAsync().ConfigureAwait(false);
 
@@ -73,6 +74,7 @@ static ServiceProvider BuildServiceProvider(bool verbose)
     services.AddSingleton<ChannelsCommandHandler>();
     services.AddSingleton<ResolveCommandHandler>();
     services.AddSingleton<PlayTestCommandHandler>();
+    services.AddSingleton<VodCommandHandler>();
 
     return services.BuildServiceProvider();
 }
@@ -113,9 +115,163 @@ static Command BuildSourcesCommand(IServiceProvider services)
             parseResult.GetValue(idArgument),
             cancellationToken))));
 
+    var refreshCommand = new Command(
+        "refresh",
+        "Re-imports a stored source's channels, films and series.");
+
+    refreshCommand.Arguments.Add(idArgument);
+    refreshCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithCatalogue<SourcesCommandHandler>(services, handler => handler.RefreshAsync(
+            parseResult.GetValue(idArgument),
+            cancellationToken))));
+
     command.Subcommands.Add(listCommand);
     command.Subcommands.Add(addCommand);
+    command.Subcommands.Add(refreshCommand);
     command.Subcommands.Add(removeCommand);
+
+    return command;
+}
+
+/// <summary>
+/// The film and series commands, all of which work against a source already in the catalogue.
+/// </summary>
+static Command BuildVodCommand(IServiceProvider services)
+{
+    var sourceIdOption = new Option<int>("--source-id")
+    {
+        Description = "Source id, as shown by 'sources list'.",
+        Required = true,
+    };
+
+    var filterOption = new Option<string?>("--filter", "-f")
+    {
+        Description = "Show only entries whose name contains this text.",
+    };
+
+    var limitOption = new Option<int>("--limit")
+    {
+        Description = "Maximum number of entries to print.",
+        DefaultValueFactory = _ => 40,
+    };
+
+    var command = new Command("vod", "Inspects and plays a stored source's films and series.");
+
+    var listCommand = new Command("list", "Lists the stored films.");
+    listCommand.Options.Add(sourceIdOption);
+    listCommand.Options.Add(filterOption);
+    listCommand.Options.Add(limitOption);
+    listCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithCatalogue<VodCommandHandler>(services, handler => handler.ListMoviesAsync(
+            parseResult.GetValue(sourceIdOption),
+            parseResult.GetValue(filterOption),
+            parseResult.GetValue(limitOption),
+            cancellationToken))));
+
+    var seriesCommand = new Command("series", "Lists the stored series.");
+    seriesCommand.Options.Add(sourceIdOption);
+    seriesCommand.Options.Add(filterOption);
+    seriesCommand.Options.Add(limitOption);
+    seriesCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithCatalogue<VodCommandHandler>(services, handler => handler.ListSeriesAsync(
+            parseResult.GetValue(sourceIdOption),
+            parseResult.GetValue(filterOption),
+            parseResult.GetValue(limitOption),
+            cancellationToken))));
+
+    var seriesIdOption = new Option<int>("--series-id")
+    {
+        Description = "Local series id, as shown by 'vod series'. Not the panel's own id.",
+        Required = true,
+    };
+
+    var episodesCommand = new Command(
+        "episodes",
+        "Shows a series' seasons and episodes, fetching them if the stored copy is stale.");
+
+    episodesCommand.Options.Add(sourceIdOption);
+    episodesCommand.Options.Add(seriesIdOption);
+    episodesCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithCatalogue<VodCommandHandler>(services, handler => handler.ShowSeriesAsync(
+            parseResult.GetValue(sourceIdOption),
+            parseResult.GetValue(seriesIdOption),
+            cancellationToken))));
+
+    var movieIdOption = new Option<int>("--movie-id")
+    {
+        Description = "Local film id, as shown by 'vod list'.",
+        Required = true,
+    };
+
+    var showCommand = new Command("show", "Shows one film's detail, fetching it if it has never been read.");
+    showCommand.Options.Add(sourceIdOption);
+    showCommand.Options.Add(movieIdOption);
+    showCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithCatalogue<VodCommandHandler>(services, handler => handler.ShowMovieAsync(
+            parseResult.GetValue(sourceIdOption),
+            parseResult.GetValue(movieIdOption),
+            cancellationToken))));
+
+    var continueCommand = new Command("continue", "Lists what is part-watched, most recent first.");
+    continueCommand.Options.Add(sourceIdOption);
+    continueCommand.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithCatalogue<VodCommandHandler>(services, handler => handler.ContinueWatchingAsync(
+            parseResult.GetValue(sourceIdOption),
+            cancellationToken))));
+
+    command.Subcommands.Add(listCommand);
+    command.Subcommands.Add(seriesCommand);
+    command.Subcommands.Add(episodesCommand);
+    command.Subcommands.Add(showCommand);
+    command.Subcommands.Add(continueCommand);
+    command.Subcommands.Add(BuildVodPlayTestCommand(services, sourceIdOption));
+
+    return command;
+}
+
+static Command BuildVodPlayTestCommand(IServiceProvider services, Option<int> sourceIdOption)
+{
+    // Optional here, unlike in the listing commands, because exactly one of the two must be given and
+    // System.CommandLine cannot express that; the handler says so plainly instead.
+    var movieIdOption = new Option<int?>("--movie-id")
+    {
+        Description = "Local film id, as shown by 'vod list'.",
+    };
+
+    var episodeIdOption = new Option<int?>("--episode-id")
+    {
+        Description = "Local episode id, as shown by 'vod episodes'.",
+    };
+
+    var secondsOption = new Option<int>("--seconds")
+    {
+        Description = "How long to hold the stream open.",
+        DefaultValueFactory = _ => 5,
+    };
+
+    var startAtOption = new Option<int>("--start-at")
+    {
+        Description = "Start this many seconds in, which is how resuming is verified.",
+    };
+
+    var command = new Command(
+        "play-test",
+        "Opens a stored film or episode headlessly, reports its position, then releases it.");
+
+    command.Options.Add(sourceIdOption);
+    command.Options.Add(movieIdOption);
+    command.Options.Add(episodeIdOption);
+    command.Options.Add(secondsOption);
+    command.Options.Add(startAtOption);
+
+    command.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
+        WithCatalogue<VodCommandHandler>(services, handler => handler.PlayTestAsync(
+            parseResult.GetValue(sourceIdOption),
+            parseResult.GetValue(movieIdOption),
+            parseResult.GetValue(episodeIdOption),
+            parseResult.GetValue(secondsOption),
+            parseResult.GetValue(startAtOption),
+            cancellationToken))));
 
     return command;
 }
