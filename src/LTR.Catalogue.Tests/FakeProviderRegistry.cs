@@ -95,10 +95,16 @@ internal sealed class FakeProviderRegistry
         return true;
     }
 
+    /// <summary>When set, <see cref="AuthenticateAsync"/> throws it instead of answering.</summary>
+    public Exception? AuthenticateException { get; set; }
+
     public Task<ProviderAccount> AuthenticateAsync(CancellationToken cancellationToken)
     {
         _calls.Add("authenticate");
-        return Task.FromResult(Account);
+
+        return AuthenticateException is not null
+            ? Task.FromException<ProviderAccount>(AuthenticateException)
+            : Task.FromResult(Account);
     }
 
     public bool Supports(PlaylistSource source)

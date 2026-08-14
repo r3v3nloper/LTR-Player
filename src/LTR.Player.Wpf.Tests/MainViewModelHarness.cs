@@ -32,6 +32,8 @@ internal sealed class MainViewModelHarness
 
     public FakeVodDetailService VodDetail { get; } = new();
 
+    public FakeStreamFailureExplainer Failures { get; } = new();
+
     /// <summary>
     /// The progress recorder the last built view model was given, so a test can prove a position was
     /// followed rather than only that a stream was opened.
@@ -57,6 +59,7 @@ internal sealed class MainViewModelHarness
                 new StubProviderRegistry(),
                 Session,
                 Progress,
+                Failures,
                 status,
                 NullLogger<PlaybackCoordinator>.Instance),
             new PlayerOverlayViewModel(Session, Clock),

@@ -34,6 +34,7 @@ public sealed partial class PlaybackCoordinator : ObservableObject
     private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
     private readonly WatchProgressRecorder _progress;
+    private readonly IStreamFailureExplainer _failures;
     private readonly StatusLine _status;
     private readonly ILogger<PlaybackCoordinator> _logger;
 
@@ -55,12 +56,14 @@ public sealed partial class PlaybackCoordinator : ObservableObject
         IProviderRegistry providers,
         IPlaybackSession session,
         WatchProgressRecorder progress,
+        IStreamFailureExplainer failures,
         StatusLine status,
         ILogger<PlaybackCoordinator> logger)
     {
         _providers = providers;
         _session = session;
         _progress = progress;
+        _failures = failures;
         _status = status;
         _logger = logger;
 
@@ -139,7 +142,7 @@ public sealed partial class PlaybackCoordinator : ObservableObject
         await RecordProgressAsync(cancellationToken).ConfigureAwait(true);
 
         var request = _providers.GetStreamUrlResolver(source).ResolveLive(source, channel);
-        await StartAsync(request, displayName, cancellationToken).ConfigureAwait(true);
+        await StartAsync(source, request, displayName, cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -158,6 +161,7 @@ public sealed partial class PlaybackCoordinator : ObservableObject
         var request = _providers.GetStreamUrlResolver(source).ResolveMovie(source, movie, startAt);
 
         await PlayResumableAsync(
+                source,
                 ContentKind.Movie,
                 movie.Id,
                 request,
@@ -183,6 +187,7 @@ public sealed partial class PlaybackCoordinator : ObservableObject
         var request = _providers.GetStreamUrlResolver(source).ResolveEpisode(source, episode, startAt);
 
         await PlayResumableAsync(
+                source,
                 ContentKind.Series,
                 episode.Id,
                 request,
@@ -256,6 +261,7 @@ public sealed partial class PlaybackCoordinator : ObservableObject
     /// Starts a film or episode and begins following where it gets to.
     /// </summary>
     private async Task PlayResumableAsync(
+        PlaylistSource source,
         ContentKind kind,
         int itemId,
         MediaRequest request,
@@ -270,7 +276,7 @@ public sealed partial class PlaybackCoordinator : ObservableObject
         // place reset to the beginning — and a deep seek can take longer than the first sample.
         _progress.Track(kind, itemId, startAt ?? TimeSpan.Zero);
 
-        if (!await StartAsync(request, displayName, cancellationToken).ConfigureAwait(true))
+        if (!await StartAsync(source, request, displayName, cancellationToken).ConfigureAwait(true))
         {
             // Nothing was watched, so there is nothing to remember — and leaving the recorder following a
             // film that never opened would attribute the next stop to it.
@@ -282,6 +288,7 @@ public sealed partial class PlaybackCoordinator : ObservableObject
     /// Opens a stream and reports whether it started.
     /// </summary>
     private async Task<bool> StartAsync(
+        PlaylistSource source,
         MediaRequest request,
         string displayName,
         CancellationToken cancellationToken)
@@ -298,9 +305,9 @@ public sealed partial class PlaybackCoordinator : ObservableObject
             // Expected in daily use: providers take channels offline without notice, and a subscription
             // permitting one connection refuses the next stream until it notices the last one closed.
             PlayerLog.ChannelUnplayable(_logger, exception, displayName);
-            _status.Text = $"{displayName} could not be played. It may be offline, or the subscription's "
-                + "one connection may still be in use.";
             NowPlaying = string.Empty;
+
+            await ReportFailureAsync(source, displayName, cancellationToken).ConfigureAwait(true);
 
             return false;
         }
@@ -311,6 +318,32 @@ public sealed partial class PlaybackCoordinator : ObservableObject
             // ordinary key press.
             return false;
         }
+    }
+
+    /// <summary>
+    /// Says what went wrong, having asked the provider rather than guessed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one message this replaced named an offline channel and a busy connection in the same breath, and
+    /// mentioned neither an expired subscription nor rejected credentials. All four look identical from
+    /// inside the engine and want different things from the viewer, and only the provider knows which it is.
+    /// </para>
+    /// <para>
+    /// A vague sentence goes up first so that something appears immediately: asking the panel is a network
+    /// request, and on a provider that is timing out it is the slowest thing in the failure path.
+    /// </para>
+    /// </remarks>
+    private async Task ReportFailureAsync(
+        PlaylistSource source,
+        string displayName,
+        CancellationToken cancellationToken)
+    {
+        _status.Text = $"{displayName} could not be played. Asking {source.Name} why...";
+
+        var reason = await _failures.ExplainAsync(source, cancellationToken).ConfigureAwait(true);
+
+        _status.Text = $"{displayName} could not be played. {StreamFailureText.Describe(reason)}";
     }
 
     /// <remarks>

@@ -86,6 +86,16 @@ internal static partial class CatalogueLog
         string kind,
         int itemId);
 
+    /// <remarks>
+    /// Warning rather than error: the playback failure this was trying to explain is already reported, and
+    /// failing to explain it only costs the viewer a vaguer sentence.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 1409,
+        Level = LogLevel.Warning,
+        Message = "Could not ask {Source} why a stream would not open; reporting it as unexplained.")]
+    public static partial void FailureNotExplained(ILogger logger, Exception exception, string source);
+
     [LoggerMessage(
         EventId = 1407,
         Level = LogLevel.Information,
