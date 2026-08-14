@@ -1,5 +1,6 @@
 using LTR.Catalogue;
 using LTR.Core.Content;
+using LTR.Core.Playback;
 using LTR.Core.Sources;
 
 namespace LTR.Player.Wpf;
@@ -153,6 +154,77 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
     {
         DeletedSourceIds.Add(sourceId);
         Sources.RemoveAll(source => source.Id == sourceId);
+        return Task.CompletedTask;
+    }
+
+    public List<VodItem> Movies { get; } = [];
+
+    public List<Series> SeriesCatalogue { get; } = [];
+
+    public List<Episode> Episodes { get; } = [];
+
+    public List<ContinueWatchingEntry> ContinueWatching { get; } = [];
+
+    /// <summary>
+    /// Progress that was written, so a test can prove a position was persisted and with what verdict.
+    /// </summary>
+    public List<(ContentKind Kind, int ItemId, WatchOutcome Outcome, TimeSpan Position)> ProgressWrites
+    {
+        get;
+    } = [];
+
+    public Task<IReadOnlyList<VodItem>> GetMoviesAsync(int sourceId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<VodItem>>(
+            [.. Movies.Where(movie => movie.SourceId == sourceId)]);
+    }
+
+    public Task<IReadOnlyList<Series>> GetSeriesAsync(int sourceId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<Series>>(
+            [.. SeriesCatalogue.Where(series => series.SourceId == sourceId)]);
+    }
+
+    public Task<VodItem?> GetMovieAsync(int movieId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(Movies.FirstOrDefault(movie => movie.Id == movieId));
+    }
+
+    public Task<Episode?> GetEpisodeAsync(int episodeId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(Episodes.FirstOrDefault(episode => episode.Id == episodeId));
+    }
+
+    public Task<IReadOnlyList<ContinueWatchingEntry>> GetContinueWatchingAsync(
+        int sourceId,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<ContinueWatchingEntry>>(
+        [
+            .. ContinueWatching
+                .OrderByDescending(entry => entry.LastWatchedUtc)
+                .Take(limit),
+        ]);
+    }
+
+    public Task RecordMovieProgressAsync(
+        int movieId,
+        WatchOutcome outcome,
+        TimeSpan position,
+        CancellationToken cancellationToken)
+    {
+        ProgressWrites.Add((ContentKind.Movie, movieId, outcome, position));
+        return Task.CompletedTask;
+    }
+
+    public Task RecordEpisodeProgressAsync(
+        int episodeId,
+        WatchOutcome outcome,
+        TimeSpan position,
+        CancellationToken cancellationToken)
+    {
+        ProgressWrites.Add((ContentKind.Series, episodeId, outcome, position));
         return Task.CompletedTask;
     }
 }

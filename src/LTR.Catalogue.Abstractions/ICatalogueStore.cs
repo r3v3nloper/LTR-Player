@@ -1,4 +1,5 @@
 using LTR.Core.Content;
+using LTR.Core.Playback;
 using LTR.Core.Sources;
 
 namespace LTR.Catalogue;
@@ -68,4 +69,52 @@ public interface ICatalogueStore
     Task SetFavoriteAsync(int channelId, bool isFavorite, CancellationToken cancellationToken);
 
     Task DeleteSourceAsync(int sourceId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<VodItem>> GetMoviesAsync(int sourceId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// A source's series, without their seasons.
+    /// </summary>
+    /// <remarks>
+    /// Shallow because that is how they are stored: seasons arrive from a separate call made when a series
+    /// is opened. <see cref="IVodDetailService"/> is what produces a series with its seasons.
+    /// </remarks>
+    Task<IReadOnlyList<Series>> GetSeriesAsync(int sourceId, CancellationToken cancellationToken);
+
+    Task<VodItem?> GetMovieAsync(int movieId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// One episode on its own, which is what resuming a continue-watching row needs.
+    /// </summary>
+    /// <remarks>
+    /// An episode's address is built from its own identifier, so nothing about its series or season has to
+    /// be loaded to play it.
+    /// </remarks>
+    Task<Episode?> GetEpisodeAsync(int episodeId, CancellationToken cancellationToken);
+
+    /// <summary>What the viewer is part-way through, most recently watched first.</summary>
+    Task<IReadOnlyList<ContinueWatchingEntry>> GetContinueWatchingAsync(
+        int sourceId,
+        int limit,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Records where the viewer left a film.
+    /// </summary>
+    /// <remarks>
+    /// Takes the outcome rather than a set of column values, so that what "finished" means to a row is
+    /// decided in one place. <see cref="LTR.Core.Playback.ResumePolicy"/> is what produces it.
+    /// </remarks>
+    Task RecordMovieProgressAsync(
+        int movieId,
+        WatchOutcome outcome,
+        TimeSpan position,
+        CancellationToken cancellationToken);
+
+    /// <summary>Records where the viewer left an episode.</summary>
+    Task RecordEpisodeProgressAsync(
+        int episodeId,
+        WatchOutcome outcome,
+        TimeSpan position,
+        CancellationToken cancellationToken);
 }

@@ -3,6 +3,7 @@ using LTR.Core.Sources;
 using LTR.Persistence;
 using LTR.Providers;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace LTR.Catalogue;
 
@@ -14,15 +15,18 @@ internal sealed class SourceImportService : ISourceImportService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IProviderRegistry _providers;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<SourceImportService> _logger;
 
     public SourceImportService(
         IServiceScopeFactory scopeFactory,
         IProviderRegistry providers,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ILogger<SourceImportService> logger)
     {
         _scopeFactory = scopeFactory;
         _providers = providers;
         _timeProvider = timeProvider;
+        _logger = logger;
     }
 
     public Task<SourceImportResult> ImportAsync(
@@ -81,6 +85,8 @@ internal sealed class SourceImportService : ISourceImportService
             .ConfigureAwait(false);
         var channels = await provider.FetchLiveChannelsAsync(cancellationToken).ConfigureAwait(false);
 
+        var vod = await FetchVodAsync(source, provider, progress, cancellationToken).ConfigureAwait(false);
+
         progress?.Report(SourceImportStage.Storing);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
@@ -104,6 +110,89 @@ internal sealed class SourceImportService : ISourceImportService
                 cancellationToken)
             .ConfigureAwait(false);
 
-        return new SourceImportResult(account, sourceId, channels.Count, categories.Count);
+        // Stored even when everything in it is empty, which is what removes a section the subscription has
+        // stopped offering rather than leaving an unplayable catalogue behind.
+        await context.ReconcileVodCatalogueAsync(
+                sourceId,
+                vod.Categories,
+                vod.Movies,
+                vod.Series,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        CatalogueLog.CatalogueImported(
+            _logger,
+            source.Name,
+            channels.Count,
+            vod.Movies.Count,
+            vod.Series.Count);
+
+        return new SourceImportResult(
+            account,
+            sourceId,
+            channels.Count,
+            categories.Count + vod.Categories.Count,
+            vod.Movies.Count,
+            vod.Series.Count);
+    }
+
+    /// <summary>
+    /// Fetches the film and series sections the source was probed as supporting.
+    /// </summary>
+    /// <remarks>
+    /// Guarded by the capabilities rather than attempted and caught. Panels that lack these endpoints
+    /// answer them with the authentication object or with an HTML error page, and asking anyway would put
+    /// two failed requests into every refresh of every playlist source.
+    /// </remarks>
+    private static async Task<VodCatalogue> FetchVodAsync(
+        PlaylistSource source,
+        IContentProvider provider,
+        IProgress<SourceImportStage>? progress,
+        CancellationToken cancellationToken)
+    {
+        var capabilities = source.Capabilities;
+
+        if (!capabilities.SupportsVod && !capabilities.SupportsSeries)
+        {
+            return VodCatalogue.Empty;
+        }
+
+        progress?.Report(SourceImportStage.FetchingVod);
+
+        var categories = new List<Category>();
+        IReadOnlyList<VodItem> movies = [];
+        IReadOnlyList<Series> series = [];
+
+        if (capabilities.SupportsVod)
+        {
+            categories.AddRange(
+                await provider.FetchCategoriesAsync(ContentKind.Movie, cancellationToken)
+                    .ConfigureAwait(false));
+
+            movies = await provider.FetchMoviesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (capabilities.SupportsSeries)
+        {
+            categories.AddRange(
+                await provider.FetchCategoriesAsync(ContentKind.Series, cancellationToken)
+                    .ConfigureAwait(false));
+
+            series = await provider.FetchSeriesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return new VodCatalogue(categories, movies, series);
+    }
+
+    /// <summary>
+    /// What one import's film and series sections came to, carried together so the storing step reads as
+    /// one call rather than three parameters that have to stay in step.
+    /// </summary>
+    private sealed record VodCatalogue(
+        IReadOnlyList<Category> Categories,
+        IReadOnlyList<VodItem> Movies,
+        IReadOnlyList<Series> Series)
+    {
+        public static VodCatalogue Empty { get; } = new([], [], []);
     }
 }

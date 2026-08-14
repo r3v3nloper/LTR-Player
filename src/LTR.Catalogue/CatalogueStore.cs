@@ -1,4 +1,5 @@
 using LTR.Core.Content;
+using LTR.Core.Playback;
 using LTR.Core.Sources;
 using LTR.Persistence;
 
@@ -15,10 +16,17 @@ namespace LTR.Catalogue;
 internal sealed class CatalogueStore : ICatalogueStore
 {
     private readonly CatalogueUnitOfWork _database;
+    private readonly TimeProvider _timeProvider;
 
-    public CatalogueStore(CatalogueUnitOfWork database)
+    /// <param name="timeProvider">
+    /// Stamps the moment a film or episode was last watched. Taken here rather than from the caller: the
+    /// caller is a view model reacting to playback stopping, and "when did that happen" is not something
+    /// it should be able to get wrong.
+    /// </param>
+    public CatalogueStore(CatalogueUnitOfWork database, TimeProvider timeProvider)
     {
         _database = database;
+        _timeProvider = timeProvider;
     }
 
     public Task<IReadOnlyList<PlaylistSource>> GetSourcesAsync(CancellationToken cancellationToken)
@@ -77,5 +85,62 @@ internal sealed class CatalogueStore : ICatalogueStore
     public Task DeleteSourceAsync(int sourceId, CancellationToken cancellationToken)
     {
         return _database.RunAsync(context => context.DeleteSourceAsync(sourceId, cancellationToken));
+    }
+
+    public Task<IReadOnlyList<VodItem>> GetMoviesAsync(int sourceId, CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.GetMoviesAsync(sourceId, cancellationToken));
+    }
+
+    public Task<IReadOnlyList<Series>> GetSeriesAsync(int sourceId, CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.GetSeriesAsync(sourceId, cancellationToken));
+    }
+
+    public Task<VodItem?> GetMovieAsync(int movieId, CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.GetMovieAsync(movieId, cancellationToken));
+    }
+
+    public Task<Episode?> GetEpisodeAsync(int episodeId, CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.GetEpisodeAsync(episodeId, cancellationToken));
+    }
+
+    public Task<IReadOnlyList<ContinueWatchingEntry>> GetContinueWatchingAsync(
+        int sourceId,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context =>
+            context.GetContinueWatchingAsync(sourceId, limit, cancellationToken));
+    }
+
+    public Task RecordMovieProgressAsync(
+        int movieId,
+        WatchOutcome outcome,
+        TimeSpan position,
+        CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.RecordMovieProgressAsync(
+            movieId,
+            outcome,
+            position,
+            _timeProvider.GetUtcNow(),
+            cancellationToken));
+    }
+
+    public Task RecordEpisodeProgressAsync(
+        int episodeId,
+        WatchOutcome outcome,
+        TimeSpan position,
+        CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.RecordEpisodeProgressAsync(
+            episodeId,
+            outcome,
+            position,
+            _timeProvider.GetUtcNow(),
+            cancellationToken));
     }
 }

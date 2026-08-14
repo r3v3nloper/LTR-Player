@@ -50,4 +50,35 @@ internal static partial class CatalogueLog
         Level = LogLevel.Debug,
         Message = "The guide for {Source} was imported at {ImportedAt} and is still fresh; skipping.")]
     public static partial void GuideStillFresh(ILogger logger, string source, DateTimeOffset importedAt);
+
+    [LoggerMessage(
+        EventId = 1405,
+        Level = LogLevel.Information,
+        Message = "Fetched the detail of {Series}: {Seasons} seasons, {Episodes} episodes.")]
+    public static partial void SeriesDetailFetched(
+        ILogger logger,
+        string series,
+        int seasons,
+        int episodes);
+
+    [LoggerMessage(
+        EventId = 1406,
+        Level = LogLevel.Warning,
+        Message = "Could not fetch the detail of {Item} from {Source}; showing what is stored.")]
+    public static partial void DetailFetchFailed(
+        ILogger logger,
+        Exception exception,
+        string item,
+        string source);
+
+    [LoggerMessage(
+        EventId = 1407,
+        Level = LogLevel.Information,
+        Message = "Imported {Source}: {Channels} channels, {Movies} films, {Series} series.")]
+    public static partial void CatalogueImported(
+        ILogger logger,
+        string source,
+        int channels,
+        int movies,
+        int series);
 }

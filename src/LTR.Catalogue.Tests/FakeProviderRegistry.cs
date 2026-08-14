@@ -112,12 +112,19 @@ internal sealed class FakeProviderRegistry
         return Task.FromResult(Capabilities);
     }
 
+    /// <summary>When set, every detail fetch fails, standing in for a panel that cannot be reached.</summary>
+    public bool DetailFetchFails { get; set; }
+
     public Task<IReadOnlyList<Category>> FetchCategoriesAsync(
         ContentKind kind,
         CancellationToken cancellationToken)
     {
-        _calls.Add("categories");
-        return Task.FromResult<IReadOnlyList<Category>>(Categories);
+        // Recorded with its kind: an import asks for three of them, and which kinds it asked for is
+        // exactly what the capability guard is supposed to decide.
+        _calls.Add($"categories:{kind}");
+
+        return Task.FromResult<IReadOnlyList<Category>>(
+            [.. Categories.Where(category => category.Kind == kind)]);
     }
 
     public Task<IReadOnlyList<Channel>> FetchLiveChannelsAsync(CancellationToken cancellationToken)
@@ -141,12 +148,18 @@ internal sealed class FakeProviderRegistry
     public Task<MovieDetail?> FetchMovieDetailAsync(string externalId, CancellationToken cancellationToken)
     {
         _calls.Add($"movie-detail:{externalId}");
-        return Task.FromResult(MovieDetail);
+
+        return DetailFetchFails
+            ? Task.FromException<MovieDetail?>(new HttpRequestException("The panel is unreachable."))
+            : Task.FromResult(MovieDetail);
     }
 
     public Task<SeriesDetail?> FetchSeriesDetailAsync(string externalId, CancellationToken cancellationToken)
     {
         _calls.Add($"series-detail:{externalId}");
-        return Task.FromResult(SeriesDetail);
+
+        return DetailFetchFails
+            ? Task.FromException<SeriesDetail?>(new HttpRequestException("The panel is unreachable."))
+            : Task.FromResult(SeriesDetail);
     }
 }

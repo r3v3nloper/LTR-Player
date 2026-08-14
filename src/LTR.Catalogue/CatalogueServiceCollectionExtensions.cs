@@ -38,6 +38,7 @@ public static class CatalogueServiceCollectionExtensions
         services.TryAddSingleton<ICatalogueStore, CatalogueStore>();
         services.TryAddSingleton<ISourceImportService, SourceImportService>();
         services.TryAddSingleton<IGuideImportService, GuideImportService>();
+        services.TryAddSingleton<IVodDetailService, VodDetailService>();
 
         return services;
     }
