@@ -19,4 +19,10 @@ public sealed class XtreamSource : PlaylistSource
     public required string Password { get; set; }
 
     public override Uri Endpoint => BaseUrl;
+
+    /// <remarks>
+    /// A panel's <c>user_info</c> block states the account's status, its expiry and how many connections it
+    /// currently counts — the three things that explain a stream refusing to open.
+    /// </remarks>
+    public override bool ReportsAccountState => true;
 }

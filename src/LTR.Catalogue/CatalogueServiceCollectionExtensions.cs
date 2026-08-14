@@ -39,6 +39,7 @@ public static class CatalogueServiceCollectionExtensions
         services.TryAddSingleton<ISourceImportService, SourceImportService>();
         services.TryAddSingleton<IGuideImportService, GuideImportService>();
         services.TryAddSingleton<IVodDetailService, VodDetailService>();
+        services.TryAddSingleton<IStreamFailureExplainer, StreamFailureExplainer>();
 
         // Singleton, and stateful unlike the rest of this layer: one stream is open at a time, so one thing
         // is being watched at a time. The same reasoning that makes the playback session a singleton.

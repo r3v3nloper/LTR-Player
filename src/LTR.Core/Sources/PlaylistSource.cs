@@ -56,4 +56,15 @@ public abstract class PlaylistSource
 
     /// <summary>Absolute address the provider is reached at, used for logging and de-duplication.</summary>
     public abstract Uri Endpoint { get; }
+
+    /// <summary>
+    /// Whether the provider keeps an account behind this source whose state can be asked about.
+    /// </summary>
+    /// <remarks>
+    /// A panel reports a status, an expiry date and how many connections it currently counts, which is what
+    /// makes a stream that would not open explainable. A playlist reports nothing of the sort: the document
+    /// either downloads or it does not, and asking again costs a multi-megabyte download that answers a
+    /// different question. Abstract rather than defaulted, so a further protocol has to say which it is.
+    /// </remarks>
+    public abstract bool ReportsAccountState { get; }
 }

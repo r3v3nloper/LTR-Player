@@ -66,6 +66,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         StatusLine status,
         PlaybackCoordinator playback,
         PlayerOverlayViewModel playerOverlay,
+        SettingsViewModel settings,
         GuideImportCoordinator guideImport,
         ILogger<MainViewModel> logger)
     {
@@ -77,6 +78,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         ContinueWatching = continueWatching;
         Status = status;
         PlayerOverlay = playerOverlay;
+        Settings = settings;
 
         _playback = playback;
         _guideImport = guideImport;
@@ -89,6 +91,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         ContinueWatching.PropertyChanged += OnContinueWatchingPropertyChanged;
         _guideImport.PropertyChanged += OnGuideImportPropertyChanged;
         _playback.PropertyChanged += OnPlaybackPropertyChanged;
+        Settings.PropertyChanged += OnSettingsPropertyChanged;
 
         SourceManagement.Coordinator = this;
 
@@ -115,6 +118,19 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
     /// <summary>The controls drawn over the picture.</summary>
     public PlayerOverlayViewModel PlayerOverlay { get; }
+
+    /// <summary>The settings pane, which owns whether it is open.</summary>
+    public SettingsViewModel Settings { get; }
+
+    /// <summary>
+    /// Whether the catalogue is what the left pane is showing, rather than a form.
+    /// </summary>
+    /// <remarks>
+    /// One positive property instead of the two negated bindings the markup had, now that a second pane can
+    /// take the same space. The source picker hides with the rest deliberately: switching source behind an
+    /// open settings pane would leave it editing the one that is no longer selected.
+    /// </remarks>
+    public bool IsShowingCatalogue => !SourceManagement.IsAddingSource && !Settings.IsOpen;
 
     /// <summary>What is playing, for the overlay over the video.</summary>
     public string NowPlaying => _playback.NowPlaying;
@@ -240,6 +256,10 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     {
         await _shellLifetime.CancelAsync().ConfigureAwait(true);
         await _playback.ShutdownAsync().ConfigureAwait(true);
+
+        // Last, and after the release rather than before it: the volume the viewer left the player at is
+        // worth keeping, but not at the cost of delaying the one thing that has to happen on the way out.
+        Settings.Persist();
     }
 
     async Task ISourceCoordinator.ShowCatalogueAsync(PlaylistSource? source, CancellationToken cancellationToken)
@@ -504,6 +524,25 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     }
 
     /// <summary>
+    /// Opens or closes the settings pane, handing it the selected source on the way in.
+    /// </summary>
+    /// <remarks>
+    /// The source is passed rather than looked up, for the same reason the timeline is handed the visible
+    /// channels: only this class knows which source is selected, and the panes do not reference each other.
+    /// </remarks>
+    [RelayCommand]
+    private void ToggleSettings()
+    {
+        if (Settings.IsOpen)
+        {
+            Settings.Close();
+            return;
+        }
+
+        Settings.Open(SourceManagement.SelectedSource);
+    }
+
+    /// <summary>
     /// Fetches the selected source's guide on request, whether or not the stored one is still fresh.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanImportGuide))]
@@ -626,12 +665,29 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     /// </remarks>
     private void OnSourceManagementPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is null or "" or nameof(SourceManagementViewModel.IsAddingSource))
+        {
+            OnPropertyChanged(nameof(IsShowingCatalogue));
+        }
+
         if (e.PropertyName is not (null or "" or nameof(SourceManagementViewModel.SelectedSource)))
         {
             return;
         }
 
         ImportGuideCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <remarks>
+    /// The same object-boundary problem as the command guards: the pane owns whether it is open and the left
+    /// pane's visibility is worked out here, so the change has to be forwarded by hand.
+    /// </remarks>
+    private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is null or "" or nameof(SettingsViewModel.IsOpen))
+        {
+            OnPropertyChanged(nameof(IsShowingCatalogue));
+        }
     }
 
     /// <remarks>

@@ -8,12 +8,19 @@ namespace LTR.Player.Wpf;
 /// Assembles the composed view model over fakes, so each test states only what it cares about.
 /// </summary>
 /// <remarks>
-/// Shared by every test class here rather than repeated in each. The composed view model takes eight
-/// constructor arguments and gained two of them in a single session; a copy per test class meant the same
-/// edit twice, and the second copy is the one that gets forgotten.
+/// Shared by every test class here rather than repeated in each. The composed view model takes twelve
+/// constructor arguments and has gained two in a single session more than once; a copy per test class meant
+/// the same edit twice, and the second copy is the one that gets forgotten.
 /// </remarks>
 internal sealed class MainViewModelHarness
 {
+    private readonly FakePlayerSettingsStore _settingsStore;
+
+    public MainViewModelHarness()
+    {
+        _settingsStore = new FakePlayerSettingsStore(Settings);
+    }
+
     /// <summary>
     /// The moment the fake clock stands at. Fixed so a test can place programmes around a known instant
     /// rather than around whenever it happens to run.
@@ -32,11 +39,25 @@ internal sealed class MainViewModelHarness
 
     public FakeVodDetailService VodDetail { get; } = new();
 
+    public FakeStreamFailureExplainer Failures { get; } = new();
+
     /// <summary>
     /// The progress recorder the last built view model was given, so a test can prove a position was
     /// followed rather than only that a stream was opened.
     /// </summary>
     public WatchProgressRecorder? Progress { get; private set; }
+
+    /// <summary>
+    /// The settings the built view model shares, so a test can seed a remembered volume or read one back.
+    /// </summary>
+    /// <remarks>
+    /// One instance, as the container hands out: the overlay writes the viewer's volume into it and the
+    /// settings pane writes the tuning, and a second copy would hide either from the other.
+    /// </remarks>
+    public PlayerSettings Settings { get; } = new();
+
+    /// <summary>What the shell saved, or null when it has not. Set by the way out of the window.</summary>
+    public PlayerSettings? SavedSettings => _settingsStore.Saved;
 
     public MainViewModel Build()
     {
@@ -57,9 +78,16 @@ internal sealed class MainViewModelHarness
                 new StubProviderRegistry(),
                 Session,
                 Progress,
+                Failures,
                 status,
                 NullLogger<PlaybackCoordinator>.Instance),
-            new PlayerOverlayViewModel(Session, Clock),
+            new PlayerOverlayViewModel(Session, Settings, Clock),
+            new SettingsViewModel(
+                _settingsStore,
+                Settings,
+                Store,
+                status,
+                NullLogger<SettingsViewModel>.Instance),
             new GuideImportCoordinator(GuideImport, status, NullLogger<GuideImportCoordinator>.Instance),
             NullLogger<MainViewModel>.Instance);
     }

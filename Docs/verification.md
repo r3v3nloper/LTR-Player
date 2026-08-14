@@ -205,6 +205,39 @@ making, in the order that finds problems fastest:
 7. **Let a film play to its end.** It must come off the continue-watching list without the window being
    closed first — that is the one this milestone fixed, and the failure mode is silent.
 
+## 8. Does a failing stream say why?
+
+Since M6 a refused stream asks the provider rather than guessing, and the CLI prints the answer:
+
+```
+Playback error: Could not play stream 1234. ...
+Reason:  ConnectionLimitReached
+         The panel counts every permitted connection as in use. ...
+```
+
+`ConnectionLimitReached` immediately after another play-test is the expected answer, not a defect — the panel
+is still counting the previous connection. `ChannelUnavailable` means the account is healthy and a connection
+is free, so the channel itself is off the air. Deliberately, a playlist source is never asked: it has no
+account, and asking would re-download the whole document to answer a different question.
+
+## 9. Does the packaged build run?
+
+`Docs/packaging.md` has the detail. The short version:
+
+```bash
+pwsh build/publish.ps1
+```
+
+Then run the result **with its working directory somewhere else**, which is what distinguishes natives resolved
+relative to the application from natives found because the shell started in the right folder:
+
+```powershell
+Start-Process artifacts\publish\LTR-Player.exe -WorkingDirectory C:\
+```
+
+A window that opens and plays nothing is the failure mode to watch for: it means LibVLC's natives are absent,
+which is silent everywhere else. The script checks for them by name and refuses to zip without them.
+
 ## Automated tests
 
 ```bash

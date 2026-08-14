@@ -29,8 +29,11 @@ internal static class LibVlcRuntime
                 return;
             }
 
-            // A null path makes LibVLCSharp search next to the executable, which is where the
-            // VideoLAN.LibVLC.Windows package places libvlc.dll and its plugins folder.
+            // A null path makes LibVLCSharp probe for itself, which lands on libvlc\win-x64 beneath the
+            // application directory — not beside the executable, which is what this comment used to say.
+            // That is where the VideoLAN.LibVLC.Windows package puts libvlc.dll, its plugins tree and the
+            // rest, and the publish profile has to name the same architecture or the folder is not there
+            // at all.
             VlcCore.Initialize(nativeLibraryDirectory!);
             _isInitialized = true;
         }

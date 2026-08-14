@@ -6,12 +6,35 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>LTR.Player.Wpf</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>ltr-player.ico</ApplicationIcon>
+    <AssemblyTitle>LTR-Player</AssemblyTitle>
+
+    <!--
+      Named for the window rather than for the namespace, because this is what a viewer sees in the task
+      bar and in a shortcut. The assembly keeps its own name so the project layout still reads.
+    -->
+    <AssemblyName>LTR-Player</AssemblyName>
   </PropertyGroup>
+
+  <!--
+    Self-containment lives in Properties/PublishProfiles/win-x64.pubxml rather than here, and has to: a
+    self-contained project cannot be referenced by one that is not, so setting it here stops the test
+    project compiling.
+  -->
 
   <ItemGroup>
     <!-- As every other project here does, so the shell's own wording and helpers can be tested without
          being made public to the application. -->
     <InternalsVisibleTo Include="LTR.Player.Wpf.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Ships beside the executable. LibVLC is LGPL and dynamically linked, and the notice travelling with the
+      binaries is half of what that arrangement requires — the package itself carries no licence file, so
+      this is where it comes from.
+    -->
+    <Content Include="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

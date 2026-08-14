@@ -49,6 +49,7 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
     public const int VolumeStep = 5;
 
     private readonly IPlaybackSession _session;
+    private readonly PlayerSettings.PlayerStateSettings _remembered;
     private readonly TimeProvider _timeProvider;
 
     private DateTimeOffset _lastActivity;
@@ -97,17 +98,36 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
     [ObservableProperty]
     private AspectRatioChoice _selectedAspectRatio = AspectRatioChoice.For(VideoAspectRatio.Source);
 
-    public PlayerOverlayViewModel(IPlaybackSession session, TimeProvider timeProvider)
+    /// <param name="settings">
+    /// The player's own settings, whose remembered half this writes back as the viewer changes it.
+    /// </param>
+    /// <remarks>
+    /// Taken as the live object rather than as values, so that whoever writes the settings file on the way out
+    /// finds the current figures in it without this class knowing anything about files.
+    /// </remarks>
+    public PlayerOverlayViewModel(
+        IPlaybackSession session,
+        PlayerSettings settings,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
+        var remembered = settings.Player;
+
         _session = session;
+        _remembered = remembered;
         _timeProvider = timeProvider;
         _lastActivity = timeProvider.GetUtcNow();
 
         AudioTracks = new TrackSelectionViewModel(MediaTrackKind.Audio, canBeSwitchedOff: false, Select);
         SubtitleTracks = new TrackSelectionViewModel(MediaTrackKind.Subtitle, canBeSwitchedOff: true, Select);
+
+        // Assigned through the properties, so each reaches the engine exactly as a viewer's change does.
+        Volume = Math.Clamp(remembered.Volume, 0, 100);
+        IsMuted = remembered.IsMuted;
+        SelectedAspectRatio = AspectRatioChoice.For(remembered.AspectRatio);
     }
 
     public TrackSelectionViewModel AudioTracks { get; }
@@ -341,18 +361,26 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
         _session.SelectTrack(kind, trackId);
     }
 
+    /// <remarks>
+    /// Each of these writes the engine and the remembered state together. Written on change rather than saved
+    /// on change: the file is put out once, on the way out of the window, because a volume slider being
+    /// dragged raises this a hundred times.
+    /// </remarks>
     partial void OnVolumeChanged(int value)
     {
         _session.Volume = value;
+        _remembered.Volume = value;
     }
 
     partial void OnIsMutedChanged(bool value)
     {
         _session.IsMuted = value;
+        _remembered.IsMuted = value;
     }
 
     partial void OnSelectedAspectRatioChanged(AspectRatioChoice value)
     {
         _session.AspectRatio = value.Value;
+        _remembered.AspectRatio = value.Value;
     }
 }

@@ -68,6 +68,21 @@ public interface ICatalogueStore
 
     Task SetFavoriteAsync(int channelId, bool isFavorite, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Stores the two settings a viewer may need to change on a source they have already added.
+    /// </summary>
+    /// <remarks>
+    /// Both exist because panels differ in ways that cannot be probed. A panel that rejects the default
+    /// VLC-like agent serves nothing at all, and one whose <c>allowed_output_formats</c> under-reports needs
+    /// the container chosen by hand — before this there was no way to correct either without the command
+    /// line, which is not much of a remedy for someone whose channels have simply stopped working.
+    /// </remarks>
+    Task UpdateSourceSettingsAsync(
+        int sourceId,
+        string userAgent,
+        StreamFormat preferredStreamFormat,
+        CancellationToken cancellationToken);
+
     Task DeleteSourceAsync(int sourceId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<VodItem>> GetMoviesAsync(int sourceId, CancellationToken cancellationToken);

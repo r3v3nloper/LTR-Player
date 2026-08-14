@@ -1,6 +1,7 @@
 using LTR.Core.Content;
 using LTR.Core.Playback;
 using LTR.Core.Sources;
+using LTR.Playback;
 
 namespace LTR.Player.Wpf;
 
@@ -254,6 +255,86 @@ public sealed class PlayerControlTests
         // Assert
         context.Store.ProgressWrites.ShouldHaveSingleItem().Position.ShouldBe(TimeSpan.FromMinutes(30));
         viewModel.NowPlaying.ShouldBe("Erste", "and the channel is still playing");
+    }
+
+    /// <remarks>
+    /// The message this replaced named an offline channel and a busy connection in the same breath, and
+    /// mentioned neither an expired subscription nor rejected credentials — four causes that look identical
+    /// from inside the engine and want four different things from the viewer.
+    /// </remarks>
+    [Fact]
+    public async Task AChannelThatWillNotPlay_ReportsWhatTheProviderSaid()
+    {
+        // Arrange
+        var context = new MainViewModelHarness();
+        var viewModel = await WithThreeChannelsAsync(context);
+
+        context.Session.SwitchException = new PlaybackFailedException(
+            "the provider refused the connection",
+            new MediaRequest(
+                new Uri("http://panel.example/live/u/p/101.ts"),
+                "TestAgent/1.0",
+                StreamFormat.MpegTs,
+                "Erste"));
+
+        context.Failures.Reason = StreamFailureReason.ConnectionLimitReached;
+        viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
+
+        // Act
+        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+
+        // Assert
+        context.Failures.Asked.ShouldHaveSingleItem().Name.ShouldBe("Source 1");
+        viewModel.Status.Text.ShouldContain("Erste");
+        viewModel.Status.Text.ShouldContain("other device");
+        viewModel.NowPlaying.ShouldBeEmpty("nothing is playing, so the overlay must not claim otherwise");
+    }
+
+    [Fact]
+    public async Task AnExpiredSubscription_IsNotReportedAsAnOfflineChannel()
+    {
+        // Arrange
+        var context = new MainViewModelHarness();
+        var viewModel = await WithThreeChannelsAsync(context);
+
+        context.Session.SwitchException = new PlaybackFailedException(
+            "the provider refused the connection",
+            new MediaRequest(
+                new Uri("http://panel.example/live/u/p/101.ts"),
+                "TestAgent/1.0",
+                StreamFormat.MpegTs,
+                "Erste"));
+
+        context.Failures.Reason = StreamFailureReason.SubscriptionExpired;
+        viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
+
+        // Act
+        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+
+        // Assert
+        viewModel.Status.Text.ShouldContain("expired");
+        viewModel.Status.Text.ShouldNotContain("Try another one");
+    }
+
+    /// <remarks>
+    /// Zapping onwards cancels the open still in flight, which is the intended behaviour of a channel change
+    /// rather than a failure — so the panel must not be interrogated about it, once per key press.
+    /// </remarks>
+    [Fact]
+    public async Task AZapThatSupersedesTheOpen_DoesNotAskTheProviderAnything()
+    {
+        // Arrange
+        var context = new MainViewModelHarness();
+        var viewModel = await WithThreeChannelsAsync(context);
+
+        context.Session.SwitchException = new OperationCanceledException();
+        viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
+
+        // Act
+        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+
+        // Assert
+        context.Failures.Asked.ShouldBeEmpty();
     }
 
     private static async Task<MainViewModel> WithThreeChannelsAsync(MainViewModelHarness context)

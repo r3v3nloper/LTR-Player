@@ -18,4 +18,10 @@ public sealed class M3uSource : PlaylistSource
     public Uri? EpgUrl { get; set; }
 
     public override Uri Endpoint => PlaylistUrl;
+
+    /// <remarks>
+    /// A playlist has no account. Whatever credentials it carries are inside its query string and the
+    /// provider never reports on them, so a failed stream cannot be explained by asking.
+    /// </remarks>
+    public override bool ReportsAccountState => false;
 }

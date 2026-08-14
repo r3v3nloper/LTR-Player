@@ -490,7 +490,7 @@ public sealed class PlayerOverlayTests
         var session = new FakePlaybackSession();
         var clock = new TestClock(Now);
 
-        return (new PlayerOverlayViewModel(session, clock), session, clock);
+        return (new PlayerOverlayViewModel(session, new PlayerSettings(), clock), session, clock);
     }
 
     private static async Task Play(FakePlaybackSession session, bool seekable = false)

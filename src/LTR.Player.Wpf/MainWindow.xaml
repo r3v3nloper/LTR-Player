@@ -46,7 +46,9 @@
       -->
       <Grid Grid.Row="1" Margin="0,14,0,0"
             DataContext="{Binding SourceManagement}"
-            Visibility="{Binding IsAddingSource, Converter={StaticResource InverseBooleanToVisibility}}">
+            Visibility="{Binding DataContext.IsShowingCatalogue,
+                                 RelativeSource={RelativeSource AncestorType=Window},
+                                 Converter={StaticResource BooleanToVisibility}}">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
@@ -70,6 +72,14 @@
                   Command="{Binding ShowAddSourceCommand}" Padding="10,7" Margin="4,0,0,0" />
           <Button Content="✕" ToolTip="Remove this subscription"
                   Command="{Binding RemoveSourceCommand}" Padding="10,7" Margin="4,0,0,0" />
+
+          <!-- Reaches past the narrowed data context, because settings belong to the shell rather than to
+               source management even though the button sits among its own. -->
+          <Button Content="⚙" ToolTip="Settings"
+                  Command="{Binding DataContext.ToggleSettingsCommand,
+                                    RelativeSource={RelativeSource AncestorType=Window}}"
+                  Padding="10,7" Margin="4,0,0,0"
+                  Background="{StaticResource BorderBrush}" />
         </StackPanel>
       </Grid>
 
@@ -78,8 +88,7 @@
         offer them, so their absence reads as a fact about the subscription rather than as a missing feature.
       -->
       <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,14,0,10"
-                  Visibility="{Binding SourceManagement.IsAddingSource,
-                                       Converter={StaticResource InverseBooleanToVisibility}}">
+                  Visibility="{Binding IsShowingCatalogue, Converter={StaticResource BooleanToVisibility}}">
         <RadioButton Content="Live"
                      Style="{StaticResource SectionTab}"
                      IsChecked="{Binding SelectedSection, Converter={StaticResource EnumMatch},
@@ -110,13 +119,17 @@
                            Visibility="{Binding IsAddingSource,
                                                 Converter={StaticResource BooleanToVisibility}}" />
 
+      <!-- Settings, in the same space and for the same reason: a form rather than a list. -->
+      <views:SettingsView Grid.Row="3"
+                          Visibility="{Binding Settings.IsOpen,
+                                               Converter={StaticResource BooleanToVisibility}}" />
+
       <!--
         One section at a time. Each is collapsed rather than unloaded, so switching back does not reload a
         list or lose a scroll position.
       -->
       <Grid Grid.Row="3"
-            Visibility="{Binding SourceManagement.IsAddingSource,
-                                 Converter={StaticResource InverseBooleanToVisibility}}">
+            Visibility="{Binding IsShowingCatalogue, Converter={StaticResource BooleanToVisibility}}">
         <views:LiveChannelsView
             Visibility="{Binding SelectedSection, Converter={StaticResource EnumMatch},
                                  ConverterParameter=Live}" />
@@ -132,8 +145,7 @@
       </Grid>
 
       <StackPanel Grid.Row="4" Margin="0,12,0,0">
-        <Grid Visibility="{Binding SourceManagement.IsAddingSource,
-                                   Converter={StaticResource InverseBooleanToVisibility}}">
+        <Grid Visibility="{Binding IsShowingCatalogue, Converter={StaticResource BooleanToVisibility}}">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="*" />

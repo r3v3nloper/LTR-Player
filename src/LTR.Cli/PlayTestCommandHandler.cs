@@ -1,3 +1,4 @@
+using LTR.Catalogue;
 using LTR.Core.Content;
 using LTR.Core.Sources;
 using LTR.Playback;
@@ -17,15 +18,18 @@ internal sealed class PlayTestCommandHandler
 {
     private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
+    private readonly IStreamFailureExplainer _failures;
     private readonly ConnectionReleaseCheck _releaseCheck;
 
     public PlayTestCommandHandler(
         IProviderRegistry providers,
         IPlaybackSession session,
+        IStreamFailureExplainer failures,
         ConnectionReleaseCheck releaseCheck)
     {
         _providers = providers;
         _session = session;
+        _failures = failures;
         _releaseCheck = releaseCheck;
     }
 
@@ -64,6 +68,19 @@ internal sealed class PlayTestCommandHandler
             await Task.Delay(TimeSpan.FromSeconds(seconds), cancellationToken).ConfigureAwait(false);
 
             ReportTracks();
+        }
+        catch (PlaybackFailedException exception)
+        {
+            // Caught here rather than left to the runner, which has no source to ask about. The panel is the
+            // only thing that knows whether this was the channel, the connection limit or the subscription.
+            Console.Error.WriteLine($"Playback error: {exception.Message}");
+
+            var reason = await _failures.ExplainAsync(source, cancellationToken).ConfigureAwait(false);
+
+            Console.Error.WriteLine($"Reason:  {reason}");
+            Console.Error.WriteLine($"         {StreamFailureNotes.Describe(reason)}");
+
+            return 1;
         }
         finally
         {

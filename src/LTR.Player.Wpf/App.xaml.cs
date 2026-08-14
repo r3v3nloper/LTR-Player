@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
+using Serilog.Events;
 
 namespace LTR.Player.Wpf;
 
@@ -28,6 +29,17 @@ public partial class App : Application
         // Invariant formatting, so a log file reads the same whatever locale the machine runs under.
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
+
+            // Entity Framework logs every statement it executes at Information, and against this schema
+            // that is most of the file — a single source switch writes the channel query, the category
+            // query, now-and-next, films, series and continue-watching, each several lines of SQL. The log
+            // is the diagnostic trail for a player whose failures are mostly a provider's doing, and a
+            // trail nobody can read is not one. Warning is kept rather than Error on purpose: the
+            // split-query complaint that found a real cartesian product arrives at Warning.
+            //
+            // To get the statements back for a session, lower this line, or use the command line tool,
+            // whose --verbose does the same for the same database.
+            .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
             .WriteTo.File(
                 AppPaths.LogFile,
                 formatProvider: CultureInfo.InvariantCulture,
@@ -71,12 +83,35 @@ public partial class App : Application
 
         services.AddLogging(logging => logging.ClearProviders().AddSerilog(dispose: true));
 
+        // Read before anything is registered, because the engine's options are taken from it and several of
+        // them only reach LibVLC as startup arguments. The container does not exist yet, so this one logger
+        // is built by hand against the Serilog instance configured a moment ago — a settings file that
+        // cannot be read has to say so somewhere.
+        using var bootstrapLogging = LoggerFactory.Create(logging => logging.AddSerilog(dispose: false));
+
+        var settingsStore = new PlayerSettingsStore(
+            AppPaths.SettingsFile,
+            bootstrapLogging.CreateLogger<PlayerSettingsStore>());
+
+        var settings = settingsStore.Load();
+
+        // One instance for the process. The overlay writes the viewer's volume into it and the settings pane
+        // writes the tuning; a second copy would mean one of the two silently not being saved.
+        services.AddSingleton<IPlayerSettingsStore>(settingsStore);
+        services.AddSingleton(settings);
+
         services.AddCredentialProtection();
         services.AddCatalogue();
         services.AddProviderRegistry();
         services.AddXtreamProvider();
         services.AddM3uProvider();
-        services.AddLibVlcPlayback();
+
+        services.AddLibVlcPlayback(options =>
+        {
+            options.NetworkCachingMilliseconds = settings.Playback.NetworkCachingMilliseconds;
+            options.LiveNetworkCachingMilliseconds = settings.Playback.LiveNetworkCachingMilliseconds;
+            options.HardwareDecoding = settings.Playback.HardwareDecoding;
+        });
 
         services.AddSingleton<StatusLine>();
         services.AddSingleton<SourceManagementViewModel>();
@@ -91,6 +126,7 @@ public partial class App : Application
         // Takes the TimeProvider the catalogue registered, as the channel list and the guide already do:
         // a view model that reads the clock is given one rather than reaching for the static property.
         services.AddSingleton<PlayerOverlayViewModel>();
+        services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 

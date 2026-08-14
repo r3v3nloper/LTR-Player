@@ -31,6 +31,7 @@ internal sealed class VodCommandHandler
     private readonly IVodDetailService _detail;
     private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
+    private readonly IStreamFailureExplainer _failures;
     private readonly ConnectionReleaseCheck _releaseCheck;
     private readonly WatchProgressRecorder _progress;
 
@@ -43,6 +44,7 @@ internal sealed class VodCommandHandler
         IVodDetailService detail,
         IProviderRegistry providers,
         IPlaybackSession session,
+        IStreamFailureExplainer failures,
         ConnectionReleaseCheck releaseCheck,
         WatchProgressRecorder progress)
     {
@@ -50,6 +52,7 @@ internal sealed class VodCommandHandler
         _detail = detail;
         _providers = providers;
         _session = session;
+        _failures = failures;
         _releaseCheck = releaseCheck;
         _progress = progress;
     }
@@ -401,13 +404,7 @@ internal sealed class VodCommandHandler
             if (state != PlaybackState.Playing)
             {
                 Console.Error.WriteLine($"Playback did not start; final state was {state}.");
-
-                // Named explicitly because it is the likeliest cause and the least obvious. A
-                // one-connection subscription refuses the next stream with an empty body for as long as
-                // the panel still counts the previous one, which reads exactly like a broken film.
-                Console.Error.WriteLine(
-                    "If a previous play-test ran moments ago, the panel may still be counting its "
-                    + "connection. 'probe' reports how many it thinks are open.");
+                await ReportFailureAsync(source, cancellationToken).ConfigureAwait(false);
 
                 return 1;
             }
@@ -434,6 +431,15 @@ internal sealed class VodCommandHandler
                 Console.WriteLine($"Remembered  {outcome}");
             }
         }
+        catch (PlaybackFailedException exception)
+        {
+            // Caught here rather than left to the runner, which has no source to ask about. The panel is the
+            // only thing that knows whether this was the film, the connection limit or the subscription.
+            Console.Error.WriteLine($"Playback error: {exception.Message}");
+            await ReportFailureAsync(source, cancellationToken).ConfigureAwait(false);
+
+            return 1;
+        }
         finally
         {
             // Whatever was being followed is dropped if it was never recorded, so an interrupted run does
@@ -448,6 +454,17 @@ internal sealed class VodCommandHandler
         await _releaseCheck.ReportAsync(source, cancellationToken).ConfigureAwait(false);
 
         return 0;
+    }
+
+    /// <summary>
+    /// Asks the panel why a stream would not open, and says so.
+    /// </summary>
+    private async Task ReportFailureAsync(PlaylistSource source, CancellationToken cancellationToken)
+    {
+        var reason = await _failures.ExplainAsync(source, cancellationToken).ConfigureAwait(false);
+
+        Console.Error.WriteLine($"Reason:  {reason}");
+        Console.Error.WriteLine($"         {StreamFailureNotes.Describe(reason)}");
     }
 
     /// <summary>

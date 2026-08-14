@@ -1,0 +1,93 @@
+<UserControl x:Class="LTR.Player.Wpf.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:LTR.Player.Wpf">
+
+  <!--
+    Every setting here exists because providers differ in a way that cannot be probed, so each one names the
+    symptom it answers rather than the API it sets.
+  -->
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel DataContext="{Binding Settings}">
+
+      <TextBlock Text="Settings" FontSize="15" FontWeight="SemiBold" />
+
+      <TextBlock Style="{StaticResource MutedText}"
+                 TextWrapping="Wrap"
+                 Margin="0,6,0,0"
+                 Text="Buffers and decoding differ per provider, so these are worth changing only when
+                       something is wrong. They take effect when the player is restarted." />
+
+      <TextBlock Text="Buffer before a channel starts (ms)" Style="{StaticResource FieldLabel}" />
+      <TextBox Text="{Binding LiveNetworkCachingMilliseconds}" />
+      <TextBlock Style="{StaticResource MutedText}"
+                 TextWrapping="Wrap"
+                 Margin="0,3,0,0"
+                 Text="Paid in full on every channel change, so it is the only part of a zap that can be
+                       shortened. Raise it if channels stutter in their first seconds." />
+
+      <TextBlock Text="Buffer before a film starts (ms)" Style="{StaticResource FieldLabel}" />
+      <TextBox Text="{Binding NetworkCachingMilliseconds}" />
+
+      <TextBlock Text="Video decoding" Style="{StaticResource FieldLabel}" />
+      <ComboBox ItemsSource="{x:Static local:HardwareDecodingChoice.All}"
+                SelectedItem="{Binding HardwareDecoding}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate DataType="{x:Type local:HardwareDecodingChoice}">
+            <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+
+      <!--
+        The selected source's own two settings. Hidden rather than disabled when nothing is selected: there
+        is no source to talk about, so the heading would be describing nothing.
+      -->
+      <StackPanel Visibility="{Binding HasSource, Converter={StaticResource BooleanToVisibility}}">
+        <TextBlock Text="{Binding SourceName, StringFormat='This subscription: {0}'}"
+                   FontWeight="SemiBold"
+                   Margin="0,20,0,0"
+                   TextTrimming="CharacterEllipsis" />
+
+        <TextBlock Text="User agent" Style="{StaticResource FieldLabel}" />
+        <TextBox Text="{Binding UserAgent}" />
+        <TextBlock Style="{StaticResource MutedText}"
+                   TextWrapping="Wrap"
+                   Margin="0,3,0,0"
+                   Text="Many panels serve nothing at all to an agent they do not recognise. Leave it empty
+                         to go back to the VLC-like default." />
+
+        <TextBlock Text="Preferred container" Style="{StaticResource FieldLabel}" />
+        <ComboBox ItemsSource="{x:Static local:StreamFormatChoice.All}"
+                  SelectedItem="{Binding PreferredStreamFormat}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate DataType="{x:Type local:StreamFormatChoice}">
+              <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock Style="{StaticResource MutedText}"
+                   TextWrapping="Wrap"
+                   Margin="0,3,0,0"
+                   Text="Only used when the panel says it serves it. Panels under-report this, so the other
+                         one is worth trying if channels will not open." />
+      </StackPanel>
+
+      <Grid Margin="0,22,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Button Grid.Column="0" Content="Save" Command="{Binding SaveCommand}" />
+
+        <Button Grid.Column="1"
+                Content="Cancel"
+                Margin="6,0,0,0"
+                Background="{StaticResource BorderBrush}"
+                Command="{Binding DataContext.ToggleSettingsCommand,
+                                  RelativeSource={RelativeSource AncestorType=Window}}" />
+      </Grid>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

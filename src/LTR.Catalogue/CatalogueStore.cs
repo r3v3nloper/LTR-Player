@@ -82,6 +82,19 @@ internal sealed class CatalogueStore : ICatalogueStore
         return _database.RunAsync(context => context.SetFavoriteAsync(channelId, isFavorite, cancellationToken));
     }
 
+    public Task UpdateSourceSettingsAsync(
+        int sourceId,
+        string userAgent,
+        StreamFormat preferredStreamFormat,
+        CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.UpdateSourceSettingsAsync(
+            sourceId,
+            userAgent,
+            preferredStreamFormat,
+            cancellationToken));
+    }
+
     public Task DeleteSourceAsync(int sourceId, CancellationToken cancellationToken)
     {
         return _database.RunAsync(context => context.DeleteSourceAsync(sourceId, cancellationToken));
