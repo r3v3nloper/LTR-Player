@@ -1,4 +1,5 @@
 using LibVLCSharp.Shared;
+using LTR.Core.Content;
 using LTR.Core.Playback;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -28,10 +29,13 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
     private readonly MediaPlayer _mediaPlayer;
     private readonly ILogger<LibVlcMediaEngine> _logger;
 
+    private readonly LibVlcOptions _options;
+
     private Media? _currentMedia;
     private PlaybackState _state = PlaybackState.Idle;
     private TaskCompletionSource<bool>? _openCompletion;
     private TaskCompletionSource<bool>? _stopCompletion;
+    private VideoAspectRatio _aspectRatio = VideoAspectRatio.Source;
     private bool _isDisposed;
 
     public LibVlcMediaEngine(IOptions<LibVlcOptions> options, ILogger<LibVlcMediaEngine> logger)
@@ -42,6 +46,7 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         _logger = logger;
 
         var resolvedOptions = options.Value;
+        _options = resolvedOptions;
         LibVlcRuntime.EnsureInitialized(resolvedOptions.NativeLibraryDirectory);
 
         _libVlc = new LibVLC(resolvedOptions.ToArguments());
@@ -80,6 +85,22 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
 
     public bool IsSeekable => !_isDisposed && _mediaPlayer.IsSeekable;
 
+    /// <remarks>
+    /// Kept in a field as well as pushed at the player, because LibVLC forgets it whenever media is
+    /// opened. A viewer who corrects a stretched channel and then zaps away and back would otherwise find
+    /// the correction gone, which reads as the setting not having worked.
+    /// </remarks>
+    public VideoAspectRatio AspectRatio
+    {
+        get => _aspectRatio;
+
+        set
+        {
+            _aspectRatio = value;
+            ApplyAspectRatio();
+        }
+    }
+
     public async Task PlayAsync(MediaRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -90,9 +111,10 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
 
         var media = new Media(_libVlc, request.Url);
 
-        // A per-input option, marked by the leading colon, so it applies to this stream only. Panels
+        // Per-input options, marked by the leading colon, so they apply to this stream only. Panels
         // filter on the agent, and a global setting would be wrong for a second source.
         media.AddOption($":http-user-agent={request.UserAgent}");
+        media.AddOption(FormattableString.Invariant($":network-caching={CachingFor(request)}"));
 
         _currentMedia?.Dispose();
         _currentMedia = media;
@@ -130,7 +152,27 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
                 request);
         }
 
+        // Both only now that the stream is open: LibVLC discards a ratio set against no media, and a seek
+        // issued before the demuxer has its index is answered by prerolling the whole file.
+        ApplyAspectRatio();
         ApplyStartPosition(request);
+    }
+
+    /// <summary>
+    /// How much of a stream to buffer before playing it.
+    /// </summary>
+    /// <remarks>
+    /// Live television gets its own figure because this is the one lever that shortens a channel change.
+    /// The other half of a zap — releasing the previous stream and waiting for the provider to notice — is
+    /// mandatory and cannot be tuned; the buffer is what is left, and every millisecond of it is spent
+    /// before the first frame appears. It is a separate value rather than a lower single one because a film
+    /// gains nothing from a short buffer and loses its resilience to a stalled read.
+    /// </remarks>
+    private int CachingFor(MediaRequest request)
+    {
+        return request.Format == StreamFormat.ProgressiveFile
+            ? _options.NetworkCachingMilliseconds
+            : _options.LiveNetworkCachingMilliseconds;
     }
 
     /// <summary>
@@ -179,7 +221,7 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         if (_mediaPlayer.State is VLCState.NothingSpecial or VLCState.Stopped or VLCState.Ended)
         {
             ReleaseMedia();
-            SetState(PlaybackState.Stopped);
+            SetState(PlaybackState.Stopped, reason: PlaybackStopReason.Requested);
             return;
         }
 
@@ -216,6 +258,21 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         _mediaPlayer.SetPause(isPaused);
     }
 
+    /// <remarks>
+    /// Refused rather than clamped for an unseekable stream. Live television has no position to move to,
+    /// and pretending a seek happened would leave a seek bar showing a place playback is not at.
+    /// </remarks>
+    public void SeekTo(TimeSpan position)
+    {
+        if (_isDisposed || !_mediaPlayer.IsSeekable)
+        {
+            return;
+        }
+
+        var target = position < TimeSpan.Zero ? TimeSpan.Zero : position;
+        _mediaPlayer.Time = (long)target.TotalMilliseconds;
+    }
+
     public IReadOnlyList<MediaTrack> GetTracks(MediaTrackKind kind)
     {
         if (_isDisposed)
@@ -240,6 +297,22 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
                 .Where(description => description.Id >= 0)
                 .Select(description => ToMediaTrack(description, kind)),
         ];
+    }
+
+    public int GetSelectedTrack(MediaTrackKind kind)
+    {
+        if (_isDisposed)
+        {
+            return MediaTrack.DisabledId;
+        }
+
+        return kind switch
+        {
+            MediaTrackKind.Audio => _mediaPlayer.AudioTrack,
+            MediaTrackKind.Subtitle => _mediaPlayer.Spu,
+            MediaTrackKind.Video => _mediaPlayer.VideoTrack,
+            _ => MediaTrack.DisabledId,
+        };
     }
 
     public void SelectTrack(MediaTrackKind kind, int trackId)
@@ -307,9 +380,37 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         return milliseconds > 0 ? TimeSpan.FromMilliseconds(milliseconds) : null;
     }
 
+    /// <remarks>
+    /// No language is reported. LibVLC's track description carries a name and nothing else, and for the
+    /// streams this player sees that name is what the muxer wrote — usually the language already
+    /// ("Deutsch", "English - [English]"), occasionally nothing at all, which is what
+    /// <see cref="MediaTrack.DisplayLabel"/> covers.
+    /// </remarks>
     private static MediaTrack ToMediaTrack(VlcTrackDescription description, MediaTrackKind kind)
     {
         return new MediaTrack(description.Id, kind, description.Name, Language: null);
+    }
+
+    /// <summary>
+    /// Pushes the chosen ratio at the player, in the string form LibVLC takes.
+    /// </summary>
+    /// <remarks>
+    /// An empty string, not <see langword="null"/>, restores the stream's own ratio: LibVLC treats null as
+    /// "leave whatever is set", so assigning it would make the setting one-way.
+    /// </remarks>
+    private void ApplyAspectRatio()
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        _mediaPlayer.AspectRatio = _aspectRatio switch
+        {
+            VideoAspectRatio.Widescreen => "16:9",
+            VideoAspectRatio.Standard => "4:3",
+            _ => string.Empty,
+        };
     }
 
     /// <summary>
@@ -384,7 +485,7 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
 
     private void OnStopped(object? sender, EventArgs e)
     {
-        SetState(PlaybackState.Stopped);
+        SetState(PlaybackState.Stopped, reason: PlaybackStopReason.Requested);
         _stopCompletion?.TrySetResult(true);
 
         // A stop before the stream ever opened must release a pending PlayAsync as a failure, not
@@ -392,9 +493,16 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         _openCompletion?.TrySetResult(false);
     }
 
+    /// <remarks>
+    /// The reason is the whole point of handling this separately from <see cref="OnStopped"/>. LibVLC
+    /// raises End Reached and then Stopped, and the second one is swallowed by the deduplication in
+    /// <see cref="SetState"/> — so reporting the reason here is what lets a caller tell a film that ran to
+    /// its own end from one the viewer stopped. Getting that the wrong way round would have every channel
+    /// change look like a completed programme.
+    /// </remarks>
     private void OnEndReached(object? sender, EventArgs e)
     {
-        SetState(PlaybackState.Stopped);
+        SetState(PlaybackState.Stopped, reason: PlaybackStopReason.EndOfStream);
         _stopCompletion?.TrySetResult(true);
         _openCompletion?.TrySetResult(false);
     }
@@ -414,7 +522,10 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         _currentMedia = null;
     }
 
-    private void SetState(PlaybackState next, string? message = null)
+    private void SetState(
+        PlaybackState next,
+        string? message = null,
+        PlaybackStopReason reason = PlaybackStopReason.None)
     {
         var previous = _state;
 
@@ -424,6 +535,6 @@ public sealed class LibVlcMediaEngine : IMediaEngine, IVlcVideoSink
         }
 
         _state = next;
-        StateChanged?.Invoke(this, new PlaybackStateChangedEventArgs(previous, next, message));
+        StateChanged?.Invoke(this, new PlaybackStateChangedEventArgs(previous, next, message, reason));
     }
 }

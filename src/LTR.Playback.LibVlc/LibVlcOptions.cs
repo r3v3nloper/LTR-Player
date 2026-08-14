@@ -17,7 +17,28 @@ public sealed class LibVlcOptions
     /// Buffer held before playback starts, in milliseconds. Higher values survive jittery providers
     /// at the cost of slower channel changes.
     /// </summary>
+    /// <remarks>
+    /// Applies to films and episodes. Live television uses
+    /// <see cref="LiveNetworkCachingMilliseconds"/> instead.
+    /// </remarks>
     public int NetworkCachingMilliseconds { get; set; } = 1000;
+
+    /// <summary>
+    /// Buffer held before a live channel starts, in milliseconds.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Lower than the on-demand figure because it is paid in full on every channel change, and it is the
+    /// only part of a zap that can be shortened at all — releasing the previous stream first is required by
+    /// the provider's connection limit, not by choice.
+    /// </para>
+    /// <para>
+    /// 600 ms is a starting point, not a measured optimum, and the right value is a property of the
+    /// provider rather than of the player: a panel that delivers in bursts needs more, a local one less.
+    /// Set it higher if channels stutter in the first seconds; that symptom is this value being too low.
+    /// </para>
+    /// </remarks>
+    public int LiveNetworkCachingMilliseconds { get; set; } = 600;
 
     /// <summary>
     /// Clock jitter tolerance in microseconds. Zero disables jitter correction, which is what makes

@@ -40,6 +40,17 @@ public sealed partial class PlaybackCoordinator : ObservableObject
     [ObservableProperty]
     private string _nowPlaying = string.Empty;
 
+    /// <summary>
+    /// Set when the engine reports a stream having run out on its own, cleared when that is acted on.
+    /// </summary>
+    /// <remarks>
+    /// A flag rather than the work itself, because the report arrives on one of the engine's own threads and
+    /// what has to follow it — a database write, then three lists rereading themselves — belongs on the
+    /// thread the window lives on. <see cref="SampleAsync"/> picks it up on the next tick, which is at most a
+    /// few seconds later and long after anyone has stopped watching.
+    /// </remarks>
+    private int _hasReachedEndOfStream;
+
     public PlaybackCoordinator(
         IProviderRegistry providers,
         IPlaybackSession session,
@@ -81,6 +92,34 @@ public sealed partial class PlaybackCoordinator : ObservableObject
         {
             _progress.Observe(_session.Position, _session.Duration);
         }
+    }
+
+    /// <summary>
+    /// Takes a sample, and closes off a stream that has ended by itself.
+    /// </summary>
+    /// <remarks>
+    /// The end of a film is not a stop anyone asked for, so nothing else brings it to the point where a
+    /// position gets written: a film that plays out and sits there would stay on the continue-watching list
+    /// until the next channel change or the window closing. Handled from the sampling tick rather than from
+    /// the engine's own report, because that report arrives on an engine thread.
+    /// </remarks>
+    public async Task SampleAsync(CancellationToken cancellationToken)
+    {
+        ObservePosition();
+
+        if (Interlocked.Exchange(ref _hasReachedEndOfStream, 0) == 0)
+        {
+            return;
+        }
+
+        var ended = NowPlaying;
+
+        // A full stop, not just a recording. The engine has finished with the stream but the session still
+        // holds it as current, and a provider that is still counting the connection is the one problem this
+        // application exists to avoid.
+        await StopAsync(cancellationToken).ConfigureAwait(true);
+
+        _status.Text = string.IsNullOrEmpty(ended) ? "Playback ended." : $"{ended} ended.";
     }
 
     /// <summary>
@@ -274,11 +313,25 @@ public sealed partial class PlaybackCoordinator : ObservableObject
         }
     }
 
+    /// <remarks>
+    /// Raised on one of the engine's own threads. Assigning an observable property from there is safe —
+    /// WPF marshals a property change for a plain binding — but nothing here may touch a collection or await
+    /// anything, which is why the end of a stream is only noted and acted on elsewhere.
+    /// </remarks>
     private void OnPlaybackStateChanged(object? sender, PlaybackStateChangedEventArgs e)
     {
         if (e.Current == PlaybackState.Playing)
         {
             _status.Text = $"Playing {NowPlaying}";
+            return;
+        }
+
+        // Only when the stream ran out. The identical transition happens in the middle of every channel
+        // change, where progress was recorded a moment earlier and recording it again would overwrite a
+        // deliberate position with whatever the engine reported while tearing down.
+        if (e.Reason == PlaybackStopReason.EndOfStream)
+        {
+            Interlocked.Exchange(ref _hasReachedEndOfStream, 1);
         }
     }
 }

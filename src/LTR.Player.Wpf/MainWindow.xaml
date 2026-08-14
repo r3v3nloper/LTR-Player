@@ -9,7 +9,9 @@
         MinWidth="960"
         MinHeight="600"
         Background="{StaticResource PanelBrush}"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        PreviewKeyDown="OnPreviewKeyDown"
+        PreviewMouseMove="OnPointerActivity">
 
   <!--
     Composition only. Each section is a view of its own, because this file had reached four hundred and
@@ -17,12 +19,16 @@
   -->
   <Grid>
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="360" MinWidth="300" />
-      <ColumnDefinition Width="4" />
+      <!-- Named because fullscreen takes the width to nothing and has to give back whatever the viewer
+           had dragged it to, which a binding to a fixed pair of widths could not. -->
+      <ColumnDefinition x:Name="SidePanelColumn" Width="360" MinWidth="300" />
+      <ColumnDefinition Width="Auto" />
       <ColumnDefinition Width="*" />
     </Grid.ColumnDefinitions>
 
-    <Grid Grid.Column="0" Margin="14">
+    <Grid Grid.Column="0" Margin="14"
+          Visibility="{Binding PlayerOverlay.IsFullscreen,
+                               Converter={StaticResource InverseBooleanToVisibility}}">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
@@ -175,12 +181,17 @@
     </Grid>
 
     <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
-                  Background="{StaticResource BorderBrush}" />
+                  Background="{StaticResource BorderBrush}"
+                  Visibility="{Binding PlayerOverlay.IsFullscreen,
+                                       Converter={StaticResource InverseBooleanToVisibility}}" />
 
     <!--
-      The overlay and the timeline live inside VideoView.Content, not beside it. VideoView hosts a separate
+      The controls and the timeline live inside VideoView.Content, not beside it. VideoView hosts a separate
       native window over the WPF tree, so any sibling element is simply invisible behind the video. Content
       placed here is rendered by an overlay window that tracks it, and the DataContext is propagated.
+
+      Declaration order is what stacks them: the hint sits behind the controls, and the timeline covers both
+      while it is open.
     -->
     <vlc:VideoView x:Name="Video" Grid.Column="2" Background="Black">
       <Grid>
@@ -190,25 +201,7 @@
                    VerticalAlignment="Center"
                    Visibility="{Binding NowPlaying, Converter={StaticResource EmptyStringToVisibility}}" />
 
-        <Border VerticalAlignment="Bottom"
-                Background="#99000000"
-                Padding="14,10"
-                Visibility="{Binding NowPlaying, Converter={StaticResource NonEmptyStringToVisibility}}">
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*" />
-              <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <TextBlock Grid.Column="0"
-                       Text="{Binding NowPlaying}"
-                       VerticalAlignment="Center"
-                       FontWeight="SemiBold"
-                       TextTrimming="CharacterEllipsis" />
-
-            <Button Grid.Column="1" Content="Stop" Command="{Binding StopCommand}" />
-          </Grid>
-        </Border>
+        <views:PlayerOverlayView />
 
         <views:GuideOverlayView />
       </Grid>

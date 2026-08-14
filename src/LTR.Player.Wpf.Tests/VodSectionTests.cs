@@ -278,7 +278,7 @@ public sealed class VodSectionTests
         // The engine is playing and reports a position, which the window's timer samples.
         context.Session.Position = TimeSpan.FromMinutes(40);
         context.Session.Duration = FilmLength;
-        viewModel.ObservePlaybackPosition();
+        await viewModel.SamplePlaybackAsync();
 
         // Act
         await viewModel.StopCommand.ExecuteAsync(null);
@@ -308,7 +308,7 @@ public sealed class VodSectionTests
 
         context.Session.Position = TimeSpan.FromMinutes(30);
         context.Session.Duration = FilmLength;
-        viewModel.ObservePlaybackPosition();
+        await viewModel.SamplePlaybackAsync();
 
         // The engine loses both the moment the stream goes, exactly as the fake does on StopAsync.
         // Act
@@ -354,7 +354,7 @@ public sealed class VodSectionTests
 
         context.Session.Position = TimeSpan.FromMinutes(20);
         context.Session.Duration = FilmLength;
-        viewModel.ObservePlaybackPosition();
+        await viewModel.SamplePlaybackAsync();
 
         // Act
         viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
@@ -622,7 +622,7 @@ public sealed class VodSectionTests
 
         context.Session.Position = TimeSpan.FromMinutes(20);
         context.Session.Duration = FilmLength;
-        viewModel.ObservePlaybackPosition();
+        await viewModel.SamplePlaybackAsync();
 
         var entry = new ContinueWatchingEntry(
             ContentKind.Movie,

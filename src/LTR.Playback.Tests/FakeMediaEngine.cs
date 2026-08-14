@@ -29,6 +29,17 @@ internal sealed class FakeMediaEngine : IMediaEngine
 
     public bool IsSeekable { get; set; }
 
+    public VideoAspectRatio AspectRatio { get; set; } = VideoAspectRatio.Source;
+
+    /// <summary>Where <see cref="SeekTo"/> was last asked to move, or null when it was refused.</summary>
+    public TimeSpan? SeekedTo { get; private set; }
+
+    /// <summary>Tracks the fake reports, keyed by kind and set by a test.</summary>
+    public Dictionary<MediaTrackKind, IReadOnlyList<MediaTrack>> Tracks { get; } = [];
+
+    /// <summary>Track selections received, in order.</summary>
+    public List<(MediaTrackKind Kind, int TrackId)> SelectedTracks { get; } = [];
+
     /// <summary>Calls received, in order, as <c>stop</c> and <c>play:{name}</c> entries.</summary>
     public IReadOnlyList<string> Calls => [.. _calls];
 
@@ -105,13 +116,34 @@ internal sealed class FakeMediaEngine : IMediaEngine
         Transition(isPaused ? PlaybackState.Paused : PlaybackState.Playing);
     }
 
+    /// <remarks>
+    /// Refuses an unseekable stream exactly as the real engine does, so a test asserting that live
+    /// television cannot be positioned is testing the rule rather than the fake.
+    /// </remarks>
+    public void SeekTo(TimeSpan position)
+    {
+        if (IsSeekable)
+        {
+            SeekedTo = position;
+        }
+    }
+
     public IReadOnlyList<MediaTrack> GetTracks(MediaTrackKind kind)
     {
-        return [];
+        return Tracks.GetValueOrDefault(kind, []);
+    }
+
+    /// <summary>Reports back the last selection made, as an engine does.</summary>
+    public int GetSelectedTrack(MediaTrackKind kind)
+    {
+        var ofKind = SelectedTracks.Where(selection => selection.Kind == kind).ToList();
+
+        return ofKind.Count > 0 ? ofKind[^1].TrackId : MediaTrack.DisabledId;
     }
 
     public void SelectTrack(MediaTrackKind kind, int trackId)
     {
+        SelectedTracks.Add((kind, trackId));
     }
 
     public ValueTask DisposeAsync()
