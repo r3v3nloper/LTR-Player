@@ -1,7 +1,7 @@
 # Refactoring backlog
 
-Reviewed after M4. **Renumbered at this review**, as at the last one — a rank quoted in an older commit
-message will not line up.
+Reviewed after M4. **Ranks are those of the post-M4 review and have not been renumbered by M5**, so that the
+numbers M5's commits quote still line up. The next review renumbers.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
@@ -12,11 +12,29 @@ Cleared so far:
   tidying — both blocked the milestone, because the view model could not take three more sections at 400
   lines and `MainWindow.xaml` could not take three more lists at 470.
 - **After M4:** ranks 1–7 below.
+- **By M5:** rank 15, which is why it was parked there. See below.
 
-Everything left is structure, a missing guard, or a limit that is stated on screen. Rank 7 was the last item
-with an effect while the player is running.
+Everything left is structure, a missing guard, or a limit that is stated on screen. Nothing left has an effect
+while the player is running.
 
 ---
+
+## Rank 15 · done by M5 — Progress at the end of a film
+
+`PlaybackStateChangedEventArgs` now carries a `PlaybackStopReason`, and that was the whole difficulty: a film
+that plays to its own end and one the viewer stopped reach the identical state, and the identical transition
+occurs in the middle of every channel change where progress was recorded a moment earlier. Acting on the wrong
+one would overwrite a deliberate position with whatever the engine reported while tearing down.
+
+LibVLC makes the distinction available for free — End Reached fires before Stopped — and the existing
+deduplication in `SetState` swallows the second, so the reason set by the first is the one that reaches the
+coordinator. `PlaybackCoordinator` flags it from the engine thread and `SampleAsync` closes the stream off on
+the next tick, since what follows is a database write and three list reloads.
+
+**Worth knowing:** the mutation check on this found a hole in the test double, not in the code.
+`FakePlaybackSession` went straight from idle to playing, so no test could have caught treating every stop as
+an end of stream. It now releases before opening, as the real session does unconditionally — a fake that skips
+an invariant hides exactly the bug the invariant exists for.
 
 ## Ranks 1–7 · done after M4
 
@@ -146,18 +164,6 @@ asked" from "asked, and there is nothing".
 Proposal: record when the detail was last attempted and do not retry within a day. `Series` already has
 `DetailFetchedUtc` for the same purpose.
 
-## Rank 15 — Nothing records progress when a film reaches its own end
-
-**Project:** LTR.Player.Wpf · **Area:** Correctness · **Criticality:** minor · **Effort:** low
-
-Progress is written when playback is switched, stopped or the window closes. A film that plays to its end
-and sits there is none of those, so it stays on the continue-watching list until the next of them happens —
-usually the window closing, which then records it correctly as finished.
-
-Nothing is lost; the list is briefly wrong. Fixing it means recording when the session reports `Stopped`
-after having been `Playing`, and the same transition occurs in the middle of every channel change, where
-progress has already been recorded a moment earlier. Distinguishing the two needs the session to say *why*
-it stopped, which is a change to `IPlaybackSession` and wants doing with M5's OSD work.
 
 ## Rank 16 — Command classes in the CLI
 
@@ -185,6 +191,27 @@ ASCII only, where `CatalogueFilter` in memory is fully case-insensitive.
 `GuideViewModel.MaximumRows` draws at most 200 channels and says so on screen. The honest fix is to load rows
 as they are scrolled into view, which needs the store to page and the timeline to build rows lazily. Related
 to rank 17, and worth doing at the same time or not at all.
+
+## Rank 19 — Nothing the player controls is remembered
+
+**Project:** LTR.Player.Wpf · **Area:** Usability · **Criticality:** minor · **Effort:** low
+
+Volume, mute and the aspect ratio correction all reset when the window closes. Volume is the one a viewer
+notices: a player that starts at full volume every evening gets turned down every evening.
+
+Deliberately left for M6, which brings the settings dialog and therefore somewhere for it to live. Doing it
+before that would mean inventing a persistence path for three values.
+
+## Rank 20 — Zapping materialises the visible channel list
+
+**Project:** LTR.Player.Wpf · **Area:** Performance · **Criticality:** minor · **Effort:** low
+
+`ChannelListViewModel.SelectAdjacent` enumerates the whole filtered view to find the current row's neighbour,
+so one key press walks up to 17,156 rows. It is fast enough not to be noticeable, and it is the same
+enumeration `VisibleChannels` already does for the guide.
+
+Related to rank 17, and probably not worth touching before it: if the list stops being materialised at all,
+this changes shape entirely. Worth a note so the cost is known rather than discovered.
 
 ---
 

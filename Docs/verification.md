@@ -69,6 +69,13 @@ state: Opening -> Buffering
 state: Buffering -> Playing
 ```
 
+**The log line worth reading afterwards** is how long the open took — `Erste began playing 780 ms after the
+open was issued`. That is the part of a channel change that can be tuned, and
+`LibVlcOptions.LiveNetworkCachingMilliseconds` is what tunes it. Its 600 ms default is a starting point rather
+than a measured optimum, because the right figure belongs to the provider: raise it if channels stutter in
+their first seconds. The release that precedes an open is *not* in that figure, deliberately — it is required
+by the connection limit and cannot be shortened.
+
 Add `--verbose` to any command to see the requests being made. Logged addresses always have their
 credentials stripped, because diagnostic output is what people paste into forums.
 
@@ -144,6 +151,19 @@ a slow seek costs a viewer nothing.
 as finished, so it stays on the continue-watching list for good.
 
 ```bash
+dotnet run --project src/LTR.Cli -- vod play-test --source-id 1 --movie-id 18848 --seek-to 1800 --seconds 20
+```
+
+**This is the only headless check of the seek bar**, and it is a different code path from `--start-at`: that
+one is honoured while the stream opens, this one against a stream already playing. The command holds, seeks,
+holds again and prints `Sought to`. Give it `--seconds 20` or more — a seek over HTTP is answered by a fresh
+range request, and read too early the engine still reports the old position, which looks exactly like a seek
+that did nothing.
+
+`Seek refused` means the panel serves this film without range support. That is a fact about the panel: the
+window hides the seek bar for such a stream rather than offering one that cannot work.
+
+```bash
 dotnet run --project src/LTR.Cli -- vod play-test --source-id 1 --episode-id 63 --start-at 600 --remember
 dotnet run --project src/LTR.Cli -- vod continue --source-id 1
 dotnet run --project src/LTR.Cli -- vod forget   --source-id 1 --episode-id 63
@@ -165,6 +185,25 @@ dotnet run --project src/LTR.Cli -- vod continue --source-id 1
 
 Lists what is part-watched after a play-test that got far enough in. Nothing appears for less than a
 minute watched, or for an item stopped within two minutes of its end — both are the resume policy working.
+
+## 7. Do the player controls work?
+
+Nothing below the UI can answer this; it needs the window. `Docs/player.md` has the key map. The checks worth
+making, in the order that finds problems fastest:
+
+1. **Play a channel.** The controls appear, say what is playing, and take themselves away after four seconds.
+   The pointer moving over the picture brings them back.
+2. **Zap with Page Up and Page Down.** Each press changes channel once. Then narrow the list with the search
+   box and zap again — it must walk only what the list is showing.
+3. **Type in the search box.** `a`, `f`, `g`, `i` and `m` must reach the box rather than the player. This is
+   the one that fails if the keyboard is ever moved into markup.
+4. **Press F, then Escape.** The panel goes and comes back at the width you left it, not at 360 pixels.
+5. **Play a film and drag the seek bar.** The thumb must stay under the pointer while held, and playback move
+   on release. Then press Left and Right for ten-second steps.
+6. **Open the audio menu on a channel that has two languages.** Switch, and confirm the picker still shows the
+   right entry a few seconds later rather than snapping back.
+7. **Let a film play to its end.** It must come off the continue-watching list without the window being
+   closed first — that is the one this milestone fixed, and the failure mode is silent.
 
 ## Automated tests
 

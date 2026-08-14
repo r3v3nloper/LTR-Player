@@ -278,6 +278,13 @@ static Command BuildVodPlayTestCommand(IServiceProvider services, Option<int> so
         Description = "Record where playback got to, as the window does, so 'vod continue' shows it.",
     };
 
+    // The only way to check the seek bar's own call without the window. --start-at is honoured while the
+    // stream opens, which is a different code path from a seek issued against one already playing.
+    var seekToOption = new Option<int>("--seek-to")
+    {
+        Description = "Seek here, in seconds, part-way through the hold, as the seek bar does.",
+    };
+
     var command = new Command(
         "play-test",
         "Opens a stored film or episode headlessly, reports its position, then releases it.");
@@ -287,6 +294,7 @@ static Command BuildVodPlayTestCommand(IServiceProvider services, Option<int> so
     command.Options.Add(episodeIdOption);
     command.Options.Add(secondsOption);
     command.Options.Add(startAtOption);
+    command.Options.Add(seekToOption);
     command.Options.Add(rememberOption);
 
     command.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
@@ -296,6 +304,7 @@ static Command BuildVodPlayTestCommand(IServiceProvider services, Option<int> so
             parseResult.GetValue(episodeIdOption),
             parseResult.GetValue(secondsOption),
             parseResult.GetValue(startAtOption),
+            parseResult.GetValue(seekToOption),
             parseResult.GetValue(rememberOption),
             cancellationToken))));
 

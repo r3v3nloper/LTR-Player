@@ -29,14 +29,14 @@ public sealed partial class TrackSelectionViewModel : ObservableObject
     private readonly Action<MediaTrackKind, int> _select;
 
     /// <summary>
-    /// Set while <see cref="Sync"/> is writing, so adopting the engine's own choice is not sent back to it.
+    /// Set while the engine's own choice is being adopted, so that it is not sent straight back to it.
     /// </summary>
     /// <remarks>
-    /// Without it, a stream that announces its tracks a moment after starting would have this menu tell the
-    /// engine to select whatever landed first — overriding the default the stream itself declared, which is
-    /// usually the right one.
+    /// Without it the menu would tell the engine to select the track the engine had just reported — and
+    /// worse, since a stream announces its tracks a moment after starting, it would be overriding the
+    /// default the stream itself declared with whichever entry happened to arrive first.
     /// </remarks>
-    private bool _isSynchronising;
+    private bool _isAdoptingEnginesChoice;
 
     [ObservableProperty]
     private TrackChoice? _selectedTrack;
@@ -92,27 +92,18 @@ public sealed partial class TrackSelectionViewModel : ObservableObject
             return;
         }
 
-        _isSynchronising = true;
+        // Emptied and refilled before anything is selected. A bound picker writes a null selection back
+        // through the binding the moment its list is cleared, and a selection assigned before the list is
+        // complete is discarded — the trap that rendered two pickers blank in the milestone before this one.
+        // Nothing needs suppressing around it, because a null selection is never passed on.
+        Tracks.Clear();
 
-        try
+        foreach (var choice in wanted)
         {
-            // Emptied and refilled before anything is selected. A bound picker writes a null selection back
-            // through the binding the moment its list is cleared, and a selection assigned before the list
-            // is complete is discarded — the trap that rendered two pickers blank in the milestone before
-            // this one.
-            Tracks.Clear();
-
-            foreach (var choice in wanted)
-            {
-                Tracks.Add(choice);
-            }
-
-            SelectedTrack = null;
+            Tracks.Add(choice);
         }
-        finally
-        {
-            _isSynchronising = false;
-        }
+
+        SelectedTrack = null;
 
         OnPropertyChanged(nameof(IsAvailable));
     }
@@ -129,7 +120,7 @@ public sealed partial class TrackSelectionViewModel : ObservableObject
             return;
         }
 
-        _isSynchronising = true;
+        _isAdoptingEnginesChoice = true;
 
         try
         {
@@ -137,7 +128,7 @@ public sealed partial class TrackSelectionViewModel : ObservableObject
         }
         finally
         {
-            _isSynchronising = false;
+            _isAdoptingEnginesChoice = false;
         }
     }
 
@@ -157,7 +148,7 @@ public sealed partial class TrackSelectionViewModel : ObservableObject
 
     partial void OnSelectedTrackChanged(TrackChoice? value)
     {
-        if (_isSynchronising || value is null)
+        if (_isAdoptingEnginesChoice || value is null)
         {
             return;
         }

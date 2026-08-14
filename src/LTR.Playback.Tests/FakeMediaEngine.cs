@@ -40,6 +40,9 @@ internal sealed class FakeMediaEngine : IMediaEngine
     /// <summary>Track selections received, in order.</summary>
     public List<(MediaTrackKind Kind, int TrackId)> SelectedTracks { get; } = [];
 
+    /// <summary>What the fake reports as playing, per kind. Seeded by a test, or set by a selection.</summary>
+    public Dictionary<MediaTrackKind, int> PlayingTrack { get; } = [];
+
     /// <summary>Calls received, in order, as <c>stop</c> and <c>play:{name}</c> entries.</summary>
     public IReadOnlyList<string> Calls => [.. _calls];
 
@@ -133,17 +136,15 @@ internal sealed class FakeMediaEngine : IMediaEngine
         return Tracks.GetValueOrDefault(kind, []);
     }
 
-    /// <summary>Reports back the last selection made, as an engine does.</summary>
     public int GetSelectedTrack(MediaTrackKind kind)
     {
-        var ofKind = SelectedTracks.Where(selection => selection.Kind == kind).ToList();
-
-        return ofKind.Count > 0 ? ofKind[^1].TrackId : MediaTrack.DisabledId;
+        return PlayingTrack.GetValueOrDefault(kind, MediaTrack.DisabledId);
     }
 
     public void SelectTrack(MediaTrackKind kind, int trackId)
     {
         SelectedTracks.Add((kind, trackId));
+        PlayingTrack[kind] = trackId;
     }
 
     public ValueTask DisposeAsync()

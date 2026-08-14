@@ -263,6 +263,96 @@ public sealed class PlaybackSessionTests
         session.Duration.ShouldBeNull();
     }
 
+    /// <remarks>
+    /// The transport surface exists so that the on-screen controls never hold the engine. What is worth
+    /// asserting about it is not that a delegation delegates, but that the two things it adds hold: an
+    /// unseekable stream refuses a seek, and a disposed session touches nothing.
+    /// </remarks>
+    [Fact]
+    public async Task SeekTo_MovesASeekableStream()
+    {
+        // Arrange
+        var engine = new FakeMediaEngine { IsSeekable = true, Position = TimeSpan.FromMinutes(5) };
+        await using var session = CreateSession(engine);
+        await session.SwitchToAsync(Request("Arrival"), TestContext.Current.CancellationToken);
+
+        // Act
+        session.SeekTo(TimeSpan.FromMinutes(40));
+
+        // Assert
+        session.IsSeekable.ShouldBeTrue();
+        engine.SeekedTo.ShouldBe(TimeSpan.FromMinutes(40));
+    }
+
+    [Fact]
+    public async Task SeekTo_OnLiveTelevision_DoesNothing()
+    {
+        // Arrange: a channel has no position to move to, and the seek bar is absent for that reason.
+        var engine = new FakeMediaEngine { IsSeekable = false };
+        await using var session = CreateSession(engine);
+        await session.SwitchToAsync(Request("Erste"), TestContext.Current.CancellationToken);
+
+        // Act
+        session.SeekTo(TimeSpan.FromMinutes(40));
+
+        // Assert
+        session.IsSeekable.ShouldBeFalse();
+        engine.SeekedTo.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task TransportControls_AfterDisposal_LeaveTheEngineAlone()
+    {
+        // Arrange: the window's sampling timer can tick once more while the container is being torn down,
+        // and the overlay reads and writes all of these on every tick.
+        var engine = new FakeMediaEngine { IsSeekable = true };
+        var session = CreateSession(engine);
+        await session.SwitchToAsync(Request("Arrival"), TestContext.Current.CancellationToken);
+
+        // Act
+        await session.DisposeAsync();
+
+        session.Volume = 40;
+        session.IsMuted = true;
+        session.AspectRatio = VideoAspectRatio.Widescreen;
+        session.SetPaused(true);
+        session.SeekTo(TimeSpan.FromMinutes(40));
+        session.SelectTrack(MediaTrackKind.Audio, trackId: 2);
+
+        // Assert: nothing reached the engine, and every read answers with a harmless default.
+        engine.SeekedTo.ShouldBeNull();
+        engine.SelectedTracks.ShouldBeEmpty();
+        engine.AspectRatio.ShouldBe(VideoAspectRatio.Source);
+        session.Volume.ShouldBe(0);
+        session.IsMuted.ShouldBeFalse();
+        session.IsSeekable.ShouldBeFalse();
+        session.GetTracks(MediaTrackKind.Audio).ShouldBeEmpty();
+        session.GetSelectedTrack(MediaTrackKind.Audio).ShouldBe(MediaTrack.DisabledId);
+    }
+
+    [Fact]
+    public async Task Tracks_AreReportedFromTheEngine()
+    {
+        // Arrange
+        var engine = new FakeMediaEngine();
+        engine.Tracks[MediaTrackKind.Audio] =
+        [
+            new MediaTrack(1, MediaTrackKind.Audio, "Deutsch", Language: null),
+            new MediaTrack(2, MediaTrackKind.Audio, "English", Language: null),
+        ];
+
+        await using var session = CreateSession(engine);
+        await session.SwitchToAsync(Request("Erste"), TestContext.Current.CancellationToken);
+
+        // Act
+        session.SelectTrack(MediaTrackKind.Audio, trackId: 2);
+
+        // Assert
+        session.GetTracks(MediaTrackKind.Audio).Select(track => track.DisplayLabel)
+            .ShouldBe(["Deutsch", "English"]);
+        session.GetSelectedTrack(MediaTrackKind.Audio).ShouldBe(2);
+    }
+
     private static PlaybackSession CreateSession(FakeMediaEngine engine)
     {
         return new PlaybackSession(engine, NullLogger<PlaybackSession>.Instance, ShortStopTimeout);
