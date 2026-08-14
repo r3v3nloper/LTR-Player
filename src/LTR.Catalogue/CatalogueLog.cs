@@ -71,6 +71,21 @@ internal static partial class CatalogueLog
         string item,
         string source);
 
+    /// <remarks>
+    /// Warning, and swallowed at the call site. Recording runs while playback is being released — including
+    /// on the way out of the window — and a lost resume position matters far less than a shutdown that
+    /// stalls.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 1408,
+        Level = LogLevel.Warning,
+        Message = "Where the viewer left {Kind} {ItemId} could not be recorded.")]
+    public static partial void ProgressNotRecorded(
+        ILogger logger,
+        Exception exception,
+        string kind,
+        int itemId);
+
     [LoggerMessage(
         EventId = 1407,
         Level = LogLevel.Information,

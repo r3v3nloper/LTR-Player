@@ -32,24 +32,26 @@ internal sealed class VodCommandHandler
     private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
     private readonly ConnectionReleaseCheck _releaseCheck;
+    private readonly WatchProgressRecorder _progress;
 
-    /// <summary>
-    /// What a play-test should remember afterwards, when it was asked to remember anything.
-    /// </summary>
-    private (ContentKind Kind, int ItemId)? _watched;
-
+    /// <param name="progress">
+    /// The same recorder the window uses. Shared rather than reimplemented, so that "how much counts as
+    /// watched" cannot come out differently here than on screen.
+    /// </param>
     public VodCommandHandler(
         ICatalogueStore catalogue,
         IVodDetailService detail,
         IProviderRegistry providers,
         IPlaybackSession session,
-        ConnectionReleaseCheck releaseCheck)
+        ConnectionReleaseCheck releaseCheck,
+        WatchProgressRecorder progress)
     {
         _catalogue = catalogue;
         _detail = detail;
         _providers = providers;
         _session = session;
         _releaseCheck = releaseCheck;
+        _progress = progress;
     }
 
     public async Task<int> ListMoviesAsync(
@@ -339,7 +341,14 @@ internal sealed class VodCommandHandler
             }
 
             request = resolver.ResolveMovie(source, movie, startAt);
-            _watched = remember ? (ContentKind.Movie, movie.Id) : null;
+
+            if (remember)
+            {
+                // Seeded with the position playback was asked to start at, exactly as the window does: a
+                // deep seek can take longer than this command holds the stream, and reading that as "back
+                // at the beginning" would throw the viewer's place away.
+                _progress.Track(ContentKind.Movie, movie.Id, startAt ?? TimeSpan.Zero);
+            }
         }
         else
         {
@@ -353,7 +362,11 @@ internal sealed class VodCommandHandler
             }
 
             request = resolver.ResolveEpisode(source, episode, startAt);
-            _watched = remember ? (ContentKind.Series, episode.Id) : null;
+
+            if (remember)
+            {
+                _progress.Track(ContentKind.Series, episode.Id, startAt ?? TimeSpan.Zero);
+            }
         }
 
         return await PlayAsync(source, request, seconds, cancellationToken).ConfigureAwait(false);
@@ -398,16 +411,21 @@ internal sealed class VodCommandHandler
             Console.WriteLine($"Position   {DescribeTime(_session.Position)}");
             Console.WriteLine($"Duration   {DescribeTime(_session.Duration)}");
 
-            // Read before the stream is released, because the engine has neither afterwards — the same
-            // reason the window samples on a timer rather than at the moment of saving.
-            await RememberAsync(
-                    _session.Position ?? request.StartAt,
-                    _session.Duration,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            // Sampled before the stream is released, because the engine has neither figure afterwards — the
+            // same reason the window samples on a timer rather than at the moment of saving.
+            _progress.Observe(_session.Position, _session.Duration);
+
+            if (await _progress.RecordAsync(cancellationToken).ConfigureAwait(false) is { } outcome)
+            {
+                Console.WriteLine($"Remembered  {outcome}");
+            }
         }
         finally
         {
+            // Whatever was being followed is dropped if it was never recorded, so an interrupted run does
+            // not leave the recorder holding an item for the next command in the same process.
+            _progress.Forget();
+
             // Not passed the caller's token: releasing must happen even when the run was interrupted.
             await _session.StopAsync(CancellationToken.None).ConfigureAwait(false);
         }
@@ -416,48 +434,6 @@ internal sealed class VodCommandHandler
         await _releaseCheck.ReportAsync(source, cancellationToken).ConfigureAwait(false);
 
         return 0;
-    }
-
-    /// <summary>
-    /// Records where a play-test got to, so the continue-watching list can be exercised headlessly.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The classification comes from <see cref="ResumePolicy"/>, which is the same rule the window applies —
-    /// only the plumbing differs, because the window samples on a timer over minutes and this holds one
-    /// stream for a few seconds and reads it once.
-    /// </para>
-    /// <para>
-    /// A position the engine cannot yet state falls back to the position playback was asked to start at, for
-    /// the same reason the window's recorder is seeded with it: a deep seek over HTTP can take longer than
-    /// this command holds the stream, and reading that as "back at the beginning" would throw the viewer's
-    /// place away.
-    /// </para>
-    /// </remarks>
-    private async Task RememberAsync(
-        TimeSpan? position,
-        TimeSpan? duration,
-        CancellationToken cancellationToken)
-    {
-        if (_watched is not { } watched || position is not { } reached)
-        {
-            return;
-        }
-
-        var outcome = ResumePolicy.Classify(reached, duration ?? TimeSpan.Zero);
-
-        if (watched.Kind == ContentKind.Movie)
-        {
-            await _catalogue.RecordMovieProgressAsync(watched.ItemId, outcome, reached, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        else
-        {
-            await _catalogue.RecordEpisodeProgressAsync(watched.ItemId, outcome, reached, cancellationToken)
-                .ConfigureAwait(false);
-        }
-
-        Console.WriteLine($"Remembered {outcome} at {DescribeTime(reached)}.");
     }
 
     /// <summary>

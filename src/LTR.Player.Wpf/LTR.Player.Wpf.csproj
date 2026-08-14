@@ -9,6 +9,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- As every other project here does, so the shell's own wording and helpers can be tested without
+         being made public to the application. -->
+    <InternalsVisibleTo Include="LTR.Player.Wpf.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="LibVLCSharp.WPF" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />

@@ -38,6 +38,15 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     /// </remarks>
     private readonly CancellationTokenSource _shellLifetime = new();
 
+    /// <summary>
+    /// The list reloads and detail fetches started in answer to a property change.
+    /// </summary>
+    /// <remarks>
+    /// Followed rather than kept: nothing in the application waits on them, but something has to be able to
+    /// ask whether the shell has finished reacting — see <see cref="SectionWorkCompletion"/>.
+    /// </remarks>
+    private readonly PendingWork _sectionWork = new();
+
     [ObservableProperty]
     private string _nowPlaying = string.Empty;
 
@@ -99,6 +108,16 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
     /// <summary>The guide import in flight, or an already completed task.</summary>
     public Task GuideImportCompletion => _guideImport.Completion;
+
+    /// <summary>
+    /// Completes once the shell has finished reacting to the last selection or search.
+    /// </summary>
+    /// <remarks>
+    /// Exposed for tests, which otherwise have no way to tell a section that is still loading from one that
+    /// has loaded nothing. Awaiting it is not part of using the window: a viewer changing the search does not
+    /// wait for the previous one, and neither does anything in the application.
+    /// </remarks>
+    public Task SectionWorkCompletion => _sectionWork.Completion;
 
     public bool IsImportingGuide => _guideImport.IsImporting;
 
@@ -387,7 +406,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         }
         catch (Exception exception)
         {
-            PlayerLog.ProgressNotRecorded(_logger, exception, entry.Kind.ToString(), entry.ItemId);
+                PlayerLog.ProgressNotRecorded(_logger, exception, entry.Kind.ToString(), entry.ItemId);
             Status.Text = "That could not be taken off the list. Details are in the log.";
         }
     }
@@ -713,14 +732,14 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     /// Runs work triggered by a property change, which cannot be awaited where it is raised.
     /// </summary>
     /// <remarks>
-    /// The task is deliberately not kept. Each of these reloads a list, is cancelled by the shell lifetime,
-    /// and handles its own failures — so there is nothing for a caller to wait on and nothing that could
-    /// escape as an unobserved exception. The last one to finish wins, which is also the one the viewer
-    /// asked for last.
+    /// Each of these reloads a list, is cancelled by the shell lifetime and handles its own failures, so
+    /// nothing in the application waits on one. It is followed all the same, through
+    /// <see cref="SectionWorkCompletion"/>: a test otherwise has no way to know the shell has finished
+    /// reacting, and the version of this that had none made the tests spin on <c>Task.Yield()</c>.
     /// </remarks>
     private void Run(Func<CancellationToken, Task> work)
     {
-        _ = work(_shellLifetime.Token);
+        _sectionWork.Add(work(_shellLifetime.Token));
     }
 
     private void OnPlaybackStateChanged(object? sender, PlaybackStateChangedEventArgs e)
