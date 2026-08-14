@@ -94,7 +94,8 @@ public sealed partial class ChannelListViewModel : ObservableObject
 
         var storedChannels = await _catalogue.GetLiveChannelsAsync(source.Id, cancellationToken)
             .ConfigureAwait(true);
-        var storedCategories = await _catalogue.GetLiveCategoriesAsync(source.Id, cancellationToken)
+        var storedCategories = await _catalogue
+            .GetCategoriesAsync(source.Id, ContentKind.Live, cancellationToken)
             .ConfigureAwait(true);
 
         Replace(storedChannels, storedCategories);

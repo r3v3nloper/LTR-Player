@@ -57,10 +57,13 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
         return [.. Channels.Where(channel => channel.SourceId == sourceId)];
     }
 
-    public Task<IReadOnlyList<Category>> GetLiveCategoriesAsync(int sourceId, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<Category>> GetCategoriesAsync(
+        int sourceId,
+        ContentKind kind,
+        CancellationToken cancellationToken)
     {
         return Task.FromResult<IReadOnlyList<Category>>(
-            [.. Categories.Where(category => category.SourceId == sourceId)]);
+            [.. Categories.Where(category => category.SourceId == sourceId && category.Kind == kind)]);
     }
 
     /// <summary>

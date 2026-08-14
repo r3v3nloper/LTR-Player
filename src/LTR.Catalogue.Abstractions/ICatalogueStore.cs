@@ -19,7 +19,17 @@ public interface ICatalogueStore
 
     Task<IReadOnlyList<Channel>> GetLiveChannelsAsync(int sourceId, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<Category>> GetLiveCategoriesAsync(int sourceId, CancellationToken cancellationToken);
+    /// <summary>
+    /// A source's categories of one kind, in the order the provider intended.
+    /// </summary>
+    /// <remarks>
+    /// Taken by kind rather than one method per kind. A panel numbers its categories per section, so the
+    /// kind is part of the question and not a variation on it.
+    /// </remarks>
+    Task<IReadOnlyList<Category>> GetCategoriesAsync(
+        int sourceId,
+        ContentKind kind,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// What is on now and next on every channel of a source that has a guide.

@@ -31,9 +31,12 @@ internal sealed class CatalogueStore : ICatalogueStore
         return _database.RunAsync(context => context.GetLiveChannelsAsync(sourceId, cancellationToken));
     }
 
-    public Task<IReadOnlyList<Category>> GetLiveCategoriesAsync(int sourceId, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<Category>> GetCategoriesAsync(
+        int sourceId,
+        ContentKind kind,
+        CancellationToken cancellationToken)
     {
-        return _database.RunAsync(context => context.GetLiveCategoriesAsync(sourceId, cancellationToken));
+        return _database.RunAsync(context => context.GetCategoriesAsync(sourceId, kind, cancellationToken));
     }
 
     public Task<IReadOnlyList<ChannelGuideSlice>> GetNowAndNextAsync(

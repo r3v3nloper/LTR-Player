@@ -215,7 +215,7 @@ public sealed class LtrDbContextTests
 
         // Assert
         await using var verifyContext = database.CreateContext();
-        var categories = await verifyContext.GetLiveCategoriesAsync(sourceId, cancellationToken);
+        var categories = await verifyContext.GetCategoriesAsync(sourceId, ContentKind.Live, cancellationToken);
         var channels = await verifyContext.GetLiveChannelsAsync(sourceId, cancellationToken);
         var sportCategoryId = categories.Single(category => category.ExternalId == "10").Id;
 
@@ -298,7 +298,7 @@ public sealed class LtrDbContextTests
 
         // Assert
         await using var verifyContext = database.CreateContext();
-        var categories = await verifyContext.GetLiveCategoriesAsync(sourceId, cancellationToken);
+        var categories = await verifyContext.GetCategoriesAsync(sourceId, ContentKind.Live, cancellationToken);
         var channels = await verifyContext.GetLiveChannelsAsync(sourceId, cancellationToken);
 
         categories.ShouldHaveSingleItem().ExternalId.ShouldBe("10");
