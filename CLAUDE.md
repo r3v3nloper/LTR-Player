@@ -22,11 +22,33 @@ exists and not what was considered finished.
 | **M6** Hardening — error handling, settings, packaging | not started | the corrupt-database quarantine landed early, with M3 |
 
 M3's timeline scrolls its channel names out of view with the programme blocks, and draws at most 200 rows.
-Both are stated on screen and carried as ranks 14 and 18 in `Docs/refactoring-backlog.md`; neither is
+Both are stated on screen and carried as ranks 11 and 18 in `Docs/refactoring-backlog.md`; neither is
 considered a gap in the milestone.
 
 M4 resumes but does not seek: a viewer can carry on where they left off, and cannot scrub. That is M5's OSD
-work, not an omission from M4.
+work, not an omission from M4. M4 is merged into `main`; ranks 1–7 of the post-M4 review are cleared, and
+nothing left in the backlog has an effect while the player is running.
+
+### Starting M5
+
+The plan calls for the OSD inside `VideoView.Content`, fullscreen, keyboard control (zap, volume, fullscreen,
+info), audio and subtitle track selection, aspect ratio, and lower zapping latency. What M4 leaves in place
+for it:
+
+- **`PlaybackCoordinator` is where playback lives.** It owns the session, the position sampling and the
+  progress recorder, and it is the only thing that opens a stream. An OSD needs the position, the duration
+  and a seek — the first two are already there; a seek is not, and `IMediaEngine` has no `SeekTo`.
+- **Seeking is unbuilt on purpose.** `MediaRequest.StartAt` covers resuming and is honoured by seeking right
+  after the first `Playing` event, for a measured reason recorded in `LibVlcMediaEngine.ApplyStartPosition`.
+  A seek bar wants the same call exposed through `IPlaybackSession`.
+- **The position timer already exists** — `MainWindow` samples every five seconds for the resume recorder.
+  An OSD wants something faster while it is visible, and that is a second interval rather than a new timer.
+- **Backlog rank 15 belongs to M5.** Recording progress when a film reaches its own end needs
+  `IPlaybackSession` to say *why* it stopped, which is the same change a seek bar wants.
+- **`MediaTrack` and `IMediaEngine.GetTracks`/`SelectTrack` exist and are unused by the window.** The CLI's
+  `play-test` prints them, which is the only thing exercising them today.
+- **Overlays go inside `VideoView.Content`.** `Views/GuideOverlayView.xaml` is the worked example; the window
+  hosts it, and the reason is the first WPF trap below.
 
 ## Layout
 
