@@ -79,6 +79,34 @@ public sealed class VodSectionTests
         viewModel.SelectedSection.ShouldBe(CatalogueSection.Live);
     }
 
+    /// <summary>
+    /// The category shown in the picker and the category the filter uses have to agree. They did not:
+    /// emptying the bound collection makes a ComboBox write a null selection back through the binding, so a
+    /// selection made before the picker was refilled was discarded — the picker rendered blank while the
+    /// list, reading the same null, still showed every category and therefore looked perfectly correct.
+    /// </summary>
+    [Fact]
+    public async Task ShowCatalogue_LeavesEveryCategorySelectedInThePicker()
+    {
+        // Arrange
+        var context = new MainViewModelHarness();
+        context.Store.Sources.Add(CreateSource());
+        context.Store.Categories.Add(
+            new Category { SourceId = 1, ExternalId = "58", Name = "Action", Kind = ContentKind.Movie });
+        context.Store.Categories.Add(
+            new Category { SourceId = 1, ExternalId = "75", Name = "Drama", Kind = ContentKind.Series });
+
+        var viewModel = context.Build();
+
+        // Act
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        viewModel.Movies.Categories.Count.ShouldBe(2, "the catch-all entry and one film category");
+        viewModel.Movies.SelectedCategory.ShouldBe(CategoryChoice.All);
+        viewModel.SeriesCatalogue.SelectedCategory.ShouldBe(CategoryChoice.All);
+    }
+
     [Fact]
     public async Task Search_NarrowsTheFilmList()
     {

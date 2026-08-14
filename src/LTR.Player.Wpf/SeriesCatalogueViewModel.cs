@@ -77,19 +77,17 @@ public sealed partial class SeriesCatalogueViewModel : ObservableObject
         _source = null;
 
         ClearSelection();
-        SelectedCategory = CategoryChoice.All;
         SearchText = string.Empty;
 
         Series.Clear();
         Categories.Clear();
         Categories.Add(CategoryChoice.All);
 
-        _source = source;
-        OnPropertyChanged(nameof(IsAvailable));
-
         if (source is null)
         {
+            SelectedCategory = CategoryChoice.All;
             Notice = string.Empty;
+            OnPropertyChanged(nameof(IsAvailable));
             return;
         }
 
@@ -101,6 +99,14 @@ public sealed partial class SeriesCatalogueViewModel : ObservableObject
         {
             Categories.Add(new CategoryChoice(category.Name, category.ExternalId));
         }
+
+        // Selected only once the picker is complete, for the reason recorded in the film list: emptying the
+        // bound collection makes the ComboBox write a null selection back, so selecting before refilling
+        // leaves the control blank while the list itself looks perfectly correct.
+        SelectedCategory = CategoryChoice.All;
+
+        _source = source;
+        OnPropertyChanged(nameof(IsAvailable));
 
         await SearchAsync(cancellationToken).ConfigureAwait(true);
     }

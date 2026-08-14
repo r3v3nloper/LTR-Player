@@ -90,22 +90,22 @@ public sealed partial class MovieListViewModel : ObservableObject
 
         SelectedMovie = null;
         DetailedMovie = null;
-        SelectedCategory = CategoryChoice.All;
         SearchText = string.Empty;
 
         Movies.Clear();
         Categories.Clear();
         Categories.Add(CategoryChoice.All);
 
-        _source = source;
-        OnPropertyChanged(nameof(IsAvailable));
-
         if (source is null)
         {
+            SelectedCategory = CategoryChoice.All;
             Notice = string.Empty;
+            OnPropertyChanged(nameof(IsAvailable));
             return;
         }
 
+        // Read through the parameter rather than the field, which is still null: the picker has to be
+        // complete before anything selects in it.
         var categories = await _catalogue
             .GetCategoriesAsync(source.Id, ContentKind.Movie, cancellationToken)
             .ConfigureAwait(true);
@@ -114,6 +114,15 @@ public sealed partial class MovieListViewModel : ObservableObject
         {
             Categories.Add(new CategoryChoice(category.Name, category.ExternalId));
         }
+
+        // Selected last, and that is not cosmetic. Emptying the bound collection makes the ComboBox write a
+        // null selection back through the binding, so a selection made before the picker is refilled is
+        // discarded and the control renders blank — while the filter, reading the same null, still returns
+        // every category. The list looks right and the picker looks broken.
+        SelectedCategory = CategoryChoice.All;
+
+        _source = source;
+        OnPropertyChanged(nameof(IsAvailable));
 
         await SearchAsync(cancellationToken).ConfigureAwait(true);
     }
