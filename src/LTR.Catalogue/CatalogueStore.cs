@@ -97,6 +97,38 @@ internal sealed class CatalogueStore : ICatalogueStore
         return _database.RunAsync(context => context.GetSeriesAsync(sourceId, cancellationToken));
     }
 
+    public Task<CataloguePage<VodItem>> SearchMoviesAsync(
+        int sourceId,
+        CatalogueFilter filter,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        return _database.RunAsync(context => context.SearchMoviesAsync(
+            sourceId,
+            filter.SearchText,
+            filter.CategoryExternalId,
+            limit,
+            cancellationToken));
+    }
+
+    public Task<CataloguePage<Series>> SearchSeriesAsync(
+        int sourceId,
+        CatalogueFilter filter,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        return _database.RunAsync(context => context.SearchSeriesAsync(
+            sourceId,
+            filter.SearchText,
+            filter.CategoryExternalId,
+            limit,
+            cancellationToken));
+    }
+
     public Task<VodItem?> GetMovieAsync(int movieId, CancellationToken cancellationToken)
     {
         return _database.RunAsync(context => context.GetMovieAsync(movieId, cancellationToken));

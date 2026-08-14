@@ -9,6 +9,11 @@
   <local:EnumMatchConverter x:Key="EnumMatch" />
   <local:NullToVisibilityConverter x:Key="NotNullToVisibility" />
 
+  <!-- Two decode widths, because a row's thumbnail and the detail pane's poster differ by a factor of
+       three and decoding both at the larger size is what makes a scrolled list of covers expensive. -->
+  <local:CoverImageConverter x:Key="RowCover" DecodePixelWidth="60" />
+  <local:CoverImageConverter x:Key="DetailCover" DecodePixelWidth="200" />
+
   <!-- A video player is used in a dark room, so the chrome stays dark and low-contrast against the
        picture rather than competing with it. -->
   <SolidColorBrush x:Key="SurfaceBrush" Color="#12141A" />
@@ -219,6 +224,48 @@
         </ControlTemplate>
       </Setter.Value>
     </Setter>
+  </Style>
+
+  <!--
+    The section selector. Radio buttons rather than a TabControl, because the sections share one pane and a
+    TabControl would bring its own header layout, its own content hosting and a second place for the
+    selection to live.
+  -->
+  <Style x:Key="SectionTab" TargetType="RadioButton">
+    <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Margin" Value="0,0,4,0" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RadioButton">
+          <Border x:Name="Root"
+                  Background="Transparent"
+                  BorderBrush="Transparent"
+                  BorderThickness="0,0,0,2"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter HorizontalAlignment="Center" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Root" Property="Background" Value="{StaticResource HoverBrush}" />
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+              <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.4" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- A film or series row: cover, then text. Same selection behaviour as a channel row. -->
+  <Style x:Key="CatalogueItem" TargetType="ListBoxItem" BasedOn="{StaticResource ChannelItem}">
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
   </Style>
 
   <!--

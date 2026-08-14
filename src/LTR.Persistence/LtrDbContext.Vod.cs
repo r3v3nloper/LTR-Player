@@ -25,6 +25,12 @@ namespace LTR.Persistence;
 public sealed partial class LtrDbContext
 {
     /// <summary>
+    /// Escape character for <c>LIKE</c> patterns. A backslash, because it is the one character a film
+    /// title never contains while <c>%</c>, <c>_</c> and <c>!</c> all do.
+    /// </summary>
+    private const string LikeEscapeCharacter = "\\";
+
+    /// <summary>
     /// Reconciles a freshly fetched film and series catalogue against what is stored.
     /// </summary>
     /// <param name="categories">
@@ -168,6 +174,112 @@ public sealed partial class LtrDbContext
             .ThenBy(series => series.Name)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Answers a search over a source's films, bounded by <paramref name="limit"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Filtered and counted by the database rather than in memory, unlike the channel list. The
+    /// subscription this was built against holds sixty-six thousand films — four times its channel count —
+    /// and nobody browses that by scrolling, so the list answers a search instead of presenting the whole
+    /// catalogue. Wrapping every one of them in a row object to filter them again afterwards would cost
+    /// seconds and a great deal of memory to display twenty.
+    /// </para>
+    /// <para>
+    /// The name criterion is <c>LIKE</c>, which SQLite applies case-insensitively to ASCII. That is a near
+    /// match for the in-memory <see cref="CatalogueFilter"/> rather than an exact one: accented letters
+    /// compare case-sensitively here and not there. The near match is deliberate — the alternative is
+    /// reading the whole table to apply the rule exactly.
+    /// </para>
+    /// </remarks>
+    public async Task<CataloguePage<VodItem>> SearchMoviesAsync(
+        int sourceId,
+        string? searchText,
+        string? categoryExternalId,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+
+        var query = Movies.AsNoTracking().Where(movie => movie.SourceId == sourceId);
+
+        if (!string.IsNullOrWhiteSpace(categoryExternalId))
+        {
+            query = query.Where(movie => movie.CategoryExternalId == categoryExternalId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var pattern = LikePattern(searchText);
+            query = query.Where(movie => EF.Functions.Like(movie.Name, pattern, LikeEscapeCharacter));
+        }
+
+        var total = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+
+        var items = await query
+            .OrderBy(movie => movie.SortOrder)
+            .ThenBy(movie => movie.Name)
+            .Take(limit)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return new CataloguePage<VodItem>(items, total);
+    }
+
+    /// <summary>Answers a search over a source's series, bounded the same way as the film search.</summary>
+    public async Task<CataloguePage<Series>> SearchSeriesAsync(
+        int sourceId,
+        string? searchText,
+        string? categoryExternalId,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+
+        var query = Series.AsNoTracking().Where(series => series.SourceId == sourceId);
+
+        if (!string.IsNullOrWhiteSpace(categoryExternalId))
+        {
+            query = query.Where(series => series.CategoryExternalId == categoryExternalId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var pattern = LikePattern(searchText);
+            query = query.Where(series => EF.Functions.Like(series.Name, pattern, LikeEscapeCharacter));
+        }
+
+        var total = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+
+        var items = await query
+            .OrderBy(series => series.SortOrder)
+            .ThenBy(series => series.Name)
+            .Take(limit)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return new CataloguePage<Series>(items, total);
+    }
+
+    /// <summary>
+    /// Turns a user's search text into a <c>LIKE</c> pattern that means what they typed.
+    /// </summary>
+    /// <remarks>
+    /// The wildcards have to be escaped: a viewer typing <c>%</c> means a percent sign, and left alone it
+    /// would match the entire catalogue. The escape character itself is escaped first, or escaping the
+    /// wildcards would corrupt it.
+    /// </remarks>
+    private static string LikePattern(string searchText)
+    {
+        var escaped = searchText
+            .Trim()
+            .Replace(LikeEscapeCharacter, LikeEscapeCharacter + LikeEscapeCharacter, StringComparison.Ordinal)
+            .Replace("%", LikeEscapeCharacter + "%", StringComparison.Ordinal)
+            .Replace("_", LikeEscapeCharacter + "_", StringComparison.Ordinal);
+
+        return $"%{escaped}%";
     }
 
     /// <summary>

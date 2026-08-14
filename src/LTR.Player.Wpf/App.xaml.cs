@@ -82,6 +82,11 @@ public partial class App : Application
         services.AddSingleton<SourceManagementViewModel>();
         services.AddSingleton<ChannelListViewModel>();
         services.AddSingleton<GuideViewModel>();
+        services.AddSingleton<MovieListViewModel>();
+        services.AddSingleton<SeriesCatalogueViewModel>();
+        services.AddSingleton<ContinueWatchingViewModel>();
+        services.AddSingleton<GuideImportCoordinator>();
+        services.AddSingleton<WatchProgressRecorder>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 

@@ -72,4 +72,43 @@ internal static partial class PlayerLog
         Level = LogLevel.Warning,
         Message = "Rereading what is on now failed; the channel list keeps what it was showing.")]
     public static partial void GuideRefreshFailed(ILogger logger, Exception exception);
+
+    /// <remarks>
+    /// Warning rather than error: the film plays perfectly well without a synopsis.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 3009,
+        Level = LogLevel.Warning,
+        Message = "The detail of film {Film} could not be read; showing what the listing supplied.")]
+    public static partial void MovieDetailFailed(ILogger logger, Exception exception, string film);
+
+    [LoggerMessage(
+        EventId = 3010,
+        Level = LogLevel.Error,
+        Message = "The episodes of {Series} could not be loaded.")]
+    public static partial void SeriesDetailFailed(ILogger logger, Exception exception, string series);
+
+    /// <remarks>
+    /// Warning, and swallowed at the call site. This runs while playback is being released — including on
+    /// the way out of the window — and a lost resume position matters far less than a shutdown that stalls.
+    /// </remarks>
+    [LoggerMessage(
+        EventId = 3011,
+        Level = LogLevel.Warning,
+        Message = "Where the viewer left {Kind} {ItemId} could not be recorded.")]
+    public static partial void ProgressNotRecorded(
+        ILogger logger,
+        Exception exception,
+        string kind,
+        int itemId);
+
+    [LoggerMessage(
+        EventId = 3012,
+        Level = LogLevel.Information,
+        Message = "Source {Source}: {MovieCount} films, {SeriesCount} series.")]
+    public static partial void LoadedVodCatalogue(
+        ILogger logger,
+        string source,
+        int movieCount,
+        int seriesCount);
 }

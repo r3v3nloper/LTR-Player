@@ -1,0 +1,101 @@
+<UserControl x:Class="LTR.Player.Wpf.Views.LiveChannelsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:LTR.Player.Wpf">
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+
+    <ComboBox Grid.Row="0"
+              ItemsSource="{Binding Channels.Categories}"
+              SelectedItem="{Binding Channels.SelectedCategory}">
+      <ComboBox.ItemTemplate>
+        <DataTemplate>
+          <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+        </DataTemplate>
+      </ComboBox.ItemTemplate>
+    </ComboBox>
+
+    <TextBox Grid.Row="1"
+             Text="{Binding Channels.ChannelFilterText, UpdateSourceTrigger=PropertyChanged, Delay=200}"
+             Margin="0,8,0,0" />
+
+    <CheckBox Grid.Row="2"
+              Content="Favourites only"
+              Foreground="{StaticResource MutedTextBrush}"
+              Margin="0,10,0,8"
+              IsChecked="{Binding Channels.ShowFavoritesOnly}" />
+
+    <!-- Virtualised and recycling: a subscription can list tens of thousands of channels. -->
+    <ListBox Grid.Row="3"
+             ItemsSource="{Binding Channels.ChannelView}"
+             SelectedItem="{Binding Channels.SelectedChannel}"
+             ItemContainerStyle="{StaticResource ChannelItem}"
+             Background="Transparent"
+             BorderThickness="0"
+             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+             VirtualizingPanel.IsVirtualizing="True"
+             VirtualizingPanel.VirtualizationMode="Recycling"
+             VirtualizingPanel.ScrollUnit="Pixel"
+             MouseDoubleClick="OnChannelActivated">
+      <ListBox.ItemTemplate>
+        <DataTemplate DataType="{x:Type local:ChannelItemViewModel}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="16" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="★" Foreground="{StaticResource FavoriteBrush}"
+                       Visibility="{Binding IsFavorite, Converter={StaticResource BooleanToVisibility}}" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Name}"
+                       TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Row="0" Grid.Column="2" Text="⟲" ToolTip="Catch-up available"
+                       Style="{StaticResource MutedText}"
+                       Visibility="{Binding HasArchive, Converter={StaticResource BooleanToVisibility}}" />
+
+            <!--
+              What is on now, collapsed for channels the guide does not cover. Collapsed rather than
+              blank: most channels of a real subscription have no guide entry, and a reserved empty
+              line for each of them would halve the number of channels on screen.
+            -->
+            <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,2,0,0"
+                        Visibility="{Binding NowTitle,
+                                             Converter={StaticResource NonEmptyStringToVisibility}}">
+              <TextBlock Style="{StaticResource MutedText}" TextTrimming="CharacterEllipsis">
+                <Run Text="{Binding NowTimes, Mode=OneWay}" />
+                <Run Text="{Binding NowTitle, Mode=OneWay}" Foreground="{StaticResource TextBrush}" />
+              </TextBlock>
+
+              <ProgressBar Height="2"
+                           Margin="0,3,0,0"
+                           Minimum="0"
+                           Maximum="1"
+                           Value="{Binding NowProgress, Mode=OneWay}"
+                           Background="{StaticResource BorderBrush}"
+                           Foreground="{StaticResource AccentBrush}"
+                           BorderThickness="0" />
+
+              <TextBlock Text="{Binding NextTitle}"
+                         Style="{StaticResource MutedText}"
+                         Margin="0,2,0,0"
+                         TextTrimming="CharacterEllipsis"
+                         Visibility="{Binding NextTitle,
+                                              Converter={StaticResource NonEmptyStringToVisibility}}" />
+            </StackPanel>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </Grid>
+</UserControl>

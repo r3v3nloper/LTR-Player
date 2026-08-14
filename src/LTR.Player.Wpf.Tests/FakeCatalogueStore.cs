@@ -185,6 +185,42 @@ internal sealed class FakeCatalogueStore : ICatalogueStore
             [.. SeriesCatalogue.Where(series => series.SourceId == sourceId)]);
     }
 
+    /// <summary>
+    /// Applies the filter the way the real store's SQL does, and caps the page the same way.
+    /// </summary>
+    /// <remarks>
+    /// The rules are reached for rather than duplicated — <see cref="CatalogueFilter"/> is the same type the
+    /// query is built from — so what differs here is only that this one runs in memory. The database
+    /// translation itself is covered against real SQLite in the persistence tests.
+    /// </remarks>
+    public Task<CataloguePage<VodItem>> SearchMoviesAsync(
+        int sourceId,
+        CatalogueFilter filter,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var matching = Movies
+            .Where(movie => movie.SourceId == sourceId
+                && filter.Matches(movie.Name, movie.CategoryExternalId))
+            .ToList();
+
+        return Task.FromResult(new CataloguePage<VodItem>([.. matching.Take(limit)], matching.Count));
+    }
+
+    public Task<CataloguePage<Series>> SearchSeriesAsync(
+        int sourceId,
+        CatalogueFilter filter,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var matching = SeriesCatalogue
+            .Where(series => series.SourceId == sourceId
+                && filter.Matches(series.Name, series.CategoryExternalId))
+            .ToList();
+
+        return Task.FromResult(new CataloguePage<Series>([.. matching.Take(limit)], matching.Count));
+    }
+
     public Task<VodItem?> GetMovieAsync(int movieId, CancellationToken cancellationToken)
     {
         return Task.FromResult(Movies.FirstOrDefault(movie => movie.Id == movieId));

@@ -1,7 +1,7 @@
 <Window x:Class="LTR.Player.Wpf.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:local="clr-namespace:LTR.Player.Wpf"
+        xmlns:views="clr-namespace:LTR.Player.Wpf.Views"
         xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
         Title="LTR-Player"
         Width="1280"
@@ -11,6 +11,10 @@
         Background="{StaticResource PanelBrush}"
         WindowStartupLocation="CenterScreen">
 
+  <!--
+    Composition only. Each section is a view of its own, because this file had reached four hundred and
+    seventy lines with one list in it (backlog rank 13) and gained three more lists in this milestone.
+  -->
   <Grid>
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="360" MinWidth="300" />
@@ -22,6 +26,7 @@
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
         <RowDefinition Height="*" />
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
@@ -30,8 +35,8 @@
 
       <!--
         Source picker, hidden while the add form is up. The two source-management blocks narrow the
-        data context once instead of prefixing every binding; the channel list below cannot, because
-        its own visibility is decided by source management.
+        data context once instead of prefixing every binding; the sections below cannot, because they
+        bind commands that live on the shell.
       -->
       <Grid Grid.Row="1" Margin="0,14,0,0"
             DataContext="{Binding SourceManagement}"
@@ -62,152 +67,65 @@
         </StackPanel>
       </Grid>
 
-      <!-- Add a source -->
-      <StackPanel Grid.Row="2" VerticalAlignment="Top" Margin="0,16,0,0"
-                  DataContext="{Binding SourceManagement}"
-                  Visibility="{Binding IsAddingSource, Converter={StaticResource BooleanToVisibility}}">
-        <TextBlock Text="Subscription type" Style="{StaticResource FieldLabel}" />
-        <StackPanel Orientation="Horizontal">
-          <RadioButton Content="Xtream Codes"
-                       Foreground="{StaticResource TextBrush}"
-                       IsChecked="{Binding NewSourceProtocol, Converter={StaticResource EnumMatch},
-                                           ConverterParameter=Xtream}" />
-          <RadioButton Content="M3U playlist"
-                       Foreground="{StaticResource TextBrush}"
-                       Margin="16,0,0,0"
-                       IsChecked="{Binding NewSourceProtocol, Converter={StaticResource EnumMatch},
-                                           ConverterParameter=M3uPlaylist}" />
-        </StackPanel>
-
-        <!-- Xtream fields -->
-        <StackPanel Visibility="{Binding NewSourceProtocol, Converter={StaticResource EnumMatch},
-                                         ConverterParameter=Xtream}">
-          <TextBlock Text="Panel address" Style="{StaticResource FieldLabel}" />
-          <TextBox Text="{Binding PanelUrl, UpdateSourceTrigger=PropertyChanged}" />
-
-          <TextBlock Text="Username" Style="{StaticResource FieldLabel}" />
-          <TextBox Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" />
-
-          <TextBlock Text="Password" Style="{StaticResource FieldLabel}" />
-          <PasswordBox x:Name="PasswordInput" PasswordChanged="OnPasswordChanged" />
-        </StackPanel>
-
-        <!-- Playlist fields -->
-        <StackPanel Visibility="{Binding NewSourceProtocol, Converter={StaticResource EnumMatch},
-                                         ConverterParameter=M3uPlaylist}">
-          <TextBlock Text="Playlist address or file" Style="{StaticResource FieldLabel}" />
-          <TextBox Text="{Binding PlaylistUrl, UpdateSourceTrigger=PropertyChanged}" />
-          <TextBlock Text="A URL, or a full path to a local .m3u file."
-                     Style="{StaticResource MutedText}" Margin="0,4,0,0" TextWrapping="Wrap" />
-        </StackPanel>
-
-        <Button Content="Connect" Command="{Binding ConnectCommand}"
-                Margin="0,16,0,0" HorizontalAlignment="Stretch" />
-        <Button Content="Cancel" Command="{Binding CancelAddSourceCommand}"
-                Margin="0,6,0,0" HorizontalAlignment="Stretch"
-                Background="{StaticResource BorderBrush}" />
+      <!--
+        The section selector. Films and series are disabled rather than hidden when a subscription does not
+        offer them, so their absence reads as a fact about the subscription rather than as a missing feature.
+      -->
+      <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,14,0,10"
+                  Visibility="{Binding SourceManagement.IsAddingSource,
+                                       Converter={StaticResource InverseBooleanToVisibility}}">
+        <RadioButton Content="Live"
+                     Style="{StaticResource SectionTab}"
+                     IsChecked="{Binding SelectedSection, Converter={StaticResource EnumMatch},
+                                         ConverterParameter=Live}" />
+        <RadioButton Content="Films"
+                     Style="{StaticResource SectionTab}"
+                     IsEnabled="{Binding Movies.IsAvailable}"
+                     ToolTip="Films offered by this subscription"
+                     IsChecked="{Binding SelectedSection, Converter={StaticResource EnumMatch},
+                                         ConverterParameter=Movies}" />
+        <RadioButton Content="Series"
+                     Style="{StaticResource SectionTab}"
+                     IsEnabled="{Binding SeriesCatalogue.IsAvailable}"
+                     ToolTip="Series offered by this subscription"
+                     IsChecked="{Binding SelectedSection, Converter={StaticResource EnumMatch},
+                                         ConverterParameter=Series}" />
+        <RadioButton Content="Continue"
+                     Style="{StaticResource SectionTab}"
+                     ToolTip="Films and episodes you are part-way through"
+                     IsChecked="{Binding SelectedSection, Converter={StaticResource EnumMatch},
+                                         ConverterParameter=ContinueWatching}" />
       </StackPanel>
 
-      <!-- Channel list -->
-      <Grid Grid.Row="2" Margin="0,14,0,0"
+      <!-- Add a source -->
+      <views:AddSourceView Grid.Row="3"
+                           VerticalAlignment="Top"
+                           DataContext="{Binding SourceManagement}"
+                           Visibility="{Binding IsAddingSource,
+                                                Converter={StaticResource BooleanToVisibility}}" />
+
+      <!--
+        One section at a time. Each is collapsed rather than unloaded, so switching back does not reload a
+        list or lose a scroll position.
+      -->
+      <Grid Grid.Row="3"
             Visibility="{Binding SourceManagement.IsAddingSource,
                                  Converter={StaticResource InverseBooleanToVisibility}}">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <ComboBox Grid.Row="0"
-                  ItemsSource="{Binding Channels.Categories}"
-                  SelectedItem="{Binding Channels.SelectedCategory}">
-          <ComboBox.ItemTemplate>
-            <DataTemplate>
-              <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
-
-        <TextBox Grid.Row="1"
-                 Text="{Binding Channels.ChannelFilterText, UpdateSourceTrigger=PropertyChanged, Delay=200}"
-                 Margin="0,8,0,0" />
-
-        <CheckBox Grid.Row="2"
-                  Content="Favourites only"
-                  Foreground="{StaticResource MutedTextBrush}"
-                  Margin="0,10,0,8"
-                  IsChecked="{Binding Channels.ShowFavoritesOnly}" />
-
-        <!-- Virtualised and recycling: a subscription can list tens of thousands of channels. -->
-        <ListBox Grid.Row="3"
-                 ItemsSource="{Binding Channels.ChannelView}"
-                 SelectedItem="{Binding Channels.SelectedChannel}"
-                 ItemContainerStyle="{StaticResource ChannelItem}"
-                 Background="Transparent"
-                 BorderThickness="0"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                 VirtualizingPanel.IsVirtualizing="True"
-                 VirtualizingPanel.VirtualizationMode="Recycling"
-                 VirtualizingPanel.ScrollUnit="Pixel"
-                 MouseDoubleClick="OnChannelActivated">
-          <ListBox.ItemTemplate>
-            <DataTemplate DataType="{x:Type local:ChannelItemViewModel}">
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="16" />
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                  <RowDefinition Height="Auto" />
-                  <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="★" Foreground="{StaticResource FavoriteBrush}"
-                           Visibility="{Binding IsFavorite, Converter={StaticResource BooleanToVisibility}}" />
-                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Name}"
-                           TextTrimming="CharacterEllipsis" />
-                <TextBlock Grid.Row="0" Grid.Column="2" Text="⟲" ToolTip="Catch-up available"
-                           Style="{StaticResource MutedText}"
-                           Visibility="{Binding HasArchive, Converter={StaticResource BooleanToVisibility}}" />
-
-                <!--
-                  What is on now, collapsed for channels the guide does not cover. Collapsed rather than
-                  blank: most channels of a real subscription have no guide entry, and a reserved empty
-                  line for each of them would halve the number of channels on screen.
-                -->
-                <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,2,0,0"
-                            Visibility="{Binding NowTitle,
-                                                 Converter={StaticResource NonEmptyStringToVisibility}}">
-                  <TextBlock Style="{StaticResource MutedText}" TextTrimming="CharacterEllipsis">
-                    <Run Text="{Binding NowTimes, Mode=OneWay}" />
-                    <Run Text="{Binding NowTitle, Mode=OneWay}" Foreground="{StaticResource TextBrush}" />
-                  </TextBlock>
-
-                  <ProgressBar Height="2"
-                               Margin="0,3,0,0"
-                               Minimum="0"
-                               Maximum="1"
-                               Value="{Binding NowProgress, Mode=OneWay}"
-                               Background="{StaticResource BorderBrush}"
-                               Foreground="{StaticResource AccentBrush}"
-                               BorderThickness="0" />
-
-                  <TextBlock Text="{Binding NextTitle}"
-                             Style="{StaticResource MutedText}"
-                             Margin="0,2,0,0"
-                             TextTrimming="CharacterEllipsis"
-                             Visibility="{Binding NextTitle,
-                                                  Converter={StaticResource NonEmptyStringToVisibility}}" />
-                </StackPanel>
-              </Grid>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
+        <views:LiveChannelsView
+            Visibility="{Binding SelectedSection, Converter={StaticResource EnumMatch},
+                                 ConverterParameter=Live}" />
+        <views:MovieCatalogueView
+            Visibility="{Binding SelectedSection, Converter={StaticResource EnumMatch},
+                                 ConverterParameter=Movies}" />
+        <views:SeriesCatalogueView
+            Visibility="{Binding SelectedSection, Converter={StaticResource EnumMatch},
+                                 ConverterParameter=Series}" />
+        <views:ContinueWatchingView
+            Visibility="{Binding SelectedSection, Converter={StaticResource EnumMatch},
+                                 ConverterParameter=ContinueWatching}" />
       </Grid>
 
-      <StackPanel Grid.Row="3" Margin="0,12,0,0">
+      <StackPanel Grid.Row="4" Margin="0,12,0,0">
         <Grid Visibility="{Binding SourceManagement.IsAddingSource,
                                    Converter={StaticResource InverseBooleanToVisibility}}">
           <Grid.ColumnDefinitions>
@@ -233,6 +151,22 @@
                   Margin="6,0,0,0"
                   Background="{StaticResource BorderBrush}" />
         </Grid>
+
+        <!-- Whatever the active section has to say about what it is showing. -->
+        <TextBlock Text="{Binding Movies.Notice}"
+                   Style="{StaticResource MutedText}"
+                   TextWrapping="Wrap"
+                   Margin="0,10,0,0"
+                   Visibility="{Binding SelectedSection, Converter={StaticResource EnumMatch},
+                                        ConverterParameter=Movies}" />
+
+        <TextBlock Text="{Binding SeriesCatalogue.Notice}"
+                   Style="{StaticResource MutedText}"
+                   TextWrapping="Wrap"
+                   Margin="0,10,0,0"
+                   Visibility="{Binding SelectedSection, Converter={StaticResource EnumMatch},
+                                        ConverterParameter=Series}" />
+
         <TextBlock Text="{Binding Status.Text}"
                    Style="{StaticResource MutedText}"
                    TextWrapping="Wrap"
@@ -244,13 +178,13 @@
                   Background="{StaticResource BorderBrush}" />
 
     <!--
-      The overlay lives inside VideoView.Content, not beside it. VideoView hosts a separate native
-      window over the WPF tree, so any sibling element is simply invisible behind the video. Content
+      The overlay and the timeline live inside VideoView.Content, not beside it. VideoView hosts a separate
+      native window over the WPF tree, so any sibling element is simply invisible behind the video. Content
       placed here is rendered by an overlay window that tracks it, and the DataContext is propagated.
     -->
     <vlc:VideoView x:Name="Video" Grid.Column="2" Background="Black">
       <Grid>
-        <TextBlock Text="Pick a channel to start playback."
+        <TextBlock Text="Pick something to play."
                    Style="{StaticResource MutedText}"
                    HorizontalAlignment="Center"
                    VerticalAlignment="Center"
@@ -276,196 +210,7 @@
           </Grid>
         </Border>
 
-        <!--
-          The programme timeline. Also inside VideoView.Content, and for the same reason as the overlay
-          above: placed beside the VideoView it would be hidden behind the native video window entirely.
-        -->
-        <Border x:Name="GuideRoot"
-                DataContext="{Binding Guide}"
-                Background="#F21B1E26"
-                Visibility="{Binding IsVisible, Converter={StaticResource BooleanToVisibility}}">
-          <Grid Margin="14">
-            <Grid.RowDefinitions>
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="Auto" />
-              <RowDefinition Height="*" />
-              <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-
-            <!-- Window navigation. Moving the window is a reload, not a scroll, so it is stated as
-                 buttons over time rather than as a scrollbar. -->
-            <StackPanel Grid.Row="0" Orientation="Horizontal">
-              <Button Content="◀ 30 min" Command="{Binding MoveEarlierCommand}"
-                      Background="{StaticResource BorderBrush}" />
-              <Button Content="Now" Command="{Binding JumpToNowCommand}" Margin="6,0,0,0" />
-              <Button Content="30 min ▶" Command="{Binding MoveLaterCommand}" Margin="6,0,0,0"
-                      Background="{StaticResource BorderBrush}" />
-              <Button Content="Close" Command="{Binding DataContext.ToggleGuideCommand,
-                                                        RelativeSource={RelativeSource AncestorType=Window}}"
-                      Margin="18,0,0,0" Background="{StaticResource BorderBrush}" />
-            </StackPanel>
-
-            <TextBlock Grid.Row="1"
-                       Text="{Binding Notice}"
-                       Style="{StaticResource MutedText}"
-                       TextWrapping="Wrap"
-                       Margin="0,8,0,0"
-                       Visibility="{Binding Notice, Converter={StaticResource NonEmptyStringToVisibility}}" />
-
-            <!--
-              One horizontal scroller around the header and the rows together, so a column heading cannot
-              drift out of line with the blocks beneath it. Vertical scrolling is disabled here and left
-              to the row list, which virtualises.
-            -->
-            <ScrollViewer Grid.Row="2"
-                          Margin="0,10,0,0"
-                          HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Disabled">
-              <Grid>
-                <Grid.RowDefinitions>
-                  <RowDefinition Height="Auto" />
-                  <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="180" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="Channel" Style="{StaticResource MutedText}" />
-
-                <ItemsControl Grid.Row="0" Grid.Column="1"
-                              ItemsSource="{Binding TimeMarkers}"
-                              Width="{Binding Timeline.Width}">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <Canvas Height="18" />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                  <ItemsControl.ItemContainerStyle>
-                    <Style TargetType="ContentPresenter">
-                      <Setter Property="Canvas.Left" Value="{Binding Position}" />
-                    </Style>
-                  </ItemsControl.ItemContainerStyle>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="{x:Type local:GuideTimeMarker}">
-                      <TextBlock Text="{Binding Label}" Style="{StaticResource MutedText}" />
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <ListBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                         ItemsSource="{Binding Rows}"
-                         Background="Transparent"
-                         BorderThickness="0"
-                         HorizontalContentAlignment="Stretch"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         VirtualizingPanel.IsVirtualizing="True"
-                         VirtualizingPanel.VirtualizationMode="Recycling"
-                         VirtualizingPanel.ScrollUnit="Pixel">
-                  <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                      <Setter Property="Padding" Value="0,2" />
-                      <Setter Property="Template">
-                        <Setter.Value>
-                          <ControlTemplate TargetType="ListBoxItem">
-                            <ContentPresenter />
-                          </ControlTemplate>
-                        </Setter.Value>
-                      </Setter>
-                    </Style>
-                  </ListBox.ItemContainerStyle>
-                  <ListBox.ItemTemplate>
-                    <DataTemplate DataType="{x:Type local:GuideRowViewModel}">
-                      <Grid>
-                        <Grid.ColumnDefinitions>
-                          <ColumnDefinition Width="180" />
-                          <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock Grid.Column="0"
-                                   Text="{Binding Name}"
-                                   VerticalAlignment="Center"
-                                   Margin="0,0,8,0"
-                                   TextTrimming="CharacterEllipsis" />
-
-                        <ItemsControl Grid.Column="1"
-                                      ItemsSource="{Binding Programmes}"
-                                      Width="{Binding DataContext.Timeline.Width, ElementName=GuideRoot}">
-                          <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                              <Canvas Height="34" Background="#141720" />
-                            </ItemsPanelTemplate>
-                          </ItemsControl.ItemsPanel>
-                          <ItemsControl.ItemContainerStyle>
-                            <Style TargetType="ContentPresenter">
-                              <Setter Property="Canvas.Left" Value="{Binding Left}" />
-                            </Style>
-                          </ItemsControl.ItemContainerStyle>
-                          <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type local:GuideProgrammeViewModel}">
-                              <Button Width="{Binding Width}"
-                                      Height="34"
-                                      Padding="6,2"
-                                      HorizontalContentAlignment="Left"
-                                      Background="{StaticResource BorderBrush}"
-                                      ToolTip="{Binding Title}"
-                                      Command="{Binding DataContext.SelectProgrammeCommand,
-                                                        ElementName=GuideRoot}"
-                                      CommandParameter="{Binding}">
-                                <StackPanel>
-                                  <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                                  <TextBlock Text="{Binding Times}" Style="{StaticResource MutedText}" />
-                                </StackPanel>
-                              </Button>
-                            </DataTemplate>
-                          </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                      </Grid>
-                    </DataTemplate>
-                  </ListBox.ItemTemplate>
-                </ListBox>
-
-                <!--
-                  The current moment, drawn over the rows. Declared after the row list so it lands on top,
-                  and not hit-testable so it does not swallow clicks on the programme underneath it.
-                -->
-                <Canvas x:Name="NowMarkerLayer"
-                        Grid.Row="1" Grid.Column="1"
-                        IsHitTestVisible="False"
-                        Visibility="{Binding IsNowVisible, Converter={StaticResource BooleanToVisibility}}">
-                  <Rectangle Canvas.Left="{Binding NowPosition}"
-                             Canvas.Top="0"
-                             Width="2"
-                             Height="{Binding ActualHeight, ElementName=NowMarkerLayer}"
-                             Fill="{StaticResource AccentBrush}" />
-                </Canvas>
-              </Grid>
-            </ScrollViewer>
-
-            <!-- Detail of the selected programme, which is where a description is long enough to read. -->
-            <Border Grid.Row="3"
-                    Margin="0,10,0,0"
-                    Padding="12,10"
-                    Background="{StaticResource SurfaceBrush}"
-                    Visibility="{Binding SelectedProgramme,
-                                         Converter={StaticResource NotNullToVisibility}}">
-              <StackPanel DataContext="{Binding SelectedProgramme}">
-                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,0">
-                  <Run Text="{Binding Times, Mode=OneWay}" />
-                  <Run Text="{Binding Category, Mode=OneWay}" />
-                  <Run Text="{Binding EpisodeReference, Mode=OneWay}" />
-                </TextBlock>
-                <TextBlock Text="{Binding Description}"
-                           Style="{StaticResource MutedText}"
-                           Margin="0,6,0,0"
-                           MaxHeight="90"
-                           TextWrapping="Wrap"
-                           TextTrimming="CharacterEllipsis" />
-              </StackPanel>
-            </Border>
-          </Grid>
-        </Border>
+        <views:GuideOverlayView />
       </Grid>
     </vlc:VideoView>
   </Grid>

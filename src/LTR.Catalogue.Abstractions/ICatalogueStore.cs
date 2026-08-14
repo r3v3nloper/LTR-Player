@@ -73,6 +73,26 @@ public interface ICatalogueStore
     Task<IReadOnlyList<VodItem>> GetMoviesAsync(int sourceId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Answers a search over a source's films, bounded by <paramref name="limit"/>.
+    /// </summary>
+    /// <remarks>
+    /// What the film list uses, rather than <see cref="GetMoviesAsync"/>. A real subscription holds tens of
+    /// thousands of films, so the section answers a search instead of presenting everything — and the count
+    /// of what matched comes back with the page so the caller can say how much it is not showing.
+    /// </remarks>
+    Task<CataloguePage<VodItem>> SearchMoviesAsync(
+        int sourceId,
+        CatalogueFilter filter,
+        int limit,
+        CancellationToken cancellationToken);
+
+    Task<CataloguePage<Series>> SearchSeriesAsync(
+        int sourceId,
+        CatalogueFilter filter,
+        int limit,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// A source's series, without their seasons.
     /// </summary>
     /// <remarks>
