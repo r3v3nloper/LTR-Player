@@ -44,6 +44,30 @@ internal sealed class M3uStreamUrlResolver : IStreamUrlResolver
     }
 
     /// <summary>
+    /// Always unsupported: a playlist offers no films, so nothing can produce a film to resolve.
+    /// </summary>
+    /// <remarks>
+    /// Thrown rather than answered, unlike <see cref="M3uContentProvider.FetchMoviesAsync"/> returning an
+    /// empty list. An empty catalogue section is an ordinary state of affairs; being handed a film that
+    /// belongs to a playlist source means something upstream mixed two sources up, and quietly building
+    /// an address for it would be the worse failure.
+    /// </remarks>
+    public MediaRequest ResolveMovie(PlaylistSource source, VodItem movie, TimeSpan? startAt = null)
+    {
+        throw new NotSupportedException(
+            "M3U playlists carry no films, so there is no address to build. This indicates a film was "
+            + "resolved against the wrong source.");
+    }
+
+    /// <summary>Always unsupported, for the same reason as <see cref="ResolveMovie"/>.</summary>
+    public MediaRequest ResolveEpisode(PlaylistSource source, Episode episode, TimeSpan? startAt = null)
+    {
+        throw new NotSupportedException(
+            "M3U playlists carry no series, so there is no address to build. This indicates an episode "
+            + "was resolved against the wrong source.");
+    }
+
+    /// <summary>
     /// Reads the container from the address.
     /// </summary>
     /// <remarks>

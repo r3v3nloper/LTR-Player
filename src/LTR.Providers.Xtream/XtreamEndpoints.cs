@@ -18,6 +18,8 @@ internal static class XtreamEndpoints
     private const string XmltvPath = "xmltv.php";
     private const string PlaylistPath = "get.php";
     private const string LivePathSegment = "live";
+    private const string MoviePathSegment = "movie";
+    private const string SeriesPathSegment = "series";
 
     /// <summary>
     /// Builds a <c>player_api.php</c> call. Omitting <paramref name="action"/> yields the
@@ -99,6 +101,56 @@ internal static class XtreamEndpoints
             Escape(streamId),
             ".",
             format.ToUrlExtension());
+
+        return Combine(source.BaseUrl, path);
+    }
+
+    /// <summary>
+    /// Builds a film's address.
+    /// </summary>
+    /// <param name="containerExtension">
+    /// The container the film is stored in, without a leading dot. Required rather than defaulted: the
+    /// extension is part of the file's identity on the panel, and choosing one here would hide the
+    /// decision from the resolver that has to make it.
+    /// </param>
+    /// <remarks>
+    /// The <c>/movie/</c> segment is not optional the way <c>/live/</c> is. Panels that serve films at
+    /// all serve them under it, so there is nothing to probe.
+    /// </remarks>
+    public static Uri MovieStream(XtreamSource source, string streamId, string containerExtension)
+    {
+        return VodStream(source, MoviePathSegment, streamId, containerExtension);
+    }
+
+    /// <summary>
+    /// Builds an episode's address, which is keyed by the episode's own id rather than the series'.
+    /// </summary>
+    public static Uri EpisodeStream(XtreamSource source, string episodeId, string containerExtension)
+    {
+        return VodStream(source, SeriesPathSegment, episodeId, containerExtension);
+    }
+
+    private static Uri VodStream(
+        XtreamSource source,
+        string pathSegment,
+        string itemId,
+        string containerExtension)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(containerExtension);
+
+        var path = string.Concat(
+            pathSegment,
+            "/",
+            Escape(source.Username),
+            "/",
+            Escape(source.Password),
+            "/",
+            Escape(itemId),
+            ".",
+            // Panels state the extension with and without its dot, and a doubled one is a 404.
+            Escape(containerExtension.TrimStart('.')));
 
         return Combine(source.BaseUrl, path);
     }

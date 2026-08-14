@@ -64,4 +64,37 @@ internal static partial class XtreamLog
         Level = LogLevel.Information,
         Message = "{Source} was probed and serves no xmltv.php, so it has no guide to import.")]
     public static partial void GuideUnavailable(ILogger logger, string source);
+
+    [LoggerMessage(
+        EventId = 1008,
+        Level = LogLevel.Information,
+        Message = "{Url} returned {Shape} instead of an object; treating as no detail available.")]
+    public static partial void DetailReturnedUnexpectedShape(ILogger logger, string url, JsonValueKind shape);
+
+    [LoggerMessage(
+        EventId = 1011,
+        Level = LogLevel.Warning,
+        Message = "The detail response from {Url} could not be read; continuing without it.")]
+    public static partial void DetailUnreadable(ILogger logger, Exception exception, string url);
+
+    [LoggerMessage(
+        EventId = 1009,
+        Level = LogLevel.Warning,
+        Message = "Skipped {Count} {Section} entries from {Source} because they carried no identifier.")]
+    public static partial void SkippedEntriesWithoutId(
+        ILogger logger,
+        int count,
+        string section,
+        string source);
+
+    [LoggerMessage(
+        EventId = 1010,
+        Level = LogLevel.Information,
+        Message = "The episode listing of series {Series} on {Source} arrived as {Shape}, which carries no "
+            + "episodes this client can read.")]
+    public static partial void EpisodeListingUnreadable(
+        ILogger logger,
+        string series,
+        string source,
+        JsonValueKind shape);
 }

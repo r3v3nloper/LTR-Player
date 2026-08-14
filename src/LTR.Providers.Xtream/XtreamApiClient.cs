@@ -77,6 +77,46 @@ internal sealed class XtreamApiClient
         return await GetArrayAsync<XtreamLiveStreamDto>(source, url, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<XtreamVodStreamDto>> GetVodStreamsAsync(
+        XtreamSource source,
+        CancellationToken cancellationToken)
+    {
+        var url = XtreamEndpoints.PlayerApi(source, "get_vod_streams");
+        return await GetArrayAsync<XtreamVodStreamDto>(source, url, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<XtreamSeriesDto>> GetSeriesAsync(
+        XtreamSource source,
+        CancellationToken cancellationToken)
+    {
+        var url = XtreamEndpoints.PlayerApi(source, "get_series");
+        return await GetArrayAsync<XtreamSeriesDto>(source, url, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads one film's extended information, or <see langword="null"/> when the panel has none.
+    /// </summary>
+    public Task<XtreamVodInfoResponseDto?> GetVodInfoAsync(
+        XtreamSource source,
+        string vodId,
+        CancellationToken cancellationToken)
+    {
+        var url = XtreamEndpoints.PlayerApi(source, "get_vod_info", [new("vod_id", vodId)]);
+        return GetObjectAsync<XtreamVodInfoResponseDto>(source, url, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads one series' seasons and episodes, or <see langword="null"/> when the panel has none.
+    /// </summary>
+    public Task<XtreamSeriesInfoResponseDto?> GetSeriesInfoAsync(
+        XtreamSource source,
+        string seriesId,
+        CancellationToken cancellationToken)
+    {
+        var url = XtreamEndpoints.PlayerApi(source, "get_series_info", [new("series_id", seriesId)]);
+        return GetObjectAsync<XtreamSeriesInfoResponseDto>(source, url, cancellationToken);
+    }
+
     /// <summary>
     /// Reports the JSON shape an action responds with, or <see langword="null"/> when it does not
     /// respond usably at all.
@@ -189,6 +229,47 @@ internal sealed class XtreamApiClient
         }
 
         return document.RootElement.Deserialize<List<T>>(XtreamJson.Options) ?? [];
+    }
+
+    /// <summary>
+    /// Reads a detail endpoint, which answers with a single object rather than a list.
+    /// </summary>
+    /// <remarks>
+    /// A panel asked for an item it does not have answers with the authentication object, with
+    /// <c>false</c>, or with an empty array — none of which is an error worth surfacing, and all of
+    /// which mean the same thing: no detail. Hence <see langword="null"/> rather than an exception.
+    /// </remarks>
+    private async Task<T?> GetObjectAsync<T>(XtreamSource source, Uri url, CancellationToken cancellationToken)
+        where T : class
+    {
+        var body = await GetStringAsync(source, url, cancellationToken).ConfigureAwait(false);
+        using var document = ParseJson(body, url, source);
+
+        if (document.RootElement.ValueKind is not JsonValueKind.Object)
+        {
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                XtreamLog.DetailReturnedUnexpectedShape(
+                    _logger,
+                    UrlSanitizer.Sanitize(url, source),
+                    document.RootElement.ValueKind);
+            }
+
+            return null;
+        }
+
+        try
+        {
+            return document.RootElement.Deserialize<T>(XtreamJson.Options);
+        }
+        catch (JsonException exception)
+        {
+            // A shape the tolerant converters do not cover. For a detail call the graceful reading is
+            // "no detail": the film or series still plays, it simply has no synopsis. Failing here would
+            // instead make opening its page an error.
+            XtreamLog.DetailUnreadable(_logger, exception, UrlSanitizer.Sanitize(url, source));
+            return null;
+        }
     }
 
     private async Task<string> GetStringAsync(XtreamSource source, Uri url, CancellationToken cancellationToken)

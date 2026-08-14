@@ -109,6 +109,71 @@ internal sealed class XtreamContentProvider : IContentProvider
         return channels;
     }
 
+    public async Task<IReadOnlyList<VodItem>> FetchMoviesAsync(CancellationToken cancellationToken)
+    {
+        var dtos = await _client.GetVodStreamsAsync(_source, cancellationToken).ConfigureAwait(false);
+        var movies = XtreamVodMapper.MapMovies(_source.Id, dtos, out var skippedWithoutId);
+
+        if (skippedWithoutId > 0)
+        {
+            XtreamLog.SkippedEntriesWithoutId(_logger, skippedWithoutId, "film", _source.Name);
+        }
+
+        return movies;
+    }
+
+    public async Task<IReadOnlyList<Series>> FetchSeriesAsync(CancellationToken cancellationToken)
+    {
+        var dtos = await _client.GetSeriesAsync(_source, cancellationToken).ConfigureAwait(false);
+        var series = XtreamVodMapper.MapSeries(_source.Id, dtos, out var skippedWithoutId);
+
+        if (skippedWithoutId > 0)
+        {
+            XtreamLog.SkippedEntriesWithoutId(_logger, skippedWithoutId, "series", _source.Name);
+        }
+
+        return series;
+    }
+
+    public async Task<MovieDetail?> FetchMovieDetailAsync(string externalId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(externalId);
+
+        var response = await _client.GetVodInfoAsync(_source, externalId, cancellationToken)
+            .ConfigureAwait(false);
+
+        return response is null ? null : XtreamVodMapper.MapMovieDetail(response);
+    }
+
+    public async Task<SeriesDetail?> FetchSeriesDetailAsync(string externalId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(externalId);
+
+        var response = await _client.GetSeriesInfoAsync(_source, externalId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (response is null)
+        {
+            return null;
+        }
+
+        var detail = XtreamVodMapper.MapSeriesDetail(response);
+
+        // A series whose detail call answered without a readable episode listing is worth a line in the
+        // log: it is the difference between "this panel has no series" and "this series is empty", and
+        // the two look identical on screen.
+        if (detail.Seasons.Count == 0)
+        {
+            XtreamLog.EpisodeListingUnreadable(
+                _logger,
+                externalId,
+                _source.Name,
+                response.Episodes.ValueKind);
+        }
+
+        return detail;
+    }
+
     /// <summary>
     /// Interprets a <c>user_info</c> block, reconciling the reported status against the expiry date.
     /// </summary>
@@ -189,7 +254,7 @@ internal sealed class XtreamContentProvider : IContentProvider
             SourceId = _source.Id,
             ExternalId = dto.StreamId!,
             Name = string.IsNullOrWhiteSpace(dto.Name) ? UnnamedChannelFallback : dto.Name.Trim(),
-            LogoUrl = NormalizeLogoUrl(dto.StreamIcon),
+            LogoUrl = XtreamFields.ImageUrl(dto.StreamIcon),
             EpgChannelId = string.IsNullOrWhiteSpace(dto.EpgChannelId) ? null : dto.EpgChannelId.Trim(),
             CategoryExternalId = string.IsNullOrWhiteSpace(dto.CategoryId) ? null : dto.CategoryId,
             Number = dto.Number > 0 ? dto.Number : null,
@@ -197,29 +262,5 @@ internal sealed class XtreamContentProvider : IContentProvider
             ArchiveDurationDays = dto.ArchiveDurationDays > 0 ? dto.ArchiveDurationDays : null,
             SortOrder = sortOrder,
         };
-    }
-
-    /// <summary>
-    /// Keeps only logo values that are absolute HTTP addresses.
-    /// </summary>
-    /// <remarks>
-    /// Panels put all sorts of things in this field — empty strings, local file paths, the literal
-    /// text "null". Filtering here means the UI never has to guard its image loading.
-    /// </remarks>
-    private static string? NormalizeLogoUrl(string? streamIcon)
-    {
-        if (string.IsNullOrWhiteSpace(streamIcon))
-        {
-            return null;
-        }
-
-        if (!Uri.TryCreate(streamIcon.Trim(), UriKind.Absolute, out var uri))
-        {
-            return null;
-        }
-
-        return uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps
-            ? uri.AbsoluteUri
-            : null;
     }
 }

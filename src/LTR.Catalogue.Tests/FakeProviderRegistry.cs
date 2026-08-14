@@ -41,6 +41,15 @@ internal sealed class FakeProviderRegistry
 
     public List<Channel> Channels { get; } = [];
 
+    public List<VodItem> Movies { get; } = [];
+
+    public List<Series> Series { get; } = [];
+
+    /// <summary>Seasons and episodes handed back for any series asked about.</summary>
+    public SeriesDetail? SeriesDetail { get; set; }
+
+    public MovieDetail? MovieDetail { get; set; }
+
     public ProviderCapabilities Capabilities { get; set; } = new() { SupportsLive = true };
 
     public IContentProvider CreateProvider(PlaylistSource source)
@@ -115,5 +124,29 @@ internal sealed class FakeProviderRegistry
     {
         _calls.Add("channels");
         return Task.FromResult<IReadOnlyList<Channel>>(Channels);
+    }
+
+    public Task<IReadOnlyList<VodItem>> FetchMoviesAsync(CancellationToken cancellationToken)
+    {
+        _calls.Add("movies");
+        return Task.FromResult<IReadOnlyList<VodItem>>(Movies);
+    }
+
+    public Task<IReadOnlyList<Series>> FetchSeriesAsync(CancellationToken cancellationToken)
+    {
+        _calls.Add("series");
+        return Task.FromResult<IReadOnlyList<Series>>(Series);
+    }
+
+    public Task<MovieDetail?> FetchMovieDetailAsync(string externalId, CancellationToken cancellationToken)
+    {
+        _calls.Add($"movie-detail:{externalId}");
+        return Task.FromResult(MovieDetail);
+    }
+
+    public Task<SeriesDetail?> FetchSeriesDetailAsync(string externalId, CancellationToken cancellationToken)
+    {
+        _calls.Add($"series-detail:{externalId}");
+        return Task.FromResult(SeriesDetail);
     }
 }

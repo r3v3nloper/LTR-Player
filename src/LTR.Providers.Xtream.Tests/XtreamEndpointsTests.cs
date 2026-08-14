@@ -146,6 +146,71 @@ public sealed class XtreamEndpointsTests
     }
 
     [Fact]
+    public void MovieStream_UsesTheMovieSegmentAndTheStatedContainer()
+    {
+        // Arrange
+        var source = new XtreamSourceBuilder().WithCredentials("alice", "secret").Build();
+
+        // Act
+        var url = XtreamEndpoints.MovieStream(source, "8412", "mkv");
+
+        // Assert
+        url.AbsoluteUri.ShouldBe("http://panel.example:8080/movie/alice/secret/8412.mkv");
+    }
+
+    [Fact]
+    public void EpisodeStream_UsesTheSeriesSegment()
+    {
+        // Arrange
+        var source = new XtreamSourceBuilder().WithCredentials("alice", "secret").Build();
+
+        // Act
+        var url = XtreamEndpoints.EpisodeStream(source, "1001", "mp4");
+
+        // Assert
+        url.AbsoluteUri.ShouldBe("http://panel.example:8080/series/alice/secret/1001.mp4");
+    }
+
+    [Fact]
+    public void MovieStream_WithADottedContainer_DoesNotDoubleTheDot()
+    {
+        // Arrange: panels state the extension both ways, and a doubled dot is a 404.
+        var source = new XtreamSourceBuilder().WithCredentials("alice", "secret").Build();
+
+        // Act
+        var url = XtreamEndpoints.MovieStream(source, "1", ".mp4");
+
+        // Assert
+        url.AbsoluteUri.ShouldEndWith("/1.mp4");
+    }
+
+    [Fact]
+    public void MovieStream_WithoutAContainer_IsRejected()
+    {
+        // Arrange: choosing one here would hide the decision from the resolver that has to make it.
+        var source = new XtreamSourceBuilder().Build();
+
+        // Act
+        var act = () => XtreamEndpoints.MovieStream(source, "1", " ");
+
+        // Assert
+        act.ShouldThrow<ArgumentException>();
+    }
+
+    [Fact]
+    public void MovieStream_WhenTheBaseUrlCarriesAPathPrefix_PreservesIt()
+    {
+        // Arrange
+        var source = new XtreamSourceBuilder().WithBaseUrl("http://host/iptv-panel").Build();
+
+        // Act
+        var url = XtreamEndpoints.MovieStream(source, "1", "mp4");
+
+        // Assert
+        url.AbsolutePath.ShouldStartWith("/iptv-panel/movie/");
+    }
+
+    [Fact]
     public void Xmltv_TargetsTheGuideEndpoint()
     {
         // Arrange

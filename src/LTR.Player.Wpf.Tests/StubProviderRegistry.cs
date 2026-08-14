@@ -44,4 +44,24 @@ internal sealed class StubProviderRegistry : IProviderRegistry, IStreamUrlResolv
             StreamFormat.MpegTs,
             channel.Name);
     }
+
+    public MediaRequest ResolveMovie(PlaylistSource source, VodItem movie, TimeSpan? startAt = null)
+    {
+        return new MediaRequest(
+            new Uri($"http://example.invalid/movie/{movie.ExternalId}.mp4"),
+            source.UserAgent,
+            StreamFormat.ProgressiveFile,
+            movie.Name,
+            startAt);
+    }
+
+    public MediaRequest ResolveEpisode(PlaylistSource source, Episode episode, TimeSpan? startAt = null)
+    {
+        return new MediaRequest(
+            new Uri($"http://example.invalid/series/{episode.ExternalId}.mkv"),
+            source.UserAgent,
+            StreamFormat.ProgressiveFile,
+            episode.Title,
+            startAt);
+    }
 }

@@ -13,4 +13,19 @@ namespace LTR.Core.Playback;
 /// </param>
 /// <param name="Format">Container the URL was built to deliver.</param>
 /// <param name="DisplayName">Human-readable label for logs and the on-screen display.</param>
-public sealed record MediaRequest(Uri Url, string UserAgent, StreamFormat Format, string DisplayName);
+/// <param name="StartAt">
+/// Where playback should begin, for resuming a part-watched film or episode.
+/// </param>
+/// <remarks>
+/// <see cref="StartAt"/> travels with the request rather than being seeked to after playback starts,
+/// and that is not a convenience: a seek issued before the engine has opened the media is discarded,
+/// one issued after it has opened plays a second of the beginning first and then jumps, and deciding
+/// when "after" has arrived means watching for a state change the engine reports at a different moment
+/// for every container. Stating the position up front leaves the engine to honour it while opening.
+/// </remarks>
+public sealed record MediaRequest(
+    Uri Url,
+    string UserAgent,
+    StreamFormat Format,
+    string DisplayName,
+    TimeSpan? StartAt = null);
