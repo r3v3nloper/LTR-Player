@@ -41,9 +41,15 @@ episode last night is fetched again the next time it is opened. `IVodDetailServi
 because the store knows what it holds and the provider knows what the panel has and neither can decide
 alone.
 
-A film's detail works the same way with a simpler test: `VodItem.HasDetail`. A panel that answers with
-nothing leaves the flag unset, so a later attempt is still made — an empty answer today is not proof of an
-empty answer next week.
+A film's detail works the same way, on two fields rather than one. `VodItem.HasDetail` records that a detail
+arrived; `DetailAttemptedUtc` records that the panel was asked. A panel answering with nothing sets only the
+second, so the film is not asked about again for a day — an empty answer today is not proof of an empty answer
+next week, but it is proof enough for one viewing.
+
+**The distinction that had to be built for it** is inside `VodDetailService`: a panel with nothing to say and a
+panel that could not be reached produce the same `null`, and remembering the second as an answer would
+suppress the retry over a momentary outage. `TryFetchAsync` therefore reports whether the provider answered at
+all. `vod show` prints which of the three states a film is in.
 
 **Both degrade rather than fail.** A panel that cannot be reached leaves the stored copy on screen, because
 last week's episode list beats an error where the episodes should be.
@@ -122,10 +128,15 @@ An entry can be taken off the continue-watching list, because a film that did no
 attention would otherwise sit there for good — and the list's whole value is that everything on it is worth
 carrying on with.
 
-Removal is recorded as `WatchOutcome.Discard`, the same verdict the policy reaches for something barely
-started. It clears the position and deliberately does **not** mark the item watched: nobody watched it, and a
-film labelled "Watched" that nobody has seen is a worse lie than a stale resume point. Nothing is confirmed
-first — it forgets a position, not the film, and starting it again is one click away.
+Removal is **not** a `WatchOutcome`, and that is the point of it having its own store operation
+(`ForgetMovieProgressAsync`). It was expressed as `WatchOutcome.Discard` at first, which fits mechanically —
+the position goes and nothing is marked watched — but every outcome also states a moment, so removing an entry
+stamped `LastWatchedUtc` with the moment of removal and the film came back as the most recently watched thing
+in the catalogue. Forgetting where you got to is not watching.
+
+So it clears the position, leaves `IsWatched` alone — nobody watched it, and a film labelled "Watched" that
+nobody has seen is a worse lie than a stale resume point — and records no instant at all. Nothing is confirmed
+first: it forgets a position, not the film, and starting it again is one click away.
 
 Two details the shell has to get right. It stops *following* the item first, or stopping playback afterwards
 would write the position straight back; and it refreshes all three places a position is displayed — the film

@@ -21,8 +21,9 @@ exists and not what was considered finished.
 | **M5** Player polish — OSD, fullscreen, keyboard, tracks | done | `Docs/player.md`; the live-caching value still wants measuring |
 | **M6** Hardening — error handling, settings, packaging | done | `Docs/packaging.md`; the quarantine had landed early, with M3 |
 
-**All six are merged into `main` and pushed.** Version 0.6.0; `pwsh build/publish.ps1` produces a
-self-contained folder and a zip that runs on a machine with no .NET.
+**All six are merged into `main` and pushed.** Version 0.7.0 — bumped from 0.6.0 after the backlog was
+cleared, because that work carried a schema migration, two new CLI commands and visible changes in the window.
+`pwsh build/publish.ps1` produces a self-contained folder and a zip that runs on a machine with no .NET.
 
 Both of M3's stated limits are gone: the timeline's channel names used to scroll away with the programme
 blocks, and it drew only the first 200 channels. It now pins the names and **pages** along the channel axis,

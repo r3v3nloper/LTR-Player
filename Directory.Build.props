@@ -5,7 +5,7 @@
       One version for everything, so a log line, a file property and an issue report all agree. Bump it
       here; nothing else states it.
     -->
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
     <Product>LTR-Player</Product>
     <Company>LTR-Player</Company>
 

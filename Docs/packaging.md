@@ -13,10 +13,11 @@ run and should not be used for anything given to anyone. Output:
 
 ```
 artifacts/publish/                        the folder that runs
-artifacts/LTR-Player-0.6.0-win-x64.zip    110 MB
+artifacts/LTR-Player-0.7.0-win-x64.zip    110 MB
 ```
 
-The version comes from `Directory.Build.props` and nothing else states it. Bump it there.
+The version comes from `Directory.Build.props` and nothing else states it. Bump it there — and the name above
+is an example, so it goes stale on every bump rather than being wrong.
 
 ## What it is, and what it is not
 
