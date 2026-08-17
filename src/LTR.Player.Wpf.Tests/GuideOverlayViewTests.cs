@@ -167,26 +167,13 @@ public sealed class GuideOverlayViewTests
     private static T Descendant<T>(DependencyObject root, string name)
         where T : FrameworkElement
     {
-        return Descendants<T>(root).First(element => element.Name == name);
+        return VisualTreeHarness.Descendant<T>(root, name);
     }
 
     private static IEnumerable<T> Descendants<T>(DependencyObject root)
         where T : DependencyObject
     {
-        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
-        {
-            var child = VisualTreeHelper.GetChild(root, index);
-
-            if (child is T match)
-            {
-                yield return match;
-            }
-
-            foreach (var nested in Descendants<T>(child))
-            {
-                yield return nested;
-            }
-        }
+        return VisualTreeHarness.Descendants<T>(root);
     }
 
     /// <summary>

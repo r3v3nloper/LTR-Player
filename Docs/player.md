@@ -90,10 +90,15 @@ replaced by `VideoView` rather than by anything here.
 
 Two details follow from that:
 
-- **The move is taken as the tunnelling event, the double-click as the bubbling one.** The window sees every
-  move regardless of what lies between, including a slider that marks the moves it consumes as handled. A
-  double-click has to be the other way round: buttons and pickers mark their own clicks handled, which is
-  what keeps a click aimed at a control from also going fullscreen.
+- **The move is taken as the tunnelling event**, so the window sees every one regardless of what lies
+  between — including a slider, which marks the moves it consumes as handled.
+- **A double-click goes fullscreen only when the picture itself was pressed**, and that has to be checked
+  against the press rather than against the double-click. Neither of the two obvious defences works:
+  `MouseDoubleClick` is raised from a class handler registered for *handled events too*, so a button that has
+  already dealt with the click still lets it through, and the event is **direct**, so it arrives naming the
+  window rather than what was under the pointer. Two quick clicks on skip-forward, or into the volume bar,
+  therefore went fullscreen and back. The tunnelling press does carry what was hit, so it is recorded there
+  and read here. It keeps a double-click in the programme guide, drawn over the same picture, out as well.
 - **A pointer resting on the controls keeps them up.** A pointer that has stopped moving raises nothing
   further, so the idle timer would otherwise take the bar out from under a hand on its way to a button —
   and the click that follows lands on the picture, which goes fullscreen. `IsPointerOnControls` is set from

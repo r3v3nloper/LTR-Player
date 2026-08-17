@@ -18,7 +18,7 @@
     surface is what wakes the controls and what answers a double-click. Nothing is obscured: the video
     underneath is a native surface, not part of this visual tree.
   -->
-  <Grid Background="{StaticResource PointerCatchBrush}">
+  <Grid x:Name="PictureSurface" Background="{StaticResource PointerCatchBrush}">
 
     <!--
       The pointer goes away with the controls, but only in fullscreen. An arrow sitting over a film is

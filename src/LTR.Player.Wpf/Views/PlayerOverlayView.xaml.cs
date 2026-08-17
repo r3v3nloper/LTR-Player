@@ -27,6 +27,9 @@ public partial class PlayerOverlayView : UserControl
     /// </summary>
     private PlayerOverlayViewModel? _watched;
 
+    /// <summary>What the last press was aimed at, which is what decides whose double-click it is.</summary>
+    private object? _pressedOn;
+
     public PlayerOverlayView()
     {
         InitializeComponent();
@@ -88,6 +91,7 @@ public partial class PlayerOverlayView : UserControl
         if (_pictureWindow is not null)
         {
             _pictureWindow.PreviewMouseMove -= OnPointerActivity;
+            _pictureWindow.PreviewMouseLeftButtonDown -= OnPointerPressed;
             _pictureWindow.MouseDoubleClick -= OnPictureDoubleClicked;
         }
 
@@ -99,6 +103,7 @@ public partial class PlayerOverlayView : UserControl
         }
 
         _pictureWindow.PreviewMouseMove += OnPointerActivity;
+        _pictureWindow.PreviewMouseLeftButtonDown += OnPointerPressed;
         _pictureWindow.MouseDoubleClick += OnPictureDoubleClicked;
     }
 
@@ -158,13 +163,38 @@ public partial class PlayerOverlayView : UserControl
         Overlay?.Reveal();
     }
 
+    /// <summary>
+    /// Remembers what the pointer was actually aimed at, which the double-click itself cannot say.
+    /// </summary>
     /// <remarks>
-    /// Bubbling rather than tunnelling, unlike the move above: buttons and pickers mark their own clicks
-    /// handled, so this only ever sees a double-click on the picture itself rather than one aimed at a
-    /// control.
+    /// Taken as the tunnelling event, so a control that deals with its own clicks — every button and both
+    /// sliders — is still recorded as what was pressed.
+    /// </remarks>
+    private void OnPointerPressed(object sender, MouseButtonEventArgs e)
+    {
+        _pressedOn = e.OriginalSource;
+    }
+
+    /// <summary>
+    /// A double-click on the picture goes fullscreen — and one aimed at anything else does not.
+    /// </summary>
+    /// <remarks>
+    /// What was aimed at has to be checked against the press, because neither marking a click handled nor
+    /// this event's own source will say. WPF raises <c>MouseDoubleClick</c> from a class handler registered
+    /// for handled events too, so a button that has already dealt with the click still lets it reach here;
+    /// and the event is *direct*, so it arrives naming the window rather than what was under the pointer.
+    /// Two quick clicks on skip-forward, or into the volume bar, therefore went fullscreen and back.
+    ///
+    /// Only the picture's own surface counts, which also keeps a double-click in the programme guide —
+    /// drawn over this one — from doing it.
     /// </remarks>
     private void OnPictureDoubleClicked(object sender, MouseButtonEventArgs e)
     {
+        if (!ReferenceEquals(_pressedOn, PictureSurface))
+        {
+            return;
+        }
+
         Overlay?.ToggleFullscreenCommand.Execute(parameter: null);
     }
 

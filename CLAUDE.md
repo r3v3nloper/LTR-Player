@@ -241,6 +241,11 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   why `PlayerOverlayView` handles its own pointer events while the keyboard stays with the window. It handles
   them **on the window it is hosted in** — found on `Loaded`, since that window is `VideoView`'s to create —
   and not on the control. `PlayerOverlayViewTests` states it.
+- **`MouseDoubleClick` reaches a handler a button has already dealt with, and does not say what was
+  clicked.** WPF raises it from a class handler registered for handled events too, and it is a *direct*
+  event, so its source is the element the handler sits on. Two quick clicks on the overlay's skip button
+  went fullscreen. What was aimed at is recorded from the tunnelling `PreviewMouseLeftButtonDown` and
+  checked there — `PlayerOverlayView.OnPictureDoubleClicked`.
 - **`Background="Transparent"` over the video is not hit at all.** That window is *layered*, and Windows
   hit-tests a layered window by its alpha: `#00FFFFFF` passes the pointer through to the video underneath, so
   the controls saw clicks on their own opaque bar and nothing whatever over the picture — the bar could not be
@@ -352,7 +357,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **729 tests pass on `main`.** A refactor should not move that number.
+- **730 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.
