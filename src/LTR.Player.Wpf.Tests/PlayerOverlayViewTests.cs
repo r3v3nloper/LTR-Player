@@ -1,5 +1,7 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using LTR.Core.Content;
 using LTR.Core.Playback;
 using LTR.Player.Wpf.Views;
@@ -64,6 +66,25 @@ public sealed class PlayerOverlayViewTests
         // Assert
         hiddenWhileIdle.ShouldBeFalse("nothing had happened for four seconds");
         shownAfterTheMove.ShouldBeTrue("the pointer over the picture is what brings them back");
+    }
+
+    /// <remarks>
+    /// The measured fact behind this, and the reason the whole surface is painted at all: `VideoView` draws
+    /// this content in a layered window, and Windows hit-tests one of those by its alpha. Over a fully
+    /// transparent pixel — which is what <c>Transparent</c> is — <c>WindowFromPoint</c> returns the window
+    /// underneath, so the pointer reached the video and never the controls. A single count of alpha is
+    /// invisible over a picture and is the difference between the two.
+    /// </remarks>
+    [Fact]
+    public void ThePictureIsCoveredByASurfaceThePointerCannotFallThrough()
+    {
+        // Arrange & Act
+        var background = VisualTreeHarness.OnStaThread(() =>
+            ((Grid)new PlayerOverlayView().Content).Background as SolidColorBrush);
+
+        // Assert
+        background.ShouldNotBeNull("an unpainted surface is not hit at all");
+        background.Color.A.ShouldNotBe((byte)0, "a fully transparent one is passed straight through");
     }
 
     [Fact]

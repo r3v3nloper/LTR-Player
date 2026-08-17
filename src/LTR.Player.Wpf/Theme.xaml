@@ -35,6 +35,18 @@
   <SolidColorBrush x:Key="SelectionBrush" Color="#25344F" />
   <SolidColorBrush x:Key="HoverBrush" Color="#232833" />
 
+  <!--
+    Nearly, and deliberately not entirely, transparent. `VideoView` draws the overlays in a layered window
+    of its own, and Windows hit-tests such a window by its alpha: a fully transparent pixel — which is what
+    `Transparent` (#00FFFFFF) is — passes the pointer straight through to the video underneath. That is
+    measurable and was measured: over a fully transparent surface `WindowFromPoint` returns the window
+    below, over this one it returns the overlay's. It is why the controls could see a click on a button,
+    which is drawn opaque, and nothing at all over the picture beside it.
+
+    One part in 255 of black is invisible over a picture and is enough to be hit.
+  -->
+  <SolidColorBrush x:Key="PointerCatchBrush" Color="#01000000" />
+
   <Style TargetType="TextBlock">
     <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
     <Setter Property="FontSize" Value="13" />

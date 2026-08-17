@@ -71,11 +71,22 @@ The bar takes itself away after four seconds and something has to bring it back.
 pointer moving anywhere over the picture — the same thing every player does, rather than a strip at the
 bottom that has to be found.
 
-Where it is taken from is the part worth writing down. `VideoView` draws this content in a window of its
-own over the native video surface, so a move over the picture reaches neither the shell window's
-`PreviewMouseMove` nor, in practice, the overlay control's own handler. The controls therefore attach to
-**the window they are hosted in**, found on `Loaded` and let go on `Unloaded` because that window is created
-and replaced by `VideoView` rather than by anything here.
+Where it is taken from is the part worth writing down, and it took two attempts because the first answer was
+only half of it.
+
+**The picture has to be painted to be touched at all.** `VideoView` draws this content in a *layered* window
+of its own over the native video surface, and Windows hit-tests a layered window by its alpha. A fully
+transparent pixel — which is exactly what `Background="Transparent"` (`#00FFFFFF`) is — passes the pointer
+through to whatever is underneath, which here is the video. That is why the buttons answered a click while
+the picture beside them answered nothing: the bar is drawn opaque and the surface around it was not drawn at
+all. `PointerCatchBrush` is one part in 255 of black, invisible over a picture and enough to be hit. The
+behaviour is measurable rather than folklore: over a fully transparent layered window `WindowFromPoint`
+returns the window below it, over this one it returns the overlay's own.
+
+**And the move is taken from the window rather than from the control.** Even hit correctly, this content is
+not in the shell's window, so the shell's `PreviewMouseMove` never sees it. The controls attach to **the
+window they are hosted in**, found on `Loaded` and let go on `Unloaded` because that window is created and
+replaced by `VideoView` rather than by anything here.
 
 Two details follow from that:
 

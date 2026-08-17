@@ -13,11 +13,12 @@
     keyboard is still the shell's business, because focus stays with the shell window; the pointer is not.
 
     The pointer is taken from that window rather than from this control — see the code-behind. The outer grid
-    is still transparent rather than unset, so the picture answers a double-click and nothing beneath it takes
-    the pointer instead. Nothing is obscured: the video underneath is a native surface, not part of this
-    visual tree.
+    covers the whole picture and is *nearly* transparent rather than entirely so, which is the difference
+    between the pointer being seen here and being passed through to the video: see PointerCatchBrush. That
+    surface is what wakes the controls and what answers a double-click. Nothing is obscured: the video
+    underneath is a native surface, not part of this visual tree.
   -->
-  <Grid Background="Transparent">
+  <Grid Background="{StaticResource PointerCatchBrush}">
     <Border x:Name="OverlayRoot"
             DataContext="{Binding PlayerOverlay}"
             MouseEnter="OnPointerEnteredControls"
