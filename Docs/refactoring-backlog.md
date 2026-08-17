@@ -8,8 +8,8 @@ Renumbered then rather than appended, unlike the removal before it: a *removed* 
 less than a new scheme, but four items belonging in the middle of the ranking cannot be appended without the
 number ceasing to mean the rank, which is the only thing this list is for.
 
-**Ranks 1–4 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-14). **The eight that
-remain keep their numbers**, so the list starts at 5, by that same rule.
+**Ranks 1–5 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-15). **The seven that
+remain keep their numbers**, so the list starts at 6, by that same rule.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
@@ -19,7 +19,7 @@ review and is worth re-checking rather than assuming next time.
 
 ## Before starting one of these
 
-- `dotnet test LTR-Player.slnx` — 670 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 683 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
@@ -29,23 +29,6 @@ review and is worth re-checking rather than assuming next time.
   survives, suspect the fake before the assertion.
 
 ---
-
-## Rank 5 — The shell's notification forwarding has grown past the size that named it
-
-**Project:** LTR.Player.Wpf · **Area:** Maintainability · **Criticality:** moderate · **Effort:** medium
-
-The review after M5 named this block as "the next real candidate" at **six handlers, about ninety lines**. It
-is now **eight handlers and about 138 lines** of `MainViewModel`'s 804 — `Settings` and the playback
-coordinator joined during M6 by the same mechanism as everything else that lands in this class.
-
-The handlers exist only to carry a notification across an object boundary, because
-`[NotifyCanExecuteChangedFor]` cannot: the command lives on the shell and the property its guard reads
-belongs to a section.
-
-**Left alone once already, deliberately, and the reason has not changed:** getting this wrong reproduces the
-defect class this repository has shipped three times, and `CanExecute` passes even with the bug. Whatever
-this becomes, the tests must keep asserting the *notification*. That is what makes it medium rather than low
-effort at eight handlers.
 
 ## Rank 6 — Stream the Xtream response instead of buffering it
 
@@ -142,9 +125,35 @@ older one.
 **Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
 else on that list is below.
 
-### In the same session as the renumbering — ranks 1–4
+### In the same session as the renumbering — ranks 1–5
 
-Four low-effort ranks, cleared in one sitting. What is worth carrying forward:
+Five ranks, cleared in one sitting. What is worth carrying forward:
+
+- **Rank 5 · the shell's notification forwarding, and the premise that turned out to be half wrong.** The
+  rank called it "about ninety lines that exist only to forward notifications". Reading it first showed that
+  it was three concerns, not one: forwarding a command guard, forwarding a computed property, and *reacting*
+  to a change by starting work or revealing the overlay. Extracting "the notification forwarding" wholesale
+  would have dragged the reactions along, and the reactions are the part that owns the lifetime token.
+
+  `CrossObjectNotifications` now holds the declarative half as a table — nine forwards, each one line to
+  three — and the three genuine reactions stayed as handlers in the shell. The real win is not the table but
+  **the one rule the eight handlers each repeated: an empty or null property name means every property.** It
+  lives in one place, and it now has tests, which it never had — no section raises a wholesale reset today, so
+  it could only be covered by testing the mechanism directly.
+
+  **The size win is small and worth stating plainly:** `MainViewModel` went from 466 to 438 code lines. A
+  declarative registration costs nearly what the handler it replaces did. Anyone reaching for this rank again
+  expecting a hundred lines back will not find them — the reason to do it was the single rule and the visible
+  set, and the honest measure of the outcome is those and not the count.
+
+  **The order the registrations are made in is load-bearing.** The forwards subscribe before the reaction
+  handlers, so a command whose guard the work may change is still notified first — the ordering the one
+  handler per section used to guarantee implicitly. It is commented at both ends.
+
+  Done in two commits on purpose: **four of the forwards had only their value asserted**, which is the
+  assertion that cannot catch this defect class, so the missing notification tests went in first against the
+  unchanged code. Two of them needed the fake's gate to be meaningful at all — the film's detail otherwise
+  lands inside the selection's own setter, and the guide import's two announcements collapse into one.
 
 - **Rank 4 · an empty answer is an answer; an unreachable panel is not.** `VodItem.DetailAttemptedUtc`
   records the asking, `HasDetail` still records the arriving, and `NeedsDetailFetch(asOf)` takes an empty
