@@ -87,6 +87,44 @@ public sealed class PlayerOverlayViewTests
         background.Color.A.ShouldNotBe((byte)0, "a fully transparent one is passed straight through");
     }
 
+    /// <remarks>
+    /// Clicking twice quickly on skip-forward, or twice into the volume bar, went fullscreen and back.
+    /// Marking the click handled is no defence: WPF raises <c>MouseDoubleClick</c> from a class handler
+    /// registered for handled events too, so a button that has dealt with the click still lets it through.
+    /// </remarks>
+    [Fact]
+    public void DoubleClicking_GoesFullscreenOnThePictureAndNowhereElse()
+    {
+        // Arrange & Act
+        var (afterAButton, afterThePicture) = VisualTreeHarness.OnStaThread(() =>
+        {
+            var (window, overlay, _) = ShowControlsOverAStream();
+
+            try
+            {
+                var picture = (Grid)((PlayerOverlayView)window.Content).Content;
+                window.UpdateLayout();
+
+                var button = VisualTreeHarness.Descendants<Button>(picture).First();
+
+                DoubleClick(window, aimedAt: button);
+                var fromTheButton = overlay.IsFullscreen;
+
+                DoubleClick(window, aimedAt: picture);
+
+                return (fromTheButton, overlay.IsFullscreen);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        // Assert
+        afterAButton.ShouldBeFalse("a click aimed at a control is not a click on the picture");
+        afterThePicture.ShouldBeTrue();
+    }
+
     [Fact]
     public void ThePointerGoesAwayWithTheControls_ButOnlyInFullscreen()
     {
@@ -160,6 +198,30 @@ public sealed class PlayerOverlayViewTests
 
         // Assert
         wokeAfterUnloading.ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// Reports a double-click as WPF does: a press naming what was under the pointer, and then the
+    /// double-click itself, which is a direct event and names the window.
+    /// </summary>
+    /// <remarks>
+    /// Both halves are needed, and the pair of them is the point. Raising only the second would test a
+    /// version of WPF that tells the handler what was clicked, which is precisely what it does not do.
+    /// </remarks>
+    private static void DoubleClick(Window window, UIElement aimedAt)
+    {
+        // Raised on the window with the target named as the source, which is how the window sees a press:
+        // it is the tunnelling event, so it reaches the window first and carries what was hit underneath.
+        window.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, timestamp: 0, MouseButton.Left)
+        {
+            RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent,
+            Source = aimedAt,
+        });
+
+        window.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, timestamp: 0, MouseButton.Left)
+        {
+            RoutedEvent = Control.MouseDoubleClickEvent,
+        });
     }
 
     /// <summary>

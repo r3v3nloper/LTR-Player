@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace LTR.Player.Wpf;
@@ -81,6 +82,33 @@ internal static class VisualTreeHarness
             {
                 Source = new Uri("/LTR-Player;component/Theme.xaml", UriKind.Relative),
             });
+        }
+    }
+
+    /// <summary>The one descendant of <paramref name="root"/> carrying <paramref name="name"/>.</summary>
+    public static T Descendant<T>(DependencyObject root, string name)
+        where T : FrameworkElement
+    {
+        return Descendants<T>(root).First(element => element.Name == name);
+    }
+
+    /// <summary>Every descendant of <paramref name="root"/> of the given type, outermost first.</summary>
+    public static IEnumerable<T> Descendants<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+
+            if (child is T match)
+            {
+                yield return match;
+            }
+
+            foreach (var nested in Descendants<T>(child))
+            {
+                yield return nested;
+            }
         }
     }
 
