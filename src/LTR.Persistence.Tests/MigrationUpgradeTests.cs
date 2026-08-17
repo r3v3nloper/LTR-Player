@@ -33,6 +33,14 @@ public sealed class MigrationUpgradeTests
     /// <summary>The last migration before films and series, which is what an M3-era installation holds.</summary>
     private const string BeforeVod = "20260813113737_AddGuide";
 
+    /// <summary>
+    /// The last migration before the film-detail attempt column, which is what every shipped 0.6.0 holds.
+    /// </summary>
+    private const string BeforeDetailAttempt = "20260814063550_AddVodCatalogue";
+
+    /// <summary>A fixed instant, as the other persistence tests use.</summary>
+    private static readonly DateTimeOffset SixPm = new(2026, 8, 12, 18, 0, 0, TimeSpan.Zero);
+
     [Fact]
     public async Task AddGuide_KeepsTheSourcesChannelsAndFavouritesAlreadyStored()
     {
@@ -188,6 +196,77 @@ public sealed class MigrationUpgradeTests
 
         var categories = await verifyContext.GetCategoriesAsync(source.Id, ContentKind.Live, cancellationToken);
         categories.ShouldHaveSingleItem().Name.ShouldBe("Sport", "the live category survived");
+    }
+
+    /// <summary>
+    /// The first migration to alter a table holding user data, which is the case this file exists for.
+    /// </summary>
+    /// <remarks>
+    /// It generated a plain <c>ADD COLUMN</c> rather than a table rebuild, so nothing should be at risk — but
+    /// "it only adds a column" is a claim about the generated migration and not about the model, and a stored
+    /// resume position is exactly what a rebuild would quietly drop. The film carries one here for that
+    /// reason.
+    /// </remarks>
+    [Fact]
+    public async Task AddMovieDetailAttempt_KeepsStoredFilmsAndTheirResumePositions()
+    {
+        // Arrange: a 0.6.0 database with a film the viewer is part-way through.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("Filename=:memory:");
+        await connection.OpenAsync(cancellationToken);
+
+        var options = new DbContextOptionsBuilder<LtrDbContext>()
+            .UseSqlite(connection)
+            .Options;
+
+        await using (var context = new LtrDbContext(options, new ReversingCredentialProtector()))
+        {
+            await context.GetService<IMigrator>().MigrateAsync(BeforeDetailAttempt, cancellationToken);
+        }
+
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO Sources
+                (Id, Name, UserAgent, PreferredStreamFormat, CreatedUtc, Protocol,
+                 Capabilities_SupportsLive, Capabilities_SupportsVod, Capabilities_SupportsSeries,
+                 Capabilities_SupportsXmltvEpg, Capabilities_SupportsShortEpg, Capabilities_SupportsMpegTs,
+                 Capabilities_SupportsHls, Capabilities_RequiresLivePathSegment,
+                 BaseUrl, Username, Password)
+            VALUES
+                (1, 'Existing subscription', 'VLC/3.0.21', 0, '1970-01-01 00:00:00+00:00', 'xtream',
+                 1, 1, 1, 1, 1, 1, 0, 1,
+                 'http://panel.example:8080/', 'alice', 'rev:terc3s');
+
+            INSERT INTO Movies
+                (Id, SourceId, ExternalId, Name, HasDetail, IsWatched, SortOrder, Plot,
+                 ResumePositionSeconds)
+            VALUES
+                (1, 1, '8412', 'Arrival', 1, 0, 0, 'Linguist meets heptapods.', 2400);
+            """,
+            cancellationToken);
+
+        // Act
+        await using (var context = new LtrDbContext(options, new ReversingCredentialProtector()))
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+        }
+
+        // Assert
+        await using var verifyContext = new LtrDbContext(options, new ReversingCredentialProtector());
+
+        var movie = await verifyContext.GetMovieAsync(1, cancellationToken);
+        movie.ShouldNotBeNull();
+        movie.Plot.ShouldBe("Linguist meets heptapods.", "a fetched synopsis is expensive to get back");
+        movie.ResumePositionSeconds.ShouldBe(2400, "the position is the viewer's own data");
+        movie.HasDetail.ShouldBeTrue();
+
+        // The new column starts unset, which is what makes an existing film ask once and then settle.
+        movie.DetailAttemptedUtc.ShouldBeNull();
+
+        // And it is writable afterwards, not merely present.
+        await verifyContext.RecordMovieDetailAbsentAsync(1, SixPm, cancellationToken);
+        (await verifyContext.GetMovieAsync(1, cancellationToken))!.DetailAttemptedUtc.ShouldBe(SixPm);
     }
 
     private static async Task ExecuteAsync(

@@ -198,6 +198,7 @@ public sealed class LtrDbContextVodTests
                     Year: 2016,
                     DurationSeconds: 6_960,
                     ContainerExtension: "mkv"),
+                SixPm,
                 cancellationToken);
         }
 

@@ -8,8 +8,8 @@ Renumbered then rather than appended, unlike the removal before it: a *removed* 
 less than a new scheme, but four items belonging in the middle of the ranking cannot be appended without the
 number ceasing to mean the rank, which is the only thing this list is for.
 
-**Ranks 1–3 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-13). **The nine that
-remain keep their numbers**, so the list starts at 4, by that same rule.
+**Ranks 1–4 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-14). **The eight that
+remain keep their numbers**, so the list starts at 5, by that same rule.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
@@ -19,7 +19,7 @@ review and is worth re-checking rather than assuming next time.
 
 ## Before starting one of these
 
-- `dotnet test LTR-Player.slnx` — 660 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 670 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
@@ -29,18 +29,6 @@ review and is worth re-checking rather than assuming next time.
   survives, suspect the fake before the assertion.
 
 ---
-
-## Rank 4 — A film's detail is fetched again on every viewing when the panel has none
-
-**Project:** LTR.Catalogue · **Area:** Performance · **Criticality:** minor · **Effort:** low
-
-`VodItem.HasDetail` is set only when a detail response arrives, so a panel that answers with nothing leaves
-it unset and selecting that film asks again every time. The current behaviour is deliberate as far as it
-goes — an empty answer today is not proof of an empty answer next week — but nothing distinguishes "never
-asked" from "asked, and there is nothing".
-
-Proposal: record when the detail was last attempted and do not retry within a day. `Series` already has
-`DetailFetchedUtc` for the same purpose.
 
 ## Rank 5 — The shell's notification forwarding has grown past the size that named it
 
@@ -154,9 +142,28 @@ older one.
 **Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
 else on that list is below.
 
-### In the same session as the renumbering — ranks 1–3
+### In the same session as the renumbering — ranks 1–4
 
-Three low-effort ranks, cleared in one sitting. What is worth carrying forward:
+Four low-effort ranks, cleared in one sitting. What is worth carrying forward:
+
+- **Rank 4 · an empty answer is an answer; an unreachable panel is not.** `VodItem.DetailAttemptedUtc`
+  records the asking, `HasDetail` still records the arriving, and `NeedsDetailFetch(asOf)` takes an empty
+  answer at its word for `DetailRetryInterval` — a day. The distinction that had to be built for it is inside
+  `VodDetailService`: `TryFetchAsync` returned the same `null` for "the panel has nothing" and "the panel
+  could not be reached", and recording the second as an answer would suppress the retry for a day over a
+  momentary outage. It now reports whether the provider answered at all.
+
+  `NeedsDetailFetch` is a **method** rather than a computed property, which also keeps it off the schema
+  without the explicit `Ignore` every computed property in this model needs — `movie.Ignore(Duration)`,
+  `series.Ignore(HasCurrentDetail)` and three more.
+
+  **The migration is the first one to alter a table holding user data.** It generated a plain `ADD COLUMN`
+  rather than a rebuild, and `MigrationUpgradeTests` carries a case anyway with a resume position in the row,
+  because "it only adds a column" is a claim about the generated migration and not about the model. Applied
+  to the real 44 MB catalogue and all 66,447 films read back.
+
+  `vod show` now prints `not available (asked <when>)`, which is what makes the rule observable at all: the
+  timestamp must not move on a second viewing.
 
 - **Rank 1 · a refused guide download names its address.** Rather than a second exception type with the same
   `SanitizedUrl` property, `ProviderRequestException` states it once in LTR.Providers.Abstractions and

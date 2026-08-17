@@ -77,6 +77,7 @@ public sealed partial class LtrDbContext
     public async Task SaveMovieDetailAsync(
         int movieId,
         MovieDetail detail,
+        DateTimeOffset attemptedUtc,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(detail);
@@ -98,8 +99,30 @@ public sealed partial class LtrDbContext
         movie.DurationSeconds = detail.DurationSeconds ?? movie.DurationSeconds;
         movie.ContainerExtension = detail.ContainerExtension ?? movie.ContainerExtension;
         movie.HasDetail = true;
+        movie.DetailAttemptedUtc = attemptedUtc;
 
         await SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Records that the provider was asked for a film's detail and had none, without claiming one arrived.
+    /// </summary>
+    /// <remarks>
+    /// This is what stops the same film being asked about on every viewing. Deliberately not
+    /// <c>HasDetail = true</c>, which would say a synopsis was stored and stop it ever being asked for
+    /// again: panels do fill their detail in over time, so the answer is taken at its word for
+    /// <see cref="VodItem.DetailRetryInterval"/> and no longer.
+    /// </remarks>
+    public Task RecordMovieDetailAbsentAsync(
+        int movieId,
+        DateTimeOffset attemptedUtc,
+        CancellationToken cancellationToken)
+    {
+        return Movies
+            .Where(movie => movie.Id == movieId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(movie => movie.DetailAttemptedUtc, attemptedUtc),
+                cancellationToken);
     }
 
     /// <summary>
@@ -695,11 +718,13 @@ public sealed partial class LtrDbContext
         movie.Property(entity => entity.Cast).HasMaxLength(2000);
         movie.Property(entity => entity.Director).HasMaxLength(400);
 
-        // Both instants go through the UTC converter for the reason stated on it: the continue-watching
+        // Every instant goes through the UTC converter for the reason stated on it: the continue-watching
         // list orders by the time last watched, and EF's default DateTimeOffset mapping cannot be ordered
-        // by in SQLite at all.
+        // by in SQLite at all. DetailAttemptedUtc is only ever compared in memory, and is converted anyway
+        // rather than left as the one column that would break the day something filters on it.
         movie.Property(entity => entity.AddedUtc).HasConversion(NullableUtcInstantConverter);
         movie.Property(entity => entity.LastWatchedUtc).HasConversion(NullableUtcInstantConverter);
+        movie.Property(entity => entity.DetailAttemptedUtc).HasConversion(NullableUtcInstantConverter);
 
         movie.Ignore(entity => entity.Duration);
 

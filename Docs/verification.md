@@ -124,6 +124,16 @@ is stored in; it is part of the address, so a film listed without one will be re
 404.
 
 ```bash
+dotnet run --project src/LTR.Cli -- vod show --source-id 1 --movie-id 1
+```
+
+Fetches the film's detail if it has never been read, and its `Detail` line is where to check that a
+detail is asked for **once**: `fetched`, `not available (never asked)`, or `not available (asked <when>)`.
+That last form is the one to watch — a second run must show the same timestamp rather than a fresh one, or
+every viewing is asking a panel that has nothing to say. The panel this was built against answered with a
+synopsis for every film sampled, so provoking the empty case may need a different one.
+
+```bash
 dotnet run --project src/LTR.Cli -- vod episodes --source-id 1 --series-id 1738
 ```
 

@@ -75,6 +75,17 @@ public sealed class VodItem
     /// </remarks>
     public bool HasDetail { get; set; }
 
+    /// <summary>
+    /// When the provider was last asked for this film's detail, whatever it answered.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="HasDetail"/>, and the distinction is the point: a panel that answers with
+    /// nothing leaves that flag unset, so without this there is no way to tell "never asked" from "asked,
+    /// and there is nothing" — and every viewing asked again. Also distinct from
+    /// <see cref="Series.DetailFetchedUtc"/>, which records a successful read; this records the asking.
+    /// </remarks>
+    public DateTimeOffset? DetailAttemptedUtc { get; set; }
+
     /// <summary>Where the viewer left off, in seconds. Null when it was never started.</summary>
     /// <remarks>
     /// User data, like <see cref="Channel.IsFavorite"/>: a catalogue refresh overwrites everything the
@@ -91,4 +102,32 @@ public sealed class VodItem
 
     /// <summary>Running time as a duration, or null when the provider states none.</summary>
     public TimeSpan? Duration => DurationSeconds.HasValue ? TimeSpan.FromSeconds(DurationSeconds.Value) : null;
+
+    /// <summary>
+    /// How long an empty answer is taken at its word before the provider is asked again.
+    /// </summary>
+    /// <remarks>
+    /// A day, because an empty answer today is not proof of an empty answer next week: panels do fill their
+    /// detail in over time, and a film whose synopsis arrives eventually should pick it up. Long enough that
+    /// browsing a catalogue asks once per film, short enough that nobody has to know this rule exists.
+    /// </remarks>
+    public static TimeSpan DetailRetryInterval => TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// Whether asking the provider for this film's detail again is worth a request.
+    /// </summary>
+    /// <remarks>
+    /// A method rather than a computed property, because the answer depends on the clock and an entity must
+    /// not read one. It also keeps it off the schema without the explicit <c>Ignore</c> every computed
+    /// property in this model needs.
+    /// </remarks>
+    public bool NeedsDetailFetch(DateTimeOffset asOf)
+    {
+        if (HasDetail)
+        {
+            return false;
+        }
+
+        return DetailAttemptedUtc is not { } attempted || asOf - attempted >= DetailRetryInterval;
+    }
 }
