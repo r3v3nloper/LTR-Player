@@ -45,6 +45,19 @@ Credentials are masked unless `--reveal` is passed. With `--reveal`, the address
 VLC to separate "our URL is wrong" from "our player is wrong". Add `--probe` so the container format
 matches what the panel actually serves rather than the configured preference.
 
+```bash
+dotnet run --project src/LTR.Cli -- live list    --source-id 1 --filter erste
+dotnet run --project src/LTR.Cli -- live resolve --source-id 1 --channel-id 2037
+```
+
+The same thing for a source already imported, and **the only way to reach a playlist's addresses**: a panel's
+address is composed from credentials, a playlist's arrives inside the playlist and exists only in the
+catalogue. `live list` prints the local channel ids `live resolve` takes.
+
+For a playlist whose credentials sit in the *path* rather than the query, the address comes back unmasked and
+says so — nothing on record distinguishes a secret segment from a route. That is rank 14 in
+`Docs/refactoring-backlog.md`.
+
 ## 4. Does playback work — and is the connection handed back?
 
 ```bash

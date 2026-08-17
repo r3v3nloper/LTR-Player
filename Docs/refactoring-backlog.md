@@ -8,14 +8,16 @@ Renumbered then rather than appended, unlike the removal before it: a *removed* 
 less than a new scheme, but four items belonging in the middle of the ranking cannot be appended without the
 number ceasing to mean the rank, which is the only thing this list is for.
 
-**Ranks 1–8 and 13 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-18-and-13). **The
-four that remain keep their numbers**, so the list runs 9–12, by that same rule.
+**Ranks 1–9 and 13 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-19-and-13). **The
+three that remain keep their numbers**, so the list runs 10–12 — plus a rank 14 that rank 9 uncovered,
+filed where it belongs by value rather than by number.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
-Everything left is structure, a limit that is stated on screen, or a capability that is missing rather than
-wrong. **Nothing left has an effect while the player is running**, which has been true since the post-M4
-review and is worth re-checking rather than assuming next time.
+**That "nothing left has an effect while the player is running" no longer holds, and rank 14 is why.** It had
+been true since the post-M4 review, which is exactly the sort of claim worth re-checking rather than
+assuming — a credential printed in clear by `live resolve` is an effect, even if the window never shows it.
+Ranks 10–12 remain what the claim described: structure, and a limit that is stated on screen.
 
 ## Before starting one of these
 
@@ -30,19 +32,29 @@ review and is worth re-checking rather than assuming next time.
 
 ---
 
+## Rank 14 — A playlist's path credentials could be found by comparing channels
 
-## Rank 9 — `resolve` cannot address a stored playlist source
+**Project:** LTR.Providers.M3u · **Area:** Security · **Criticality:** moderate · **Effort:** medium
 
-**Project:** LTR.Cli · **Area:** Usability · **Criticality:** minor · **Effort:** low
+The M3U sanitiser leaves paths alone, and its reasoning is sound as far as it goes: with no credentials on
+record, nothing tells a secret segment from a route. `live resolve` now makes the consequence visible —
 
-`resolve` takes `--url/--user/--pass`, so it only ever addresses an Xtream panel. A playlist source's channel
-address cannot be printed headlessly at all, which is also why the M3U sanitiser has no verification through
-this command — the one it does have came from provoking a failed playlist fetch.
+```
+URL         http://provider.invalid/live/alice/s3cret/101.ts
+```
 
-Proposal: accept `--source-id` and go through the registry, as `vod play-test` does.
+— for a provider that puts them in the path rather than the query. Found by building rank 9 and pointing it
+at a playlist of exactly that shape.
 
-**Ranked by usefulness rather than by effort**, and therefore below items that cost more: this adds a
-capability rather than restructuring one, so it is the only entry here that is not a refactor.
+**But the information is there, in the other channels.** A playlist holds hundreds of addresses from one
+subscription: the credential segments are the ones *identical in every one of them*, while the id segment
+varies. That is a real signal and it is available at import time, when the whole document is in hand — the
+segments common to every entry could be recorded on the source and then redacted by value, which is how the
+Xtream sanitiser already works.
+
+Ranked at moderate rather than minor because it is a credential printed in clear, and at medium effort
+because the sanitiser would need something the source does not currently carry. Until then the command says
+so rather than claiming a masking it did not perform, which is what makes this a gap and not a lie.
 
 ## Rank 10 — Extract the reconciliation diff
 
@@ -91,9 +103,27 @@ older one.
 **Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
 else on that list is below.
 
-### In the same session as the renumbering — ranks 1–8 and 13
+### In the same session as the renumbering — ranks 1–9 and 13
 
-Nine ranks, cleared in one sitting. What is worth carrying forward:
+Ten ranks, cleared in one sitting. What is worth carrying forward:
+
+- **Rank 9 · a stored channel can be addressed, and it found a credential in clear.** Not by extending
+  `resolve` as the rank proposed: that command's panel options are `Required`, on instances shared with three
+  other commands, and two mutually exclusive ways of naming a source is what System.CommandLine cannot
+  express — the same reason `vod play-test` is its own command rather than a flag on `play-test`. So there is
+  a `live` group, the stored counterpart of the panel commands exactly as `vod` is: `live list` and
+  `live resolve`. The listing had to come with it, because the local channel ids the resolve takes were
+  previously not printed anywhere.
+
+  `ResolvedAddressReport` now holds the "masked unless `--reveal`" rule for both resolve commands, which is
+  the sort of rule worth having once.
+
+  **What it verified is not what was expected.** The point was to give the M3U sanitiser a check through this
+  command, and the first playlist pointed at it printed
+  `http://provider.invalid/live/alice/s3cret/101.ts` — the documented path limitation, in clear, under a note
+  that claimed credentials were masked. The note now tells the truth: when sanitising changed nothing, it says
+  so and says why. The underlying gap is **rank 14**, along with the observation that makes it solvable — the
+  credential segments are the ones every channel in the playlist shares.
 
 - **Rank 8 · one class per command, and the handler that was four.** `Program.cs` went from 380 lines to 57:
   build the container, build the tree, invoke. Each command states its own options and action under

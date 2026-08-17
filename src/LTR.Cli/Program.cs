@@ -43,6 +43,7 @@ rootCommand.Subcommands.Add(new ResolveCommand(serviceProvider, sourceOptions).B
 rootCommand.Subcommands.Add(new LivePlayTestCommand(serviceProvider, sourceOptions).Build());
 rootCommand.Subcommands.Add(new SourcesCommand(catalogue).Build());
 rootCommand.Subcommands.Add(new GuideCommand(catalogue).Build());
+rootCommand.Subcommands.Add(new LiveCommand(catalogue).Build());
 rootCommand.Subcommands.Add(new VodCommand(catalogue).Build());
 
 return await rootCommand.Parse(args).InvokeAsync().ConfigureAwait(false);
@@ -88,7 +89,10 @@ static ServiceProvider BuildServiceProvider(bool verbose)
     services.AddSingleton<WatchProgressCommandHandler>();
     services.AddSingleton<VodPlayTestCommandHandler>();
 
+    services.AddSingleton<LiveCommandHandler>();
+
     services.AddSingleton<StoredSourceLookup>();
+    services.AddSingleton<ResolvedAddressReport>();
     services.AddSingleton<ConnectionReleaseCheck>();
     services.AddSingleton<StreamHoldTest>();
 

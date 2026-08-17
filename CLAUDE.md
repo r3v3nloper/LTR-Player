@@ -32,9 +32,12 @@ away with the programme blocks and no longer do — see rank 7 under Done there.
 
 `Docs/refactoring-backlog.md` is the work list, **renumbered 1–12 in the review after the URL-sanitisation
 rank** — that rank is done, and the review it triggered added four items belonging in the middle of the
-ranking, which is what forced a renumber rather than a gap. **Ranks 1–8 are done, and so is a rank 13 that was
-found while verifying rank 6**; the four that remain keep their numbers, so the list runs 9–12. None of them has
-an effect while the player is running.
+ranking, which is what forced a renumber rather than a gap. **Ranks 1–9 are done, and so is a rank 13 that was
+found while verifying rank 6**; three remain (10–12), plus a rank 14 that rank 9 uncovered. Ranks 10–12 have
+no effect while the player is running; **rank 14 does have one** — `live resolve` prints a playlist's
+path-form credentials in clear, because the M3U sanitiser cannot recognise them. The long-standing "nothing
+left has an effect" line in that file is therefore retired, which is what re-checking it rather than assuming
+it was for.
 **Ranks quoted in commit messages belong to whichever scheme was current when they were written**; that file
 carries both mappings. Its opening section says what to run before starting one.
 
