@@ -238,7 +238,15 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
 - **Overlays belong inside `VideoView.Content`**, not beside it. `VideoView` hosts a separate native
   window over the WPF tree; a sibling element is invisible behind the video. That hosting has a second
   consequence found in M5: input over the overlay does not reach the shell window's handlers either, which is
-  why `PlayerOverlayView` handles its own pointer events while the keyboard stays with the window.
+  why `PlayerOverlayView` handles its own pointer events while the keyboard stays with the window. It handles
+  them **on the window it is hosted in** — found on `Loaded`, since that window is `VideoView`'s to create —
+  and not on the control. `PlayerOverlayViewTests` states it.
+- **`Background="Transparent"` over the video is not hit at all.** That window is *layered*, and Windows
+  hit-tests a layered window by its alpha: `#00FFFFFF` passes the pointer through to the video underneath, so
+  the controls saw clicks on their own opaque bar and nothing whatever over the picture — the bar could not be
+  brought back by the pointer, and in fullscreen not at all. Any surface over the video that has to be touched
+  takes `PointerCatchBrush` (`#01000000`), which is invisible and hit. Measured, not inferred: over a fully
+  transparent layered window `WindowFromPoint` returns the window below it.
 - **Every command guard needs `[NotifyCanExecuteChangedFor]` on every property it reads.** Three
   defects came from omitting it. Note that `CanExecute` invokes the guard directly and therefore passes
   even with the bug — tests must assert the *notification*. The attribute cannot cross an object
@@ -344,7 +352,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **724 tests pass on `main`.** A refactor should not move that number.
+- **729 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.

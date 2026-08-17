@@ -148,6 +148,15 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
     public bool IsScrubbing { get; private set; }
 
     /// <summary>
+    /// Whether the pointer is resting on the controls, which keeps them up however long it rests there.
+    /// </summary>
+    /// <remarks>
+    /// Set by the view, because a pointer that has stopped moving raises nothing further and the idle timer
+    /// would otherwise take the bar away from under a hand on its way to a button.
+    /// </remarks>
+    public bool IsPointerOnControls { get; set; }
+
+    /// <summary>
     /// Brings the controls up, and keeps them up for as long as the viewer keeps doing things.
     /// </summary>
     /// <remarks>
@@ -343,7 +352,7 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
 
     private void HideWhenIdle()
     {
-        if (!IsRevealed || _playback.State != PlaybackState.Playing)
+        if (!IsRevealed || _playback.State != PlaybackState.Playing || IsPointerOnControls)
         {
             return;
         }

@@ -101,7 +101,7 @@ public sealed class GuideOverlayViewTests
     /// </summary>
     private static GuideOverlayView BuildGuide(out ScrollViewer scroller, out FrameworkElement nowMarker)
     {
-        EnsureThemeLoaded();
+        VisualTreeHarness.EnsureThemeLoaded();
 
         var guide = new GuideViewModel(new FakeCatalogueStore(), new TestClock(MainViewModelHarness.Now))
         {
@@ -204,59 +204,9 @@ public sealed class GuideOverlayViewTests
     /// <summary>
     /// WPF requires a single-threaded apartment, which xunit does not provide.
     /// </summary>
-    /// <remarks>
-    /// A thread per test rather than a shared one: each builds its own visual tree, and a dispatcher left
-    /// running from a previous test is how these become order-dependent.
-    /// </remarks>
     private static T OnStaThread<T>(Func<T> work)
     {
-        var result = default(T);
-        Exception? failure = null;
-
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                EnsureThemeLoaded();
-                result = work();
-            }
-            catch (Exception exception)
-            {
-                failure = exception;
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
-        if (failure is not null)
-        {
-            throw new InvalidOperationException("The visual tree could not be built.", failure);
-        }
-
-        return result!;
-    }
-
-    /// <summary>
-    /// Makes the theme's brushes, styles and converters resolvable, as the running application does.
-    /// </summary>
-    private static void EnsureThemeLoaded()
-    {
-        if (Application.Current is null)
-        {
-            _ = new Application();
-        }
-
-        if (Application.Current!.Resources.Contains("Negated"))
-        {
-            return;
-        }
-
-        Application.Current.Resources.MergedDictionaries.Add(new ResourceDictionary
-        {
-            Source = new Uri("/LTR-Player;component/Theme.xaml", UriKind.Relative),
-        });
+        return VisualTreeHarness.OnStaThread(work);
     }
 
     /// <summary>Stands in for the shell, which is what the overlay binds its <c>Guide</c> through.</summary>

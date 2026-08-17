@@ -85,6 +85,34 @@ public sealed class PlayerOverlayTests
     }
 
     [Fact]
+    public async Task Controls_StayUp_WhileThePointerRestsOnThem()
+    {
+        // Arrange: a pointer that has stopped moving raises nothing further, so the idle timer would
+        // otherwise take the bar away from under a hand on its way to a button.
+        var (overlay, session, clock) = Create();
+        await Play(session);
+        overlay.Reveal();
+        overlay.IsPointerOnControls = true;
+
+        // Act
+        clock.Advance(PlayerOverlayViewModel.IdleBeforeHiding * 10);
+        overlay.Sample();
+
+        // Assert
+        overlay.IsVisible.ShouldBeTrue();
+
+        // Act: the pointer goes elsewhere, and the countdown starts from there rather than from where it
+        // had got to before the pointer arrived.
+        overlay.IsPointerOnControls = false;
+        overlay.Reveal();
+        clock.Advance(PlayerOverlayViewModel.IdleBeforeHiding);
+        overlay.Sample();
+
+        // Assert
+        overlay.IsVisible.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Controls_StayUp_WhilePlaybackIsPaused()
     {
         // Arrange: a still picture with no controls on it reads as a frozen application, so pausing is

@@ -65,6 +65,52 @@ A second timer would have been the obvious move and the wrong one: both jobs rea
 same place, so two timers means sampling twice as often for no additional information. The slow rate is not a
 fallback either; it exists because a resume position has to stay current whether or not anything is on screen.
 
+## The controls wake on the pointer, and the pointer is not the shell's
+
+The bar takes itself away after four seconds and something has to bring it back. That something is the
+pointer moving anywhere over the picture — the same thing every player does, rather than a strip at the
+bottom that has to be found.
+
+Where it is taken from is the part worth writing down, and it took two attempts because the first answer was
+only half of it.
+
+**The picture has to be painted to be touched at all.** `VideoView` draws this content in a *layered* window
+of its own over the native video surface, and Windows hit-tests a layered window by its alpha. A fully
+transparent pixel — which is exactly what `Background="Transparent"` (`#00FFFFFF`) is — passes the pointer
+through to whatever is underneath, which here is the video. That is why the buttons answered a click while
+the picture beside them answered nothing: the bar is drawn opaque and the surface around it was not drawn at
+all. `PointerCatchBrush` is one part in 255 of black, invisible over a picture and enough to be hit. The
+behaviour is measurable rather than folklore: over a fully transparent layered window `WindowFromPoint`
+returns the window below it, over this one it returns the overlay's own.
+
+**And the move is taken from the window rather than from the control.** Even hit correctly, this content is
+not in the shell's window, so the shell's `PreviewMouseMove` never sees it. The controls attach to **the
+window they are hosted in**, found on `Loaded` and let go on `Unloaded` because that window is created and
+replaced by `VideoView` rather than by anything here.
+
+Two details follow from that:
+
+- **The move is taken as the tunnelling event, the double-click as the bubbling one.** The window sees every
+  move regardless of what lies between, including a slider that marks the moves it consumes as handled. A
+  double-click has to be the other way round: buttons and pickers mark their own clicks handled, which is
+  what keeps a click aimed at a control from also going fullscreen.
+- **A pointer resting on the controls keeps them up.** A pointer that has stopped moving raises nothing
+  further, so the idle timer would otherwise take the bar out from under a hand on its way to a button —
+  and the click that follows lands on the picture, which goes fullscreen. `IsPointerOnControls` is set from
+  the bar's own `MouseEnter`/`MouseLeave`, and leaving it restarts the countdown rather than resuming one
+  that had already run down.
+
+- **The cursor goes away with the controls, in fullscreen only.** An arrow left sitting over a film is
+  exactly as unwanted as the bar is. In a window it stays, because there the pointer is on its way to the
+  channel list as often as not. Which cursor the picture wears is a rule in the markup; the code-behind only
+  posts a `Mouse.UpdateCursor` when the controls change, because WPF settles the cursor when the pointer
+  moves and the moment this has to take effect is four seconds of nothing moving.
+
+The cost of getting this wrong was worst in fullscreen, where there is no side panel to fall back on: the
+controls could not be reached at all short of leaving fullscreen with Escape. `PlayerOverlayViewTests` builds
+the real controls in a window and moves the pointer over it, because nothing else states which window the
+wake-up comes from.
+
 ## The seek bar fights the timer, and wins while held
 
 A bound slider whose value is written twice a second cannot be aimed — the thumb moves out from under the

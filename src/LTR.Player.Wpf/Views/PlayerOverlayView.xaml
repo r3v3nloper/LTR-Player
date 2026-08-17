@@ -1,9 +1,7 @@
 <UserControl x:Class="LTR.Player.Wpf.Views.PlayerOverlayView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:LTR.Player.Wpf"
-             MouseMove="OnPointerActivity"
-             MouseDoubleClick="OnPictureDoubleClicked">
+             xmlns:local="clr-namespace:LTR.Player.Wpf">
 
   <!--
     The on-screen display. Hosted inside VideoView.Content by the window, for the same reason the guide is:
@@ -14,13 +12,40 @@
     lives in an overlay window of its own, so input over it does not reach the shell window's handlers. The
     keyboard is still the shell's business, because focus stays with the shell window; the pointer is not.
 
-    The outer grid is transparent rather than unset, and covers the whole picture — that is what makes the
-    pointer moving anywhere over the video wake the controls, and a double-click anywhere on it go
-    fullscreen. Nothing is obscured: the video underneath is a native surface, not part of this visual tree.
+    The pointer is taken from that window rather than from this control — see the code-behind. The outer grid
+    covers the whole picture and is *nearly* transparent rather than entirely so, which is the difference
+    between the pointer being seen here and being passed through to the video: see PointerCatchBrush. That
+    surface is what wakes the controls and what answers a double-click. Nothing is obscured: the video
+    underneath is a native surface, not part of this visual tree.
   -->
-  <Grid Background="Transparent">
+  <Grid Background="{StaticResource PointerCatchBrush}">
+
+    <!--
+      The pointer goes away with the controls, but only in fullscreen. An arrow sitting over a film is
+      exactly as unwanted as the transport bar is, and for the same reason; in a window it stays, because
+      there the pointer is on its way to the channel list as often as not.
+
+      Stated here and nudged from the code-behind: WPF settles the cursor when the pointer moves, and the
+      moment this has to take effect is the moment nothing has moved for four seconds.
+    -->
+    <Grid.Style>
+      <Style TargetType="Grid">
+        <Style.Triggers>
+          <MultiDataTrigger>
+            <MultiDataTrigger.Conditions>
+              <Condition Binding="{Binding PlayerOverlay.IsFullscreen}" Value="True" />
+              <Condition Binding="{Binding PlayerOverlay.IsVisible}" Value="False" />
+            </MultiDataTrigger.Conditions>
+            <Setter Property="Cursor" Value="None" />
+          </MultiDataTrigger>
+        </Style.Triggers>
+      </Style>
+    </Grid.Style>
+
     <Border x:Name="OverlayRoot"
             DataContext="{Binding PlayerOverlay}"
+            MouseEnter="OnPointerEnteredControls"
+            MouseLeave="OnPointerLeftControls"
             VerticalAlignment="Bottom"
             Background="#D9000000"
             Padding="16,12"
