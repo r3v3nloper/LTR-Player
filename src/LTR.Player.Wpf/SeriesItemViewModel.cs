@@ -1,4 +1,3 @@
-using System.Globalization;
 using LTR.Core.Content;
 
 namespace LTR.Player.Wpf;
@@ -22,23 +21,8 @@ public sealed class SeriesItemViewModel
 
     public string? CoverUrl => Series.CoverUrl;
 
-    public string Details => string.Join(" · ", DetailParts());
-
-    private IEnumerable<string> DetailParts()
-    {
-        if (Series.Year is { } year)
-        {
-            yield return year.ToString(CultureInfo.CurrentCulture);
-        }
-
-        if (Series.Rating is { } rating and > 0)
-        {
-            yield return rating.ToString("0.#", CultureInfo.CurrentCulture);
-        }
-
-        if (!string.IsNullOrWhiteSpace(Series.Genre))
-        {
-            yield return Series.Genre;
-        }
-    }
+    /// <summary>
+    /// Year, rating and genre on one line. No running time, unlike a film: a series has none of its own.
+    /// </summary>
+    public string Details => CatalogueDetailLine.Build(Series.Year, Series.Rating, Series.Genre);
 }

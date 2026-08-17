@@ -450,6 +450,34 @@ public sealed partial class LtrDbContext
     }
 
     /// <summary>
+    /// Clears a film's stored position at the viewer's request, and says nothing else about it.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not <see cref="RecordMovieProgressAsync"/> with a discarding outcome, which is how both
+    /// front ends used to do this: that also writes <c>LastWatchedUtc</c>, so removing an entry from the
+    /// continue-watching list stamped the row as watched at the moment of removal. <c>IsWatched</c> is left
+    /// alone too — forgetting where you got to in a film you had already finished does not unfinish it.
+    /// </remarks>
+    public Task ForgetMovieProgressAsync(int movieId, CancellationToken cancellationToken)
+    {
+        return Movies
+            .Where(movie => movie.Id == movieId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(movie => movie.ResumePositionSeconds, (int?)null),
+                cancellationToken);
+    }
+
+    /// <summary>Clears an episode's stored position at the viewer's request.</summary>
+    public Task ForgetEpisodeProgressAsync(int episodeId, CancellationToken cancellationToken)
+    {
+        return Episodes
+            .Where(episode => episode.Id == episodeId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(episode => episode.ResumePositionSeconds, (int?)null),
+                cancellationToken);
+    }
+
+    /// <summary>
     /// The position to store, which only a part-watched item has.
     /// </summary>
     /// <remarks>

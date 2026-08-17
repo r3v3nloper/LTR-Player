@@ -1,4 +1,3 @@
-using System.Globalization;
 using LTR.Core.Content;
 
 namespace LTR.Player.Wpf;
@@ -27,8 +26,8 @@ public sealed class MovieItemViewModel
 
     public string? CoverUrl => Movie.CoverUrl;
 
-    /// <summary>Year and running time on one line, with whatever of the two the provider stated.</summary>
-    public string Details => string.Join(" · ", DetailParts());
+    /// <summary>Year, running time, rating and genre on one line, as far as the provider stated them.</summary>
+    public string Details => CatalogueDetailLine.Build(Movie.Year, Movie.Rating, Movie.Genre, Movie.Duration);
 
     public bool HasResumePoint => Movie.ResumePositionSeconds is > 0;
 
@@ -44,27 +43,4 @@ public sealed class MovieItemViewModel
 
     /// <summary>What the play button says, which is the only place resuming is offered by name.</summary>
     public string PlayLabel => HasResumePoint ? ResumeLabel : "Play";
-
-    private IEnumerable<string> DetailParts()
-    {
-        if (Movie.Year is { } year)
-        {
-            yield return year.ToString(CultureInfo.CurrentCulture);
-        }
-
-        if (Movie.Duration is { } duration)
-        {
-            yield return DurationText.Format(duration);
-        }
-
-        if (Movie.Rating is { } rating and > 0)
-        {
-            yield return rating.ToString("0.#", CultureInfo.CurrentCulture);
-        }
-
-        if (!string.IsNullOrWhiteSpace(Movie.Genre))
-        {
-            yield return Movie.Genre;
-        }
-    }
 }

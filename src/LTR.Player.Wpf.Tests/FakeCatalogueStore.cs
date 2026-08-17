@@ -284,4 +284,26 @@ internal sealed class FakeCatalogueStore
         ProgressWrites.Add((ContentKind.Series, episodeId, outcome, position));
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Entries the viewer removed, recorded separately from <see cref="ProgressWrites"/>.
+    /// </summary>
+    /// <remarks>
+    /// Separate on purpose, and it is what lets a test tell the two apart: while forgetting was expressed as
+    /// a discarding outcome, no test could distinguish "the viewer removed this" from "the viewer watched
+    /// ninety seconds of it", which is the difference that put a stale timestamp on the row.
+    /// </remarks>
+    public List<(ContentKind Kind, int ItemId)> ForgottenEntries { get; } = [];
+
+    public Task ForgetMovieProgressAsync(int movieId, CancellationToken cancellationToken)
+    {
+        ForgottenEntries.Add((ContentKind.Movie, movieId));
+        return Task.CompletedTask;
+    }
+
+    public Task ForgetEpisodeProgressAsync(int episodeId, CancellationToken cancellationToken)
+    {
+        ForgottenEntries.Add((ContentKind.Series, episodeId));
+        return Task.CompletedTask;
+    }
 }

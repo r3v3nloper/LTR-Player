@@ -32,10 +32,8 @@ internal sealed class VodCommandHandler
     private readonly IWatchProgressStore _watched;
     private readonly IVodDetailService _detail;
     private readonly IProviderRegistry _providers;
-    private readonly IPlaybackSession _session;
     private readonly IPlaybackTransport _playback;
-    private readonly IStreamFailureExplainer _failures;
-    private readonly ConnectionReleaseCheck _releaseCheck;
+    private readonly StreamHoldTest _holdTest;
     private readonly WatchProgressRecorder _progress;
 
     /// <param name="progress">
@@ -48,10 +46,8 @@ internal sealed class VodCommandHandler
         IWatchProgressStore watched,
         IVodDetailService detail,
         IProviderRegistry providers,
-        IPlaybackSession session,
         IPlaybackTransport playback,
-        IStreamFailureExplainer failures,
-        ConnectionReleaseCheck releaseCheck,
+        StreamHoldTest holdTest,
         WatchProgressRecorder progress)
     {
         _sources = sources;
@@ -59,10 +55,8 @@ internal sealed class VodCommandHandler
         _watched = watched;
         _detail = detail;
         _providers = providers;
-        _session = session;
         _playback = playback;
-        _failures = failures;
-        _releaseCheck = releaseCheck;
+        _holdTest = holdTest;
         _progress = progress;
     }
 
@@ -283,20 +277,18 @@ internal sealed class VodCommandHandler
             return 1;
         }
 
-        // Discard is the same verdict the policy reaches for something barely started: the position goes and
-        // the item is not marked watched, because nobody watched it.
+        // Its own operation rather than a discarding outcome: the position goes, the item is not marked
+        // watched because nobody watched it, and nothing is recorded about when — which a watch outcome
+        // cannot express, since every one of them states a moment.
         if (movieId is { } film)
         {
-            await _watched
-                .RecordMovieProgressAsync(film, WatchOutcome.Discard, TimeSpan.Zero, cancellationToken)
-                .ConfigureAwait(false);
-
+            await _watched.ForgetMovieProgressAsync(film, cancellationToken).ConfigureAwait(false);
             Console.WriteLine($"Film {film} is no longer part-watched.");
         }
         else
         {
             await _watched
-                .RecordEpisodeProgressAsync(episodeId!.Value, WatchOutcome.Discard, TimeSpan.Zero, cancellationToken)
+                .ForgetEpisodeProgressAsync(episodeId!.Value, cancellationToken)
                 .ConfigureAwait(false);
 
             Console.WriteLine($"Episode {episodeId} is no longer part-watched.");
@@ -392,6 +384,9 @@ internal sealed class VodCommandHandler
         return await PlayAsync(source, request, seconds, seekTo, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Holds the stream through the shared play-test, adding the parts only a film needs.
+    /// </summary>
     private async Task<int> PlayAsync(
         PlaylistSource source,
         MediaRequest request,
@@ -399,81 +394,50 @@ internal sealed class VodCommandHandler
         TimeSpan? seekTo,
         CancellationToken cancellationToken)
     {
-        Console.WriteLine($"Opening '{request.DisplayName}' as {request.Format}...");
-
-        if (request.StartAt is { } startAt)
-        {
-            Console.WriteLine($"Starting at {startAt:hh\\:mm\\:ss}.");
-        }
-
         try
         {
-            var state = await _session.SwitchToAsync(request, cancellationToken).ConfigureAwait(false);
-
-            if (state != PlaybackState.Playing)
-            {
-                Console.Error.WriteLine($"Playback did not start; final state was {state}.");
-                await ReportFailureAsync(source, cancellationToken).ConfigureAwait(false);
-
-                return 1;
-            }
-
-            Console.WriteLine($"Playing. Holding the stream for {seconds}s.");
-            await Task.Delay(TimeSpan.FromSeconds(seconds), cancellationToken).ConfigureAwait(false);
-
-            if (seekTo is { } target)
-            {
-                await SeekAndReportAsync(target, seconds, cancellationToken).ConfigureAwait(false);
-            }
-
-            // The two figures that decide whether resuming can work at all. A film reporting no duration
-            // can never be recognised as finished, and one reporting no position can never be resumed.
-            Console.WriteLine($"Position   {DescribeTime(_playback.Position)}");
-            Console.WriteLine($"Duration   {DescribeTime(_playback.Duration)}");
-
-            // Sampled before the stream is released, because the engine has neither figure afterwards — the
-            // same reason the window samples on a timer rather than at the moment of saving.
-            _progress.Observe(_playback.Position, _playback.Duration);
-
-            if (await _progress.RecordAsync(cancellationToken).ConfigureAwait(false) is { } outcome)
-            {
-                Console.WriteLine($"Remembered  {outcome}");
-            }
-        }
-        catch (PlaybackFailedException exception)
-        {
-            // Caught here rather than left to the runner, which has no source to ask about. The panel is the
-            // only thing that knows whether this was the film, the connection limit or the subscription.
-            Console.Error.WriteLine($"Playback error: {exception.Message}");
-            await ReportFailureAsync(source, cancellationToken).ConfigureAwait(false);
-
-            return 1;
+            return await _holdTest
+                .RunAsync(
+                    source,
+                    request,
+                    seconds,
+                    token => ReportPlaybackAsync(seekTo, seconds, token),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {
             // Whatever was being followed is dropped if it was never recorded, so an interrupted run does
             // not leave the recorder holding an item for the next command in the same process.
             _progress.Forget();
-
-            // Not passed the caller's token: releasing must happen even when the run was interrupted.
-            await _session.StopAsync(CancellationToken.None).ConfigureAwait(false);
         }
-
-        Console.WriteLine("Stream released.");
-        await _releaseCheck.ReportAsync(source, cancellationToken).ConfigureAwait(false);
-
-        return 0;
     }
 
     /// <summary>
-    /// Asks the panel why a stream would not open, and says so.
+    /// Reads what only a playing film can report, and records where it got to.
     /// </summary>
-    private async Task ReportFailureAsync(PlaylistSource source, CancellationToken cancellationToken)
+    /// <remarks>
+    /// Runs while the stream is still open, because the engine has neither figure afterwards — the same
+    /// reason the window samples on a timer rather than at the moment of saving.
+    /// </remarks>
+    private async Task ReportPlaybackAsync(TimeSpan? seekTo, int seconds, CancellationToken cancellationToken)
     {
-        var reason = await _failures.ExplainAsync(source, cancellationToken).ConfigureAwait(false);
+        if (seekTo is { } target)
+        {
+            await SeekAndReportAsync(target, seconds, cancellationToken).ConfigureAwait(false);
+        }
 
-        Console.Error.WriteLine($"Reason:  {reason}");
-        Console.Error.WriteLine($"         {StreamFailureNotes.Describe(reason)}");
+        // The two figures that decide whether resuming can work at all. A film reporting no duration
+        // can never be recognised as finished, and one reporting no position can never be resumed.
+        Console.WriteLine($"Position   {DescribeTime(_playback.Position)}");
+        Console.WriteLine($"Duration   {DescribeTime(_playback.Duration)}");
+
+        _progress.Observe(_playback.Position, _playback.Duration);
+
+        if (await _progress.RecordAsync(cancellationToken).ConfigureAwait(false) is { } outcome)
+        {
+            Console.WriteLine($"Remembered  {outcome}");
+        }
     }
 
     /// <summary>

@@ -74,11 +74,9 @@ public sealed partial class ContinueWatchingViewModel : ObservableObject
     /// everything on it is worth carrying on with.
     /// </para>
     /// <para>
-    /// Recorded as <see cref="WatchOutcome.Discard"/>, which is not a stretch: it means "too little happened
-    /// to be worth remembering", and that is exactly the judgement being made — deliberately, this time,
-    /// rather than by a threshold. Note what it does *not* do. It does not mark the item watched, because the
-    /// viewer did not watch it, and a film labelled "Watched" that nobody has seen is a worse lie than a
-    /// stale resume point.
+    /// Note what it does *not* do. It does not mark the item watched, because the viewer did not watch it —
+    /// a film labelled "Watched" that nobody has seen is a worse lie than a stale resume point — and it does
+    /// not record a viewing, which is why it no longer goes through a <see cref="WatchOutcome"/>.
     /// </para>
     /// </remarks>
     public async Task ForgetAsync(ContinueWatchingEntry entry, CancellationToken cancellationToken)
@@ -88,13 +86,13 @@ public sealed partial class ContinueWatchingViewModel : ObservableObject
         if (entry.Kind == ContentKind.Movie)
         {
             await _progress
-                .RecordMovieProgressAsync(entry.ItemId, WatchOutcome.Discard, TimeSpan.Zero, cancellationToken)
+                .ForgetMovieProgressAsync(entry.ItemId, cancellationToken)
                 .ConfigureAwait(true);
         }
         else
         {
             await _progress
-                .RecordEpisodeProgressAsync(entry.ItemId, WatchOutcome.Discard, TimeSpan.Zero, cancellationToken)
+                .ForgetEpisodeProgressAsync(entry.ItemId, cancellationToken)
                 .ConfigureAwait(true);
         }
 

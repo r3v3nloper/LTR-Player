@@ -76,6 +76,7 @@ static ServiceProvider BuildServiceProvider(bool verbose)
     services.AddSingleton<PlayTestCommandHandler>();
     services.AddSingleton<VodCommandHandler>();
     services.AddSingleton<ConnectionReleaseCheck>();
+    services.AddSingleton<StreamHoldTest>();
 
     return services.BuildServiceProvider();
 }

@@ -1,7 +1,5 @@
-using LTR.Catalogue;
 using LTR.Core.Content;
 using LTR.Core.Sources;
-using LTR.Playback;
 using LTR.Providers;
 
 namespace LTR.Cli;
@@ -17,26 +15,19 @@ namespace LTR.Cli;
 internal sealed class PlayTestCommandHandler
 {
     private readonly IProviderRegistry _providers;
-    private readonly IPlaybackSession _session;
-    private readonly IPlaybackTransport _playback;
-    private readonly IStreamFailureExplainer _failures;
-    private readonly ConnectionReleaseCheck _releaseCheck;
+    private readonly StreamHoldTest _holdTest;
 
-    public PlayTestCommandHandler(
-        IProviderRegistry providers,
-        IPlaybackSession session,
-        IPlaybackTransport playback,
-        IStreamFailureExplainer failures,
-        ConnectionReleaseCheck releaseCheck)
+    public PlayTestCommandHandler(IProviderRegistry providers, StreamHoldTest holdTest)
     {
         _providers = providers;
-        _session = session;
-        _playback = playback;
-        _failures = failures;
-        _releaseCheck = releaseCheck;
+        _holdTest = holdTest;
     }
 
-    public async Task<int> ExecuteAsync(
+    /// <remarks>
+    /// Nothing happens while the stream is held beyond what every hold reports, so no callback is passed:
+    /// a channel has no position worth reading and nothing to seek to.
+    /// </remarks>
+    public Task<int> ExecuteAsync(
         XtreamSource source,
         string streamId,
         int seconds,
@@ -53,74 +44,6 @@ internal sealed class PlayTestCommandHandler
 
         var request = resolver.ResolveLive(source, channel);
 
-        _session.StateChanged += OnStateChanged;
-
-        try
-        {
-            Console.WriteLine($"Opening stream {streamId} as {request.Format}...");
-
-            var state = await _session.SwitchToAsync(request, cancellationToken).ConfigureAwait(false);
-
-            if (state != PlaybackState.Playing)
-            {
-                Console.Error.WriteLine($"Playback did not start; final state was {state}.");
-                return 1;
-            }
-
-            Console.WriteLine($"Playing. Holding the stream for {seconds}s.");
-            await Task.Delay(TimeSpan.FromSeconds(seconds), cancellationToken).ConfigureAwait(false);
-
-            ReportTracks();
-        }
-        catch (PlaybackFailedException exception)
-        {
-            // Caught here rather than left to the runner, which has no source to ask about. The panel is the
-            // only thing that knows whether this was the channel, the connection limit or the subscription.
-            Console.Error.WriteLine($"Playback error: {exception.Message}");
-
-            var reason = await _failures.ExplainAsync(source, cancellationToken).ConfigureAwait(false);
-
-            Console.Error.WriteLine($"Reason:  {reason}");
-            Console.Error.WriteLine($"         {StreamFailureNotes.Describe(reason)}");
-
-            return 1;
-        }
-        finally
-        {
-            _session.StateChanged -= OnStateChanged;
-
-            // Not passed the caller's token: releasing must happen even when the run was interrupted.
-            await _session.StopAsync(CancellationToken.None).ConfigureAwait(false);
-        }
-
-        Console.WriteLine("Stream released.");
-        await _releaseCheck.ReportAsync(source, cancellationToken).ConfigureAwait(false);
-
-        return 0;
-    }
-
-    private static void OnStateChanged(object? sender, PlaybackStateChangedEventArgs e)
-    {
-        Console.WriteLine($"  state: {e.Previous} -> {e.Current}{DescribeMessage(e.Message)}");
-    }
-
-    private static string DescribeMessage(string? message)
-    {
-        return string.IsNullOrWhiteSpace(message) ? string.Empty : $" ({message})";
-    }
-
-    private void ReportTracks()
-    {
-        // MPEG-TS announces its tracks only as they are encountered, so this is meaningful just once
-        // playback is actually running.
-        foreach (var kind in new[] { MediaTrackKind.Video, MediaTrackKind.Audio, MediaTrackKind.Subtitle })
-        {
-            var tracks = _playback.GetTracks(kind);
-
-            Console.WriteLine(
-                tracks.Count == 0
-                    ? $"  {kind}: none reported"
-                    : $"  {kind}: {string.Join(", ", tracks.Select(track => track.DisplayLabel))}");
-        }
+        return _holdTest.RunAsync(source, request, seconds, whileHolding: null, cancellationToken);
     }
 }

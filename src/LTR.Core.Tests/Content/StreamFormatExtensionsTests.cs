@@ -27,6 +27,20 @@ public sealed class StreamFormatExtensionsTests
         act.ShouldThrow<ArgumentOutOfRangeException>();
     }
 
+    [Fact]
+    public void ToUrlExtension_ForAProgressiveFile_SaysTheContainerIsThePanels()
+    {
+        // Arrange: no caller passes this today, so what the method does with it is only ever discovered by
+        // the caller that eventually does. The message is the point — it says what to use instead.
+        // Act
+        var act = () => StreamFormat.ProgressiveFile.ToUrlExtension();
+
+        // Assert
+        var exception = act.ShouldThrow<ArgumentOutOfRangeException>();
+        exception.Message.ShouldContain("container");
+        exception.Message.ShouldNotContain("Unknown");
+    }
+
     [Theory]
     [InlineData("ts", StreamFormat.MpegTs)]
     [InlineData("TS", StreamFormat.MpegTs)]
