@@ -1,51 +1,37 @@
 # Refactoring backlog
 
-**Renumbered in the review after the URL-sanitisation rank**, which finished the post-M6 list's rank 1 and
-found four items to add. Numbers quoted in commit messages belong to whichever scheme was current when they
-were written — the mappings are at the bottom, under [Done](#done).
+# **Empty.** Every ranked item is done, and this file is now the record of how.
 
-Renumbered then rather than appended, unlike the removal before it: a *removed* item leaves a gap that costs
-less than a new scheme, but four items belonging in the middle of the ranking cannot be appended without the
-number ceasing to mean the rank, which is the only thing this list is for.
+The list was renumbered 1–12 in the review after the URL-sanitisation rank; two more (13 and 14) were found
+while verifying others. All fourteen are below, newest first. **One of them was dropped rather than built** —
+rank 11's store-side paging, on a measurement — and that entry keeps the numbers so the decision is not
+re-derived from scratch.
 
-**Ranks 1–11, 13 and 14 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-111-13-and-14).
-**One remains: rank 12**, and it now stands alone — the rank it was to be done
-alongside was measured and dropped.
+Numbers quoted in commit messages belong to whichever scheme was current when they were written; both
+mappings are under [Done](#done).
 
-Ranking rule: criticality against effort, most valuable per unit of effort first.
+## What replaces this list
 
-Everything left is structure or a limit that is stated on screen, and **nothing left has an effect while the
-player is running** — true again, having briefly not been: rank 14 was a credential printed in clear, and it
-is fixed. The claim is worth re-checking at each review rather than assuming, which is how that one surfaced.
+Nothing yet, and that is the honest state. What is left in the project is not refactoring:
 
-## Before starting one of these
+- **Two checks that need the subscription or a window**, carried in `Docs/verification.md`: the
+  `LiveNetworkCachingMilliseconds` figure has never been measured against a real panel, and §§7–9 (the player
+  controls, a failing stream's reported reason, the packaged build) need a person at the screen.
+- **Whatever the next milestone turns out to be.** The plan lives outside the repository.
 
-- `dotnet test LTR-Player.slnx` — 716 tests, all passing on `main`. A refactor should not move that number;
+## Before starting anything here
+
+Kept because it applies to any change in this repository, not only to a ranked one:
+
+- `dotnet test LTR-Player.slnx` — 724 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
 - **Start the app after anything that touches dependency injection.** The compiler cannot see a missing
   registration, and the container holds the session whose disposal releases the provider connection.
-- The two reviews before this one both found the *test double* wrong rather than the code. When a mutation
-  survives, suspect the fake before the assertion.
-
----
-
-## Rank 12 — Page the timeline instead of capping it
-
-**Project:** LTR.Player.Wpf · **Area:** Performance · **Criticality:** minor · **Effort:** high
-
-`GuideViewModel.MaximumRows` draws at most 200 channels and says so on screen. The honest fix is to load rows
-as they are scrolled into view, which needs the store to page and the timeline to build rows lazily.
-
-**It said "related to rank 11, and worth doing at the same time or not at all" — and rank 11 has since been
-measured and dropped, which leaves this one standing alone.** That is not a reason to do it: the cap is stated
-on screen, a 200-row window over channels the viewer filtered themselves is a usable guide, and the same
-argument that retired rank 11 applies to the store side of this one. What would justify it is a viewer saying
-the cap gets in their way — which is a fact about use, and nobody has said it yet.
-
-**The last item on this list, and the one most likely never to be done.** If it is, the timeline's own
-paging is the whole of it now; there is no channel-list paging to share the work with.
+- Reviews here have repeatedly found the *test double* wrong rather than the code, and twice found a
+  *comment* wrong rather than either. When a mutation survives, suspect the tooling, then the fake, then the
+  assertion — in that order. One "survival" in this session was a regex that never matched the file.
 
 ---
 
@@ -60,9 +46,31 @@ older one.
 **Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
 else on that list is below.
 
-### In the same session as the renumbering — ranks 1–11, 13 and 14
+### In the same session as the renumbering — all fourteen
 
-Thirteen ranks, cleared in one sitting. What is worth carrying forward:
+Cleared in one sitting. What is worth carrying forward:
+
+- **Rank 12 · the timeline pages along its channels, and it is paged rather than scrolled.** The rank called
+  scroll-driven loading "the honest fix"; the title said *page*, and paging is what it got. The reason is the
+  one already written at the top of `GuideViewModel`: the time window is moved by command because each move is
+  a fetch, and stating that with a button beats hiding it behind a scrollbar. The channel axis is the same
+  kind of axis. Scroll-driven loading would also have meant a data-virtualising collection whose rows appear
+  empty and fill in afterwards — in a grid where every row is already a mosaic of blocks, that reads as a
+  fault rather than as loading.
+
+  `MaximumRows` became `RowsPerPage`, still 200, and the notice changed from "Showing 200 of 4,531 … filter
+  the channel list to see the others" to a position: "Channels 201–400 of 4,531 with guide data." The old
+  wording had to tell the viewer to go and narrow their channel list, which is the thing the cap made
+  necessary; nothing needs saying now beyond where they are.
+
+  **Two guards, and both were mutation-checked.** Attaching a new set of channels resets to the first page —
+  page three of a filtered list is not page three of the same list unfiltered — and a reload clamps an offset
+  that has outlived the channels it indexed into, which would otherwise draw an empty timeline over a guide
+  that has data. Removing either one fails exactly one test.
+
+  **A mutation appeared to survive and had not been applied at all** — a `perl` pattern written with `\n`
+  against a CRLF file. Checked the file, saw the code untouched, applied it properly, and it failed as it
+  should. Worth remembering: a surviving mutation is a claim about the *tooling* first.
 
 - **Rank 11 · half done and half dropped, on a measurement.** The cheap half was real and is fixed:
   `SelectAdjacent` copied the filtered view into a list on **every zap key press** — up to seventeen thousand

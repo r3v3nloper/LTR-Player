@@ -88,8 +88,12 @@ observe is also one nothing can shut down.
   `ROW_NUMBER() OVER (PARTITION BY GuideChannelId)`. Asking per row would be thousands of queries driven
   by a scroll bar.
 - **A timeline is a grid, not a list.** 17,000 channels over four hours is several hundred thousand
-  elements, so the timeline draws at most 200 rows and says so on screen. Its channel-name column scrolls
-  horizontally with the blocks rather than staying pinned — the honest limitation of one shared scroller,
-  and mostly invisible because the window is moved by the buttons rather than by scrolling.
+  elements, so the timeline draws **one page of 200 channels** and states which page it is on. Both axes are
+  moved by command: 30 minutes at a time along the time axis, 200 channels at a time along the other. Neither
+  is a scrollbar, because each move is a fetch and a button says so where a scrollbar would hide it.
+- **The channel-name column stays pinned while the blocks scroll.** One scroller around the header alone owns
+  the horizontal offset; each row's blocks and the now-marker follow it through a translation, so a heading
+  cannot drift off its own blocks. `GuideOverlayViewTests` measures exactly that — it is the only test in the
+  repository that builds a visual tree, and it exists because nothing else can state a layout property.
 - **`Channel.GuideChannelId` is written only by the guide import.** A catalogue refresh must leave it
   alone, for the same reason it leaves the favourite flag alone: it is not something the provider states.
