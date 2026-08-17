@@ -88,7 +88,10 @@ LTR.Core[.Abstractions]        Domain. Platform-neutral, no dependencies. Keep i
 LTR.Providers[.Abstractions]   IContentProvider, probes, resolvers + the registry that selects them
 LTR.Providers.Xtream           player_api.php client
 LTR.Providers.M3u              M3U-Plus parser and provider
-LTR.Catalogue[.Abstractions]   Application layer: import orchestration and catalogue access
+LTR.Catalogue[.Abstractions]   Application layer: import orchestration and catalogue access. The store
+                              is five interfaces over one class — ISourceStore, ILiveCatalogue,
+                              IGuideCatalogue, IVodCatalogue, IWatchProgressStore — so a consumer
+                              declares the face it uses. Take the narrowest that fits
 LTR.Epg.Xmltv                  XMLTV reader. No dependencies at all — not even on Core
 LTR.Persistence                LtrDbContext. All database logic lives here (§3.3.2)
 LTR.Playback[.Abstractions]    Engine-neutral playback policy

@@ -14,7 +14,8 @@ Cleared so far:
 - **After M4:** ranks 1–7 below.
 - **By M5:** rank 15, which is why it was parked there. See below.
 - **In the review after M5:** its own top four. See below.
-- **By M6:** rank 19, also parked deliberately. Rank 10 got *worse* by a member, by decision — see it.
+- **By M6:** rank 19, also parked deliberately.
+- **After M6:** rank 10, which M6 had made worse by a member before it was done.
 
 Everything left is structure, a missing guard, or a limit that is stated on screen. Nothing left has an effect
 while the player is running.
@@ -150,20 +151,41 @@ Proposal: `JsonDocument.ParseAsync` over the content stream. The HTML-detection 
 first bytes of the stream, which is the only fiddly part: panels answer with an HTML error page at HTTP 200
 and that must still be recognised.
 
-## Rank 10 — `ICatalogueStore` has nineteen members
+## Rank 10 · done after M6 — `ICatalogueStore` had nineteen members
 
-**Project:** LTR.Catalogue.Abstractions · **Area:** Maintainability · **Criticality:** moderate · **Effort:** medium
+Split into five, grouped by what consumes them rather than by the tables behind them:
 
-Sources, live channels, the guide, films, series and watch progress in one interface. Every fake has to
-implement all of it (§2.5), which is why the window's test double is the largest file in its project.
+| | members | taken by |
+|---|---|---|
+| `ISourceStore` | 4 | source management, settings, both section bases |
+| `ILiveCatalogue` | 2 | channel list, CLI |
+| `IGuideCatalogue` | 4 | guide, channel list, CLI |
+| `IVodCatalogue` | 6 | film and series sections, continue-watching, CLI |
+| `IWatchProgressStore` | 3 | `WatchProgressRecorder`, which declared nineteen to use three |
 
-**Eighteen at the last review; nineteen since M6** added `UpdateSourceSettingsAsync` for the per-source
-settings. Adding to it was a decision rather than an oversight — splitting the interface in the middle of a
-milestone is the larger risk — but the rank should be read as having got worse rather than stayed still.
+Two placements are the only ones worth arguing about again:
 
-The review after M5 also noted `IPlaybackSession` reaching sixteen members, which is the same shape one layer
-down. Worth doing together (see rank 9 of that review): the same argument produces the same split, and doing
-one without the other leaves the codebase inconsistent about it.
+- **`GetCategoriesAsync` is on `ISourceStore`,** not on either catalogue. It takes its kind as a parameter
+  because a panel numbers categories per section, so a method deliberately indifferent to the section belongs
+  with the source — the alternative was the same method on two interfaces.
+- **Now-and-next is on `IGuideCatalogue`,** because it is guide data. That is why the channel list takes three
+  faces: it lists channels, offers categories and decorates rows with what is on, and those are three
+  different things imported on three different schedules.
+
+`ICatalogueStore` was **removed** rather than kept as an umbrella inheriting the five, because an umbrella is
+what the next consumer would take. The catalogue's own tests resolve `CatalogueStore` directly instead, which
+is more honest about what they are: integration tests of this layer over real SQLite rather than consumers of
+an abstraction.
+
+One class still implements all five and one instance answers all five. Every method is the same two lines over
+the same unit of work, so splitting the implementation would buy five files and nothing else (§2.16).
+
+**What did not improve:** the window's `FakeCatalogueStore` is still the largest file in its project and still
+implements everything, because the shell harness builds every view model. The win is on the production side —
+each consumer now declares the surface it uses — and for any *new* double, which can implement one face.
+
+`IPlaybackSession` at sixteen members is the same shape one layer down, and is still open — rank 9 of the
+post-M5 review. The argument there is the same, and it now has a worked example to follow.
 
 Proposal: split into `ISourceStore` / `ILiveCatalogue` / `IGuideCatalogue` / `IVodCatalogue`, composed where
 more than one is needed.
