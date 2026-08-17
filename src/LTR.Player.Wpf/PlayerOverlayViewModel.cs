@@ -9,14 +9,13 @@ namespace LTR.Player.Wpf;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Reads and drives <see cref="IPlaybackSession"/> rather than <see cref="PlaybackCoordinator"/>. The
-/// division is that the coordinator decides *what* plays — it builds addresses, opens streams and records
-/// positions — while everything here acts on a stream that is already open. Neither can start one behind the
-/// other's back, because starting one is still <see cref="IPlaybackSession.SwitchToAsync"/> and the
-/// coordinator remains its only caller.
+/// Takes <see cref="IPlaybackTransport"/> and not <see cref="IPlaybackSession"/>, which is what makes the
+/// division structural rather than a matter of discipline: the coordinator decides *what* plays — it builds
+/// addresses, opens streams and records positions — while everything here acts on a stream already open. This
+/// class cannot start or release one, because the type it holds has no way to.
 /// </para>
 /// <para>
-/// Nothing here subscribes to the session's events, and that is deliberate. An engine raises them on its own
+/// Nothing here subscribes to playback events, and that is deliberate. An engine raises them on its own
 /// internal threads; WPF marshals a property change from another thread for a plain binding but not for a
 /// collection, so a track list rebuilt from an engine callback would take the window down. Everything is
 /// therefore read in <see cref="Sample"/>, which the window drives from a dispatcher timer.
@@ -48,7 +47,7 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
     /// <summary>How much one press of the volume keys moves it.</summary>
     public const int VolumeStep = 5;
 
-    private readonly IPlaybackSession _session;
+    private readonly IPlaybackTransport _playback;
     private readonly PlayerSettings.PlayerStateSettings _remembered;
     private readonly TimeProvider _timeProvider;
 
@@ -106,17 +105,17 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
     /// finds the current figures in it without this class knowing anything about files.
     /// </remarks>
     public PlayerOverlayViewModel(
-        IPlaybackSession session,
+        IPlaybackTransport playback,
         PlayerSettings settings,
         TimeProvider timeProvider)
     {
-        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(playback);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         var remembered = settings.Player;
 
-        _session = session;
+        _playback = playback;
         _remembered = remembered;
         _timeProvider = timeProvider;
         _lastActivity = timeProvider.GetUtcNow();
@@ -171,11 +170,11 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
     /// </remarks>
     public void Sample()
     {
-        var state = _session.State;
+        var state = _playback.State;
 
         HasStream = state.HoldsProviderConnection();
         IsPaused = state == PlaybackState.Paused;
-        IsSeekable = _session.IsSeekable;
+        IsSeekable = _playback.IsSeekable;
 
         // A stream that has just started needs the viewer's settings pushed at it: an engine is entitled to
         // forget them when it opens media, and the volume the viewer chose is not a per-channel decision.
@@ -198,7 +197,7 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
         Reveal();
 
         var wantsPause = !IsPaused;
-        _session.SetPaused(wantsPause);
+        _playback.SetPaused(wantsPause);
         IsPaused = wantsPause;
     }
 
@@ -268,12 +267,12 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
     {
         Reveal();
 
-        if (_session.Position is not { } current)
+        if (_playback.Position is not { } current)
         {
             return;
         }
 
-        _session.SeekTo(current + offset);
+        _playback.SeekTo(current + offset);
         SampleTimes();
     }
 
@@ -293,21 +292,21 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
         Reveal();
 
         var target = TimeSpan.FromSeconds(PositionSeconds);
-        var current = _session.Position ?? TimeSpan.Zero;
+        var current = _playback.Position ?? TimeSpan.Zero;
 
         if ((target - current).Duration() < SeekTolerance)
         {
             return;
         }
 
-        _session.SeekTo(target);
+        _playback.SeekTo(target);
         SampleTimes();
     }
 
     private void ApplyToStream()
     {
-        _session.Volume = Volume;
-        _session.IsMuted = IsMuted;
+        _playback.Volume = Volume;
+        _playback.IsMuted = IsMuted;
     }
 
     /// <remarks>
@@ -316,8 +315,8 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
     /// </remarks>
     private void SampleTimes()
     {
-        var position = _session.Position ?? TimeSpan.Zero;
-        var duration = _session.Duration ?? TimeSpan.Zero;
+        var position = _playback.Position ?? TimeSpan.Zero;
+        var duration = _playback.Duration ?? TimeSpan.Zero;
 
         DurationSeconds = duration.TotalSeconds;
         DurationLabel = duration > TimeSpan.Zero ? DurationText.Format(duration) : string.Empty;
@@ -334,17 +333,17 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
     private void SampleTracks()
     {
         AudioTracks.Sync(
-            _session.GetTracks(MediaTrackKind.Audio),
-            _session.GetSelectedTrack(MediaTrackKind.Audio));
+            _playback.GetTracks(MediaTrackKind.Audio),
+            _playback.GetSelectedTrack(MediaTrackKind.Audio));
 
         SubtitleTracks.Sync(
-            _session.GetTracks(MediaTrackKind.Subtitle),
-            _session.GetSelectedTrack(MediaTrackKind.Subtitle));
+            _playback.GetTracks(MediaTrackKind.Subtitle),
+            _playback.GetSelectedTrack(MediaTrackKind.Subtitle));
     }
 
     private void HideWhenIdle()
     {
-        if (!IsRevealed || _session.State != PlaybackState.Playing)
+        if (!IsRevealed || _playback.State != PlaybackState.Playing)
         {
             return;
         }
@@ -358,7 +357,7 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
     private void Select(MediaTrackKind kind, int trackId)
     {
         Reveal();
-        _session.SelectTrack(kind, trackId);
+        _playback.SelectTrack(kind, trackId);
     }
 
     /// <remarks>
@@ -368,19 +367,19 @@ public sealed partial class PlayerOverlayViewModel : ObservableObject
     /// </remarks>
     partial void OnVolumeChanged(int value)
     {
-        _session.Volume = value;
+        _playback.Volume = value;
         _remembered.Volume = value;
     }
 
     partial void OnIsMutedChanged(bool value)
     {
-        _session.IsMuted = value;
+        _playback.IsMuted = value;
         _remembered.IsMuted = value;
     }
 
     partial void OnSelectedAspectRatioChanged(AspectRatioChoice value)
     {
-        _session.AspectRatio = value.Value;
+        _playback.AspectRatio = value.Value;
         _remembered.AspectRatio = value.Value;
     }
 }

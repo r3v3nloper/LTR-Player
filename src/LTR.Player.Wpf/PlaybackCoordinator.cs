@@ -33,6 +33,7 @@ public sealed partial class PlaybackCoordinator : ObservableObject
 {
     private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
+    private readonly IPlaybackTransport _playback;
     private readonly WatchProgressRecorder _progress;
     private readonly IStreamFailureExplainer _failures;
     private readonly StatusLine _status;
@@ -55,6 +56,7 @@ public sealed partial class PlaybackCoordinator : ObservableObject
     public PlaybackCoordinator(
         IProviderRegistry providers,
         IPlaybackSession session,
+        IPlaybackTransport playback,
         WatchProgressRecorder progress,
         IStreamFailureExplainer failures,
         StatusLine status,
@@ -62,6 +64,7 @@ public sealed partial class PlaybackCoordinator : ObservableObject
     {
         _providers = providers;
         _session = session;
+        _playback = playback;
         _progress = progress;
         _failures = failures;
         _status = status;
@@ -93,7 +96,7 @@ public sealed partial class PlaybackCoordinator : ObservableObject
     {
         if (_progress.IsTracking)
         {
-            _progress.Observe(_session.Position, _session.Duration);
+            _progress.Observe(_playback.Position, _playback.Duration);
         }
     }
 

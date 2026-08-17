@@ -21,7 +21,7 @@ namespace LTR.Playback;
 /// requests are dropped instead of each being opened in turn.
 /// </para>
 /// </remarks>
-public sealed class PlaybackSession : IPlaybackSession
+public sealed class PlaybackSession : IPlaybackSession, IPlaybackTransport
 {
     /// <summary>
     /// How long the engine is given to release a stream before the attempt is abandoned and logged.
@@ -77,10 +77,10 @@ public sealed class PlaybackSession : IPlaybackSession
     public bool IsSeekable => !_isDisposed && _engine.IsSeekable;
 
     /// <remarks>
-    /// Every member from here down is a delegation, and deliberately so. They are on the session because
-    /// the on-screen controls need them and must not hold the engine; the session adds nothing to them
-    /// beyond refusing to touch a disposed engine, which is reachable — the window's sampling timer can
-    /// tick once more while the container is being torn down.
+    /// Every transport member is a delegation, and deliberately so. They exist here because the on-screen
+    /// controls need them and must not hold the engine; this class adds nothing to them beyond refusing to
+    /// touch a disposed engine, which is reachable — the window's sampling timer can tick once more while
+    /// the container is being torn down.
     /// </remarks>
     public int Volume
     {

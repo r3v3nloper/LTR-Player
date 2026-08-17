@@ -86,6 +86,7 @@ internal sealed class MainViewModelHarness
             new PlaybackCoordinator(
                 new StubProviderRegistry(),
                 Session,
+                Session,
                 Progress,
                 Failures,
                 status,

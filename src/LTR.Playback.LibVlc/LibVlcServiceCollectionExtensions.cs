@@ -33,7 +33,12 @@ public static class LibVlcServiceCollectionExtensions
         services.AddSingleton<LibVlcMediaEngine>();
         services.AddSingleton<IMediaEngine>(provider => provider.GetRequiredService<LibVlcMediaEngine>());
         services.AddSingleton<IVlcVideoSink>(provider => provider.GetRequiredService<LibVlcMediaEngine>());
-        services.AddSingleton<IPlaybackSession, PlaybackSession>();
+        // One session behind two interfaces, resolved to the same instance. Registered as itself first so
+        // the container owns it and therefore disposes it — which is what releases the provider connection
+        // on the way out, and the reason the container must be disposed asynchronously.
+        services.AddSingleton<PlaybackSession>();
+        services.AddSingleton<IPlaybackSession>(provider => provider.GetRequiredService<PlaybackSession>());
+        services.AddSingleton<IPlaybackTransport>(provider => provider.GetRequiredService<PlaybackSession>());
 
         return services;
     }

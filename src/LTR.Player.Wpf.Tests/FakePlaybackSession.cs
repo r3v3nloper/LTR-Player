@@ -6,7 +6,7 @@ namespace LTR.Player.Wpf;
 /// <summary>
 /// Records playback requests without opening anything.
 /// </summary>
-internal sealed class FakePlaybackSession : IPlaybackSession
+internal sealed class FakePlaybackSession : IPlaybackSession, IPlaybackTransport
 {
     public List<MediaRequest> Started { get; } = [];
 

@@ -18,17 +18,20 @@ internal sealed class PlayTestCommandHandler
 {
     private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
+    private readonly IPlaybackTransport _playback;
     private readonly IStreamFailureExplainer _failures;
     private readonly ConnectionReleaseCheck _releaseCheck;
 
     public PlayTestCommandHandler(
         IProviderRegistry providers,
         IPlaybackSession session,
+        IPlaybackTransport playback,
         IStreamFailureExplainer failures,
         ConnectionReleaseCheck releaseCheck)
     {
         _providers = providers;
         _session = session;
+        _playback = playback;
         _failures = failures;
         _releaseCheck = releaseCheck;
     }
@@ -112,7 +115,7 @@ internal sealed class PlayTestCommandHandler
         // playback is actually running.
         foreach (var kind in new[] { MediaTrackKind.Video, MediaTrackKind.Audio, MediaTrackKind.Subtitle })
         {
-            var tracks = _session.GetTracks(kind);
+            var tracks = _playback.GetTracks(kind);
 
             Console.WriteLine(
                 tracks.Count == 0

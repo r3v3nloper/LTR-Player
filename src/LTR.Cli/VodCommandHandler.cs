@@ -33,6 +33,7 @@ internal sealed class VodCommandHandler
     private readonly IVodDetailService _detail;
     private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
+    private readonly IPlaybackTransport _playback;
     private readonly IStreamFailureExplainer _failures;
     private readonly ConnectionReleaseCheck _releaseCheck;
     private readonly WatchProgressRecorder _progress;
@@ -48,6 +49,7 @@ internal sealed class VodCommandHandler
         IVodDetailService detail,
         IProviderRegistry providers,
         IPlaybackSession session,
+        IPlaybackTransport playback,
         IStreamFailureExplainer failures,
         ConnectionReleaseCheck releaseCheck,
         WatchProgressRecorder progress)
@@ -58,6 +60,7 @@ internal sealed class VodCommandHandler
         _detail = detail;
         _providers = providers;
         _session = session;
+        _playback = playback;
         _failures = failures;
         _releaseCheck = releaseCheck;
         _progress = progress;
@@ -425,12 +428,12 @@ internal sealed class VodCommandHandler
 
             // The two figures that decide whether resuming can work at all. A film reporting no duration
             // can never be recognised as finished, and one reporting no position can never be resumed.
-            Console.WriteLine($"Position   {DescribeTime(_session.Position)}");
-            Console.WriteLine($"Duration   {DescribeTime(_session.Duration)}");
+            Console.WriteLine($"Position   {DescribeTime(_playback.Position)}");
+            Console.WriteLine($"Duration   {DescribeTime(_playback.Duration)}");
 
             // Sampled before the stream is released, because the engine has neither figure afterwards — the
             // same reason the window samples on a timer rather than at the moment of saving.
-            _progress.Observe(_session.Position, _session.Duration);
+            _progress.Observe(_playback.Position, _playback.Duration);
 
             if (await _progress.RecordAsync(cancellationToken).ConfigureAwait(false) is { } outcome)
             {
@@ -483,7 +486,7 @@ internal sealed class VodCommandHandler
     /// </remarks>
     private async Task SeekAndReportAsync(TimeSpan target, int seconds, CancellationToken cancellationToken)
     {
-        if (!_session.IsSeekable)
+        if (!_playback.IsSeekable)
         {
             Console.Error.WriteLine(
                 "Seek       refused; the panel serves this without range support, so it cannot be "
@@ -492,11 +495,11 @@ internal sealed class VodCommandHandler
         }
 
         Console.WriteLine($"Seeking to {target:hh\\:mm\\:ss}, then holding another {seconds}s.");
-        _session.SeekTo(target);
+        _playback.SeekTo(target);
 
         await Task.Delay(TimeSpan.FromSeconds(seconds), cancellationToken).ConfigureAwait(false);
 
-        Console.WriteLine($"Sought to  {DescribeTime(_session.Position)}");
+        Console.WriteLine($"Sought to  {DescribeTime(_playback.Position)}");
     }
 
     /// <summary>
