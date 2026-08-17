@@ -352,7 +352,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **728 tests pass on `main`.** A refactor should not move that number.
+- **729 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.

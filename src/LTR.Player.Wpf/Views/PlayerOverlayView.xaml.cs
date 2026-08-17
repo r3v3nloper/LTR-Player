@@ -1,7 +1,9 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace LTR.Player.Wpf.Views;
 
@@ -19,6 +21,11 @@ public partial class PlayerOverlayView : UserControl
     /// The window this content is hosted in, which is not the shell's. See <see cref="AttachTo"/>.
     /// </summary>
     private Window? _pictureWindow;
+
+    /// <summary>
+    /// The view model being watched for the one thing the cursor cannot be told by a binding alone.
+    /// </summary>
+    private PlayerOverlayViewModel? _watched;
 
     public PlayerOverlayView()
     {
@@ -40,11 +47,13 @@ public partial class PlayerOverlayView : UserControl
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         AttachTo(Window.GetWindow(this));
+        WatchForCursorChanges(Overlay);
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         AttachTo(null);
+        WatchForCursorChanges(null);
     }
 
     /// <summary>
@@ -91,6 +100,57 @@ public partial class PlayerOverlayView : UserControl
 
         _pictureWindow.PreviewMouseMove += OnPointerActivity;
         _pictureWindow.MouseDoubleClick += OnPictureDoubleClicked;
+    }
+
+    /// <summary>
+    /// Keeps the cursor's disappearance in step with the controls'.
+    /// </summary>
+    /// <remarks>
+    /// Which cursor the picture wears is stated in the markup and needs nothing here. What does is the
+    /// timing: WPF settles the cursor when the pointer moves, and the moment this has to take effect —
+    /// four seconds of nothing happening — is by definition a moment when it has not. Posted rather than
+    /// called straight, so the bindings the markup's rule reads have already been through.
+    /// </remarks>
+    private void WatchForCursorChanges(PlayerOverlayViewModel? overlay)
+    {
+        if (ReferenceEquals(overlay, _watched))
+        {
+            return;
+        }
+
+        if (_watched is not null)
+        {
+            _watched.PropertyChanged -= OnOverlayChanged;
+        }
+
+        _watched = overlay;
+
+        if (_watched is null)
+        {
+            return;
+        }
+
+        _watched.PropertyChanged += OnOverlayChanged;
+    }
+
+    /// <remarks>
+    /// An empty or null property name means every property, which is the rule everywhere in this
+    /// application that a change is answered by name.
+    /// </remarks>
+    private void OnOverlayChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        var affectsTheCursor = e.PropertyName
+            is null
+            or ""
+            or nameof(PlayerOverlayViewModel.IsVisible)
+            or nameof(PlayerOverlayViewModel.IsFullscreen);
+
+        if (!affectsTheCursor)
+        {
+            return;
+        }
+
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Render, () => Mouse.UpdateCursor());
     }
 
     private void OnPointerActivity(object sender, MouseEventArgs e)

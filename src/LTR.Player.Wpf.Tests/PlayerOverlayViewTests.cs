@@ -88,6 +88,47 @@ public sealed class PlayerOverlayViewTests
     }
 
     [Fact]
+    public void ThePointerGoesAwayWithTheControls_ButOnlyInFullscreen()
+    {
+        // Arrange & Act
+        var (inAWindow, inFullscreen, whileTheControlsAreUp) = VisualTreeHarness.OnStaThread(() =>
+        {
+            var (window, overlay, clock) = ShowControlsOverAStream();
+
+            try
+            {
+                var surface = (Grid)((PlayerOverlayView)window.Content).Content;
+
+                clock.Advance(PlayerOverlayViewModel.IdleBeforeHiding);
+                overlay.Sample();
+
+                var windowed = surface.Cursor;
+
+                overlay.IsFullscreen = true;
+                VisualTreeHarness.PumpDispatcher(window);
+
+                var full = surface.Cursor;
+
+                overlay.Reveal();
+                overlay.Sample();
+                VisualTreeHarness.PumpDispatcher(window);
+
+                return (windowed, full, surface.Cursor);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        // Assert: an arrow over a film is as unwanted as the bar is, and for the same reason. In a window
+        // it stays, because there the pointer is on its way to the channel list as often as not.
+        inAWindow.ShouldNotBe(Cursors.None);
+        inFullscreen.ShouldBe(Cursors.None);
+        whileTheControlsAreUp.ShouldNotBe(Cursors.None, "there is something to aim at again");
+    }
+
+    [Fact]
     public void ControlsLeavingTheWindow_StopWakingIt()
     {
         // Arrange: the hosting window is not this view's own, so a handler left on it after the content has

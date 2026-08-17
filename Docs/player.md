@@ -100,6 +100,12 @@ Two details follow from that:
   the bar's own `MouseEnter`/`MouseLeave`, and leaving it restarts the countdown rather than resuming one
   that had already run down.
 
+- **The cursor goes away with the controls, in fullscreen only.** An arrow left sitting over a film is
+  exactly as unwanted as the bar is. In a window it stays, because there the pointer is on its way to the
+  channel list as often as not. Which cursor the picture wears is a rule in the markup; the code-behind only
+  posts a `Mouse.UpdateCursor` when the controls change, because WPF settles the cursor when the pointer
+  moves and the moment this has to take effect is four seconds of nothing moving.
+
 The cost of getting this wrong was worst in fullscreen, where there is no side panel to fall back on: the
 controls could not be reached at all short of leaving fullscreen with Escape. `PlayerOverlayViewTests` builds
 the real controls in a window and moves the pointer over it, because nothing else states which window the

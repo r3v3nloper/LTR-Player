@@ -19,6 +19,29 @@
     underneath is a native surface, not part of this visual tree.
   -->
   <Grid Background="{StaticResource PointerCatchBrush}">
+
+    <!--
+      The pointer goes away with the controls, but only in fullscreen. An arrow sitting over a film is
+      exactly as unwanted as the transport bar is, and for the same reason; in a window it stays, because
+      there the pointer is on its way to the channel list as often as not.
+
+      Stated here and nudged from the code-behind: WPF settles the cursor when the pointer moves, and the
+      moment this has to take effect is the moment nothing has moved for four seconds.
+    -->
+    <Grid.Style>
+      <Style TargetType="Grid">
+        <Style.Triggers>
+          <MultiDataTrigger>
+            <MultiDataTrigger.Conditions>
+              <Condition Binding="{Binding PlayerOverlay.IsFullscreen}" Value="True" />
+              <Condition Binding="{Binding PlayerOverlay.IsVisible}" Value="False" />
+            </MultiDataTrigger.Conditions>
+            <Setter Property="Cursor" Value="None" />
+          </MultiDataTrigger>
+        </Style.Triggers>
+      </Style>
+    </Grid.Style>
+
     <Border x:Name="OverlayRoot"
             DataContext="{Binding PlayerOverlay}"
             MouseEnter="OnPointerEnteredControls"
