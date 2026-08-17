@@ -1,22 +1,25 @@
 # Refactoring backlog
 
 **Renumbered in the review after the URL-sanitisation rank**, which finished the post-M6 list's rank 1 and
-found four items to add. Twelve remain, ranked 1–12. Numbers quoted in commit messages belong to whichever
-scheme was current when they were written — the mappings are at the bottom, under [Done](#done).
+found four items to add. Numbers quoted in commit messages belong to whichever scheme was current when they
+were written — the mappings are at the bottom, under [Done](#done).
 
-Renumbered rather than appended, unlike this morning: a *removed* item leaves a gap that costs less than a
-new scheme, but four items belonging in the middle of the ranking cannot be appended without the number
-ceasing to mean the rank, which is the only thing this list is for.
+Renumbered then rather than appended, unlike the removal before it: a *removed* item leaves a gap that costs
+less than a new scheme, but four items belonging in the middle of the ranking cannot be appended without the
+number ceasing to mean the rank, which is the only thing this list is for.
+
+**Ranks 1–3 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-13). **The nine that
+remain keep their numbers**, so the list starts at 4, by that same rule.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
-Everything left is structure, a missing guard, a diagnostic that says too little, or a limit that is stated
-on screen. **Nothing left has an effect while the player is running**, which has been true since the post-M4
+Everything left is structure, a limit that is stated on screen, or a capability that is missing rather than
+wrong. **Nothing left has an effect while the player is running**, which has been true since the post-M4
 review and is worth re-checking rather than assuming next time.
 
 ## Before starting one of these
 
-- `dotnet test LTR-Player.slnx` — 648 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 660 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
@@ -26,47 +29,6 @@ review and is worth re-checking rather than assuming next time.
   survives, suspect the fake before the assertion.
 
 ---
-
-## Rank 1 — An M3U guide download says which address failed
-
-**Project:** LTR.Providers.M3u · **Area:** Maintainability · **Criticality:** minor · **Effort:** low
-
-`M3uGuideSource` reports a guide that answered 404 through `EnsureSuccessStatusCode()`, whose message names
-no address at all — while `XtreamGuideSource` throws an exception carrying a sanitised one. The address is
-the diagnosis here: a playlist's guide is either the one the user configured or the one the playlist
-declared in its header, and which of the two was tried is the question.
-
-Nothing was possible before the sanitiser existed. It exists now, and this is the caller that predates it.
-
-## Rank 2 — Small duplications and loose ends
-
-**Project:** various · **Area:** Maintainability · **Criticality:** minor · **Effort:** low
-
-Individually not worth a rank; worth clearing in one pass:
-
-- Both CLI play-tests duplicate open → hold → release → report. One `StreamHoldTest` collaborator. M5 and M6
-  each widened the gap — the live one prints state transitions and cannot seek, the film one seeks and prints
-  no transitions.
-- `MovieItemViewModel` and `SeriesItemViewModel` duplicate the year · rating · genre assembly.
-- `StreamFormat.ProgressiveFile` throws from `ToUrlExtension`. No caller passes it, so it is a latent trap.
-- Taking an entry off the continue-watching list stamps `LastWatchedUtc` with the moment it was removed.
-  Only the CLI shows it.
-
-## Rank 3 — The registry's test doubles grow with every interface member
-
-**Project:** LTR.Catalogue.Tests, LTR.Player.Wpf.Tests · **Area:** Maintainability · **Criticality:** minor
-· **Effort:** low
-
-`IProviderRegistry` gained a fifth member and both doubles — `FakeProviderRegistry` and
-`StubProviderRegistry` — had to gain a body for it that only throws. Each double answers one or two of the
-five and declares all of them; the next member costs the same two edits again.
-
-Proposal: a `NotSupportedProviderRegistry` base in `src/TestSupport`, linked into the test projects the way
-`TestClock` already is, throwing from every member with the message that names it. Each double then overrides
-only what it actually answers, and a new member costs nothing.
-
-Worth reading the post-M6 note on the interface splits first: **neither split shrank a test double**, and
-this is the same subject from the other end. The difference is that this one does not touch production code.
 
 ## Rank 4 — A film's detail is fetched again on every viewing when the panel has none
 
@@ -191,6 +153,36 @@ older one.
 
 **Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
 else on that list is below.
+
+### In the same session as the renumbering — ranks 1–3
+
+Three low-effort ranks, cleared in one sitting. What is worth carrying forward:
+
+- **Rank 1 · a refused guide download names its address.** Rather than a second exception type with the same
+  `SanitizedUrl` property, `ProviderRequestException` states it once in LTR.Providers.Abstractions and
+  `XtreamApiException` derives from it. That is also what let the CLI's error handling stop naming a protocol:
+  it caught `XtreamApiException` specifically, which is *why* a playlist's failures arrived with no address.
+  LTR.Providers.M3u.Tests gained a Kestrel host of its own — the M3U package had no test that went over HTTP
+  at all, which is how the guide path came to be the one place the sanitiser was not used.
+- **Rank 2 · the four loose ends.** `StreamHoldTest` holds the play-test sequence once and takes the film's
+  seek, position and progress recording as a callback; both commands now print the state transitions, the
+  tracks *and* the provider's reason, where each had about half. `CatalogueDetailLine` holds the row summary
+  and finally has tests — it is bound in three views and nothing covered it. `ToUrlExtension` states
+  `ProgressiveFile` as its own case instead of calling it unknown.
+- **Rank 2 also settled what "forget" means.** Both front ends expressed taking an entry off the
+  continue-watching list as `WatchOutcome.Discard`, which fits mechanically and also writes
+  `LastWatchedUtc` — so a removed entry came back as the most recently watched thing in the catalogue, which
+  `vod continue` prints. It is now its own store operation that records no moment, **because a watch outcome
+  cannot express "nothing was watched": every one of them states a when.** That distinction is the reusable
+  part.
+- **Rank 3 · `NotSupportedProviderRegistry`** in `src/TestSupport`, linked as `TestClock` is. The trade is
+  that per-member explanations went; three of the four on the window's stub were one fact in three phrasings
+  and now sit on the class.
+
+**One test got sharper rather than looser**, which is the sign the forget split was real: the WPF test
+guarding against a stopping stream writing the position back used to assert "one progress write, and it is
+Discard" — conflating the forget with the write-back it was watching for. The two are now separate
+collections, so a write-back cannot hide inside the count.
 
 ### After M6 — protocol-neutral URL sanitisation
 
