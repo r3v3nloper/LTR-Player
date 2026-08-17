@@ -34,6 +34,12 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     private readonly ILogger<MainViewModel> _logger;
 
     /// <summary>
+    /// The notifications this class carries from the objects that own a property to the commands and
+    /// properties here that depend on it. Registered in <see cref="RegisterNotificationForwards"/>.
+    /// </summary>
+    private readonly CrossObjectNotifications _notifications;
+
+    /// <summary>
     /// Cancelled when the window closes, and linked into everything the shell starts.
     /// </summary>
     /// <remarks>
@@ -84,14 +90,15 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         _guideImport = guideImport;
         _logger = logger;
 
-        Channels.PropertyChanged += OnChannelListPropertyChanged;
-        SourceManagement.PropertyChanged += OnSourceManagementPropertyChanged;
-        Movies.PropertyChanged += OnMovieListPropertyChanged;
-        SeriesCatalogue.PropertyChanged += OnSeriesPropertyChanged;
-        ContinueWatching.PropertyChanged += OnContinueWatchingPropertyChanged;
-        _guideImport.PropertyChanged += OnGuideImportPropertyChanged;
-        _playback.PropertyChanged += OnPlaybackPropertyChanged;
-        Settings.PropertyChanged += OnSettingsPropertyChanged;
+        _notifications = new CrossObjectNotifications(OnPropertyChanged);
+        RegisterNotificationForwards();
+
+        // After the forwards, deliberately: a section raises one event and both run in subscription order,
+        // so a command whose guard the work below may change is notified first — the order the single
+        // hand-written handler per section used to guarantee.
+        Movies.PropertyChanged += OnMovieListChanged;
+        SeriesCatalogue.PropertyChanged += OnSeriesChanged;
+        _playback.PropertyChanged += OnPlaybackChanged;
 
         SourceManagement.Coordinator = this;
 
@@ -640,73 +647,71 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     }
 
     /// <summary>
-    /// Keeps commands that guard on state they do not own current.
+    /// States every notification this class has to carry across an object boundary by hand.
     /// </summary>
     /// <remarks>
-    /// <c>[NotifyCanExecuteChangedFor]</c> cannot cross an object boundary: the command is here and the
-    /// property its guard reads belongs to the channel list. Without this the button keeps whatever
-    /// state it had when the window opened — the defect class that shipped three times, and the reason
-    /// the tests assert the notification rather than <c>CanExecute</c>.
+    /// <para>
+    /// <c>[NotifyCanExecuteChangedFor]</c> cannot cross one: the command is here and the property its guard
+    /// reads belongs to a section. Without the forward the button keeps whatever state it had when the window
+    /// opened — the defect class that shipped three times, and the reason the tests assert the notification
+    /// rather than <c>CanExecute</c>.
+    /// </para>
+    /// <para>
+    /// A table rather than a handler each, so that the set is readable as a set and the rule about an empty
+    /// property name lives in one place. What is deliberately *not* here is anything that reacts: starting
+    /// work and revealing the overlay are behaviour, and they stay below.
+    /// </para>
     /// </remarks>
-    private void OnChannelListPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void RegisterNotificationForwards()
+    {
+        _notifications.When(Channels, nameof(ChannelListViewModel.SelectedChannel))
+            .Notifies(PlaySelectedCommand);
+
+        _notifications.When(SourceManagement, nameof(SourceManagementViewModel.SelectedSource))
+            .Notifies(ImportGuideCommand);
+
+        _notifications.When(ContinueWatching, nameof(ContinueWatchingViewModel.SelectedEntry))
+            .Notifies(ResumeEntryCommand);
+
+        // Both panes take the left-hand side over, and IsShowingCatalogue is computed here from both.
+        _notifications
+            .When(SourceManagement, nameof(SourceManagementViewModel.IsAddingSource))
+            .Raises(nameof(IsShowingCatalogue));
+
+        _notifications.When(Settings, nameof(SettingsViewModel.IsOpen)).Raises(nameof(IsShowingCatalogue));
+
+        _notifications
+            .When(Movies, nameof(MovieListViewModel.SelectedMovie))
+            .Notifies(PlayMovieCommand)
+            .Notifies(RestartMovieCommand);
+
+        // A second, separate reason: the guard reads the resume position, which only the detail carries.
+        _notifications.When(Movies, nameof(MovieListViewModel.DetailedMovie)).Notifies(RestartMovieCommand);
+
+        _notifications
+            .When(_guideImport, nameof(GuideImportCoordinator.IsImporting))
+            .Raises(nameof(IsImportingGuide))
+            .Notifies(ImportGuideCommand);
+
+        // The overlay binds NowPlaying here rather than reaching into the coordinator.
+        _notifications.When(_playback, nameof(PlaybackCoordinator.NowPlaying)).Raises(nameof(NowPlaying));
+    }
+
+    /// <summary>
+    /// Loads a film's detail, and reruns the search, when the section reports one of them is due.
+    /// </summary>
+    /// <remarks>
+    /// Selecting a film means a network call, which a property setter cannot await — so the section reports
+    /// the selection and the shell, which owns the lifetime token, drives the work. The notifications the same
+    /// changes carry are in the table above.
+    /// </remarks>
+    private void OnMovieListChanged(object? sender, PropertyChangedEventArgs e)
     {
         // An empty name means every property, which WPF and the toolkit both use to mean "re-read all".
-        if (e.PropertyName is not (null or "" or nameof(ChannelListViewModel.SelectedChannel)))
-        {
-            return;
-        }
-
-        PlaySelectedCommand.NotifyCanExecuteChanged();
-    }
-
-    /// <remarks>
-    /// The same boundary problem as above: <see cref="ImportGuideCommand"/> lives here and guards on the
-    /// selected source, which belongs to source management.
-    /// </remarks>
-    private void OnSourceManagementPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is null or "" or nameof(SourceManagementViewModel.IsAddingSource))
-        {
-            OnPropertyChanged(nameof(IsShowingCatalogue));
-        }
-
-        if (e.PropertyName is not (null or "" or nameof(SourceManagementViewModel.SelectedSource)))
-        {
-            return;
-        }
-
-        ImportGuideCommand.NotifyCanExecuteChanged();
-    }
-
-    /// <remarks>
-    /// The same object-boundary problem as the command guards: the pane owns whether it is open and the left
-    /// pane's visibility is worked out here, so the change has to be forwarded by hand.
-    /// </remarks>
-    private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is null or "" or nameof(SettingsViewModel.IsOpen))
-        {
-            OnPropertyChanged(nameof(IsShowingCatalogue));
-        }
-    }
-
-    /// <remarks>
-    /// Also the place the film detail is fetched from. Selecting a film means a network call, which a
-    /// property setter cannot await — so the section reports the selection and the shell, which owns the
-    /// lifetime token, drives the work.
-    /// </remarks>
-    private void OnMovieListPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
         switch (e.PropertyName)
         {
             case null or "" or nameof(MovieListViewModel.SelectedMovie):
-                PlayMovieCommand.NotifyCanExecuteChanged();
-                RestartMovieCommand.NotifyCanExecuteChanged();
                 Run(Movies.LoadSelectedDetailAsync);
-                break;
-
-            case nameof(MovieListViewModel.DetailedMovie):
-                RestartMovieCommand.NotifyCanExecuteChanged();
                 break;
 
             case nameof(MovieListViewModel.SearchText) or nameof(MovieListViewModel.SelectedCategory):
@@ -718,7 +723,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         }
     }
 
-    private void OnSeriesPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnSeriesChanged(object? sender, PropertyChangedEventArgs e)
     {
         switch (e.PropertyName)
         {
@@ -736,41 +741,21 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         }
     }
 
-    private void OnContinueWatchingPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is null or "" or nameof(ContinueWatchingViewModel.SelectedEntry))
-        {
-            ResumeEntryCommand.NotifyCanExecuteChanged();
-        }
-    }
-
-    private void OnGuideImportPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is not (null or "" or nameof(GuideImportCoordinator.IsImporting)))
-        {
-            return;
-        }
-
-        OnPropertyChanged(nameof(IsImportingGuide));
-        ImportGuideCommand.NotifyCanExecuteChanged();
-    }
-
+    /// <summary>
+    /// Shows the controls when something new starts playing.
+    /// </summary>
     /// <remarks>
-    /// The overlay binds <see cref="NowPlaying"/> here rather than reaching into the coordinator, so the
-    /// change has to be forwarded — the same object-boundary problem as the command guards above.
+    /// A reaction and not a notification, which is why it did not move into the table: the controls take
+    /// themselves away again after a few seconds, and a channel change that announced nothing would leave the
+    /// viewer to recognise the channel from the picture.
     /// </remarks>
-    private void OnPlaybackPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnPlaybackChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is not (null or "" or nameof(PlaybackCoordinator.NowPlaying)))
         {
             return;
         }
 
-        OnPropertyChanged(nameof(NowPlaying));
-
-        // Something new was started, so say what it is. The controls take themselves away again after a few
-        // seconds; a channel change that announced nothing would leave the viewer to recognise the channel
-        // from the picture.
         if (!string.IsNullOrEmpty(_playback.NowPlaying))
         {
             PlayerOverlay.Reveal();

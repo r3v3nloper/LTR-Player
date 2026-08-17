@@ -32,8 +32,8 @@ considered a gap in the milestone.
 
 `Docs/refactoring-backlog.md` is the work list, **renumbered 1–12 in the review after the URL-sanitisation
 rank** — that rank is done, and the review it triggered added four items belonging in the middle of the
-ranking, which is what forced a renumber rather than a gap. **Ranks 1–4 are done too, and the eight that
-remain keep their numbers**, so the list starts at 5. None of them has an effect while the player is running.
+ranking, which is what forced a renumber rather than a gap. **Ranks 1–5 are done too, and the seven that
+remain keep their numbers**, so the list starts at 6. None of them has an effect while the player is running.
 **Ranks quoted in commit messages belong to whichever scheme was current when they were written**; that file
 carries both mappings. Its opening section says what to run before starting one.
 
@@ -72,8 +72,10 @@ them:
   channel list. `PlayerActions` splits where the design already does: four actions come back to the shell
   because they decide *what* plays, and the rest go to the overlay because they act on an open stream.
 - **`MainViewModel` regrows, every milestone, by the same mechanism** — it is the only place that can reach
-  everything. 395 lines at the M4 merge, 483 after M5, 439 after extracting the key dispatch. Check it at the
-  start of a milestone, not the end.
+  everything. 395 lines at the M4 merge, 483 after M5, 439 after extracting the key dispatch, 466 by the end
+  of M6, 438 after the notification forwarding moved into a table. Check it at the start of a milestone, not
+  the end — and note how little that last extraction bought: a declarative registration costs nearly what the
+  handler it replaces did, so size is the wrong reason to reach for one.
 - **`LiveNetworkCachingMilliseconds` defaults to 600 ms and is a guess, not a measurement.** It is the only
   part of a zap that can be shortened; the stop that precedes it is required by the connection limit. Raise
   it if channels stutter in their first seconds — that symptom is this value being too low. `PlaybackSession`
@@ -217,8 +219,12 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
 - **Every command guard needs `[NotifyCanExecuteChangedFor]` on every property it reads.** Three
   defects came from omitting it. Note that `CanExecute` invokes the guard directly and therefore passes
   even with the bug — tests must assert the *notification*. The attribute cannot cross an object
-  boundary: `PlaySelectedCommand` lives on `MainViewModel` and guards on `ChannelListViewModel`'s
-  selection, so that one notification is wired by hand from a `PropertyChanged` subscription.
+  boundary, and the nine forwards that therefore have to be made by hand are registered in one table,
+  `MainViewModel.RegisterNotificationForwards`, over `CrossObjectNotifications`. Add to that table; do not
+  add a handler. Two things about it are load-bearing: **an empty or null property name means every
+  property** (the rule the table exists to state once), and the forwards must be registered *before* the
+  shell's own reaction handlers subscribe, so a command is notified before work that may change its guard
+  begins.
 - **`InvariantGlobalization` must stay off.** WPF's binding engine throws from
   `XmlLanguage.GetSpecificCulture` without culture data, and every binding in the window fails while it
   still looks fine.
@@ -309,7 +315,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **670 tests pass on `main`.** A refactor should not move that number.
+- **683 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.
