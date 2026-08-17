@@ -21,13 +21,27 @@ exists and not what was considered finished.
 | **M5** Player polish — OSD, fullscreen, keyboard, tracks | done | `Docs/player.md`; the live-caching value still wants measuring |
 | **M6** Hardening — error handling, settings, packaging | done | `Docs/packaging.md`; the quarantine had landed early, with M3 |
 
+**All six are merged into `main` and pushed.** Version 0.6.0; `pwsh build/publish.ps1` produces a
+self-contained folder and a zip that runs on a machine with no .NET.
+
 M3's timeline scrolls its channel names out of view with the programme blocks, and draws at most 200 rows.
-Both are stated on screen and carried as ranks 11 and 18 in `Docs/refactoring-backlog.md`; neither is
+Both are stated on screen and carried as ranks 5 and 9 in `Docs/refactoring-backlog.md`; neither is
 considered a gap in the milestone.
 
-M4 is merged into `main`; ranks 1–7 of the post-M4 review are cleared. M5 cleared rank 15 as well, which is
-why it belonged there: recording progress at the end of a film needed the session to say *why* it stopped,
-and the seek bar needed the same widening of the playback surface.
+### Where to pick up
+
+`Docs/refactoring-backlog.md` is the work list, **renumbered 1–9 after M6** — nine items remain, none of
+which has an effect while the player is running. Ranks quoted in commit messages up to the M6 merge belong to
+older schemes; that file carries the mapping. Its opening section says what to run before starting one.
+
+Two things are outstanding that are *not* refactors, because only the person with the subscription can do
+them:
+
+- **`LiveNetworkCachingMilliseconds` (600 ms) is a guess, not a measurement.** The settings pane exposes it
+  and `PlaybackSession` logs how long each open took, which is what makes tuning possible — see
+  `Docs/verification.md` §4.
+- **The M5 and M6 checks that need a real panel or a window** are `Docs/verification.md` §§7–9: the player
+  controls, a failing stream's reported reason, and the packaged build.
 
 ### What M5 settled, and the one thing it did not
 
@@ -63,7 +77,7 @@ and the seek bar needed the same widening of the playback surface.
   now logs how long each open took, which is what makes tuning it possible at all. M6 put it in the settings
   pane, so it no longer needs a rebuild to try a figure — but it does need a restart.
 
-## What M6 settled
+### What M6 settled
 
 `Docs/packaging.md` has the shipping story. The rest:
 
@@ -257,7 +271,15 @@ subscription.
   channel, category and favourite counts — use those, or `sources list`.
 - **Restoring a file from a backup can keep its old timestamp,** and MSBuild will then reuse the old
   binary. Touch the file if a test result looks impossible.
+- **The executable is `LTR-Player.exe`, not `LTR.Player.Wpf.exe`** — M6 set `AssemblyName`. The project
+  folder keeps its own name, so the two differ.
+- **Start the app after touching dependency injection.** A missing registration is invisible to the compiler,
+  and the container holds the session whose disposal releases the provider connection. Launch it and read the
+  log; do not synthesise clicks, and close it with a window-close rather than by killing the image name.
+- **Read today's log, not the newest-looking one.** Serilog rolls daily, so a session spanning midnight
+  writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
+- **628 tests pass on `main`.** A refactor should not move that number.
 
 `Docs/refactoring-backlog.md` holds the reviewed, ranked work that remains.
