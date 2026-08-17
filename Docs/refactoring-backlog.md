@@ -8,8 +8,9 @@ Renumbered then rather than appended, unlike the removal before it: a *removed* 
 less than a new scheme, but four items belonging in the middle of the ranking cannot be appended without the
 number ceasing to mean the rank, which is the only thing this list is for.
 
-**Ranks 1–10, 13 and 14 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-110-13-and-14).
-**The two that remain keep their numbers**, so the list runs 11–12 — and they belong together or not at all.
+**Ranks 1–11, 13 and 14 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-111-13-and-14).
+**One remains: rank 12**, and it now stands alone — the rank it was to be done
+alongside was measured and dropped.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
@@ -19,7 +20,7 @@ is fixed. The claim is worth re-checking at each review rather than assuming, wh
 
 ## Before starting one of these
 
-- `dotnet test LTR-Player.slnx` — 715 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 716 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
@@ -30,32 +31,21 @@ is fixed. The claim is worth re-checking at each review rather than assuming, wh
 
 ---
 
-
-## Rank 11 — Do not materialise the whole channel list
-
-**Project:** LTR.Persistence, LTR.Player.Wpf · **Area:** Performance · **Criticality:** moderate · **Effort:** high
-
-Every source switch loads all 17,156 channels and wraps each in a view model. It works. The film section did
-not inherit the approach — at 66,447 films it was not viable, so `SearchMoviesAsync` filters and counts in
-the database and the section shows a bounded page. That is the shape this rank proposes, now built and in
-use; what remains is applying it here, where the guide's now/next join makes it harder.
-
-Settle one behavioural difference first: the film search matches with SQLite's `LIKE`, case-insensitive for
-ASCII only, where `CatalogueFilter` in memory is fully case-insensitive.
-
-**Carries a second item with it.** `ChannelListViewModel.SelectAdjacent` enumerates the whole filtered view
-to find the current row's neighbour, so one zap key press walks up to 17,156 rows — the same enumeration
-`VisibleChannels` already does for the guide. Cheap to fix on its own and deliberately not ranked separately,
-because if the list stops being materialised at all it changes shape entirely. Noted so the cost is known
-rather than discovered.
-
 ## Rank 12 — Page the timeline instead of capping it
 
 **Project:** LTR.Player.Wpf · **Area:** Performance · **Criticality:** minor · **Effort:** high
 
 `GuideViewModel.MaximumRows` draws at most 200 channels and says so on screen. The honest fix is to load rows
-as they are scrolled into view, which needs the store to page and the timeline to build rows lazily. Related
-to rank 11, and worth doing at the same time or not at all.
+as they are scrolled into view, which needs the store to page and the timeline to build rows lazily.
+
+**It said "related to rank 11, and worth doing at the same time or not at all" — and rank 11 has since been
+measured and dropped, which leaves this one standing alone.** That is not a reason to do it: the cap is stated
+on screen, a 200-row window over channels the viewer filtered themselves is a usable guide, and the same
+argument that retired rank 11 applies to the store side of this one. What would justify it is a viewer saying
+the cap gets in their way — which is a fact about use, and nobody has said it yet.
+
+**The last item on this list, and the one most likely never to be done.** If it is, the timeline's own
+paging is the whole of it now; there is no channel-list paging to share the work with.
 
 ---
 
@@ -70,9 +60,33 @@ older one.
 **Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
 else on that list is below.
 
-### In the same session as the renumbering — ranks 1–10, 13 and 14
+### In the same session as the renumbering — ranks 1–11, 13 and 14
 
-Twelve ranks, cleared in one sitting. What is worth carrying forward:
+Thirteen ranks, cleared in one sitting. What is worth carrying forward:
+
+- **Rank 11 · half done and half dropped, on a measurement.** The cheap half was real and is fixed:
+  `SelectAdjacent` copied the filtered view into a list on **every zap key press** — up to seventeen thousand
+  rows, allocated to find one neighbour. It now asks the view by index. `CollectionView` offers `Count`,
+  `IndexOf` and `GetItemAt`; `ICollectionView` does not, and `ListCollectionView` does **not** implement
+  `IList`, which is what the first attempt assumed and the zap tests rejected within a minute.
+
+  **The expensive half — a bounded page from the store — was dropped after measuring it.** Loading all 17,283
+  channels costs about 50 ms and disappears into the noise of a process start; the window's whole catalogue
+  load, view models included, is around 200 ms and happens once per source switch. Against that, paging would
+  have cost two things the backlog had not listed:
+
+  - **Zapping would stop at the page boundary.** Today a viewer can zap through every channel they can see.
+  - **The search would lose case-insensitivity outside ASCII.** SQLite's `LIKE` is ASCII-only, while
+    `CatalogueFilter` is `OrdinalIgnoreCase` — and this subscription's names arrive in Cyrillic, Arabic and
+    Greek. The rank said to settle that difference first; settled, it is a reason not to proceed.
+
+  **The film section is not the precedent it looked like.** It needed paging because 66,529 films cannot be
+  browsed by scrolling at all — it is search-first by design. A channel list is browse-first: scrolling and
+  zapping through it *is* the interaction. Same shape, different reason, and the reason is what transfers.
+
+  Recorded rather than left implicit so the next review does not re-derive it: **the numbers are the argument,
+  and they are in this entry.** If a source switch ever becomes slow enough to notice, measure again — the
+  figures above are for 17,283 channels on this machine.
 
 - **Rank 10 · the reconciliation diff came out in three pieces, not one.** The rank proposed a
   `CatalogueReconciler` that computes while the context writes. Reading it first showed the ~250 lines were

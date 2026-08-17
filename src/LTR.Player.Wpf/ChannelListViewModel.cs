@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Data;
@@ -22,6 +23,16 @@ public sealed partial class ChannelListViewModel : ObservableObject
     private readonly StatusLine _status;
     private readonly ILogger<ChannelListViewModel> _logger;
     private readonly List<ChannelItemViewModel> _channels = [];
+
+    /// <summary>
+    /// The same view <see cref="ChannelView"/> exposes, held in its concrete form.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ICollectionView"/> offers no way to reach a row by position, so zapping would have to
+    /// enumerate. <see cref="CollectionView"/> answers <c>Count</c>, <c>IndexOf</c> and <c>GetItemAt</c> over
+    /// the filtered contents, which is what a key press needs and all it needs.
+    /// </remarks>
+    private readonly CollectionView _channelView;
 
     /// <summary>The source the list is currently showing, needed to ask for its guide again.</summary>
     private PlaylistSource? _source;
@@ -73,8 +84,11 @@ public sealed partial class ChannelListViewModel : ObservableObject
         _status = status;
         _logger = logger;
 
-        ChannelView = new CollectionViewSource { Source = _channels }.View;
-        ChannelView.Filter = MatchesCurrentFilter;
+        // A CollectionViewSource over a List<T> produces a ListCollectionView, which is a CollectionView.
+        _channelView = (CollectionView)new CollectionViewSource { Source = _channels }.View;
+        _channelView.Filter = MatchesCurrentFilter;
+
+        ChannelView = _channelView;
     }
 
     public ObservableCollection<CategoryChoice> Categories { get; } = [CategoryChoice.All];
@@ -193,12 +207,17 @@ public sealed partial class ChannelListViewModel : ObservableObject
     /// makes that guess expensive: an unwanted wrap costs a stream open, which costs the account's one
     /// connection.
     /// </para>
+    /// <para>
+    /// Asked by index rather than enumerated. A collection view answers <c>IndexOf</c> and <c>GetItemAt</c>
+    /// over its filtered contents directly, while copying it out — which is what this did — allocated a list
+    /// of up to seventeen thousand rows on every key press. Note that it is <see cref="CollectionView"/> and
+    /// not <see cref="IList"/> that offers them: the view does not implement <c>IList</c>, and assuming it
+    /// did is what the zap tests caught.
+    /// </para>
     /// </remarks>
     public bool SelectAdjacent(int offset)
     {
-        var visible = ChannelView.Cast<ChannelItemViewModel>().ToList();
-
-        if (visible.Count == 0)
+        if (_channelView.Count == 0)
         {
             return false;
         }
@@ -206,19 +225,19 @@ public sealed partial class ChannelListViewModel : ObservableObject
         // Nothing selected yet: the first channel is what "next" means, and the last is what "previous"
         // does — both land the viewer somewhere rather than refusing.
         var current = SelectedChannel is null
-            ? (offset > 0 ? -1 : visible.Count)
-            : visible.IndexOf(SelectedChannel);
+            ? (offset > 0 ? -1 : _channelView.Count)
+            : _channelView.IndexOf(SelectedChannel);
 
         var target = current + offset;
 
-        if (target < 0 || target >= visible.Count)
+        if (target < 0 || target >= _channelView.Count)
         {
             return false;
         }
 
-        SelectedChannel = visible[target];
+        SelectedChannel = _channelView.GetItemAt(target) as ChannelItemViewModel;
 
-        return true;
+        return SelectedChannel is not null;
     }
 
     [RelayCommand(CanExecute = nameof(HasSelectedChannel))]
