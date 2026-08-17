@@ -8,8 +8,8 @@ Renumbered then rather than appended, unlike the removal before it: a *removed* 
 less than a new scheme, but four items belonging in the middle of the ranking cannot be appended without the
 number ceasing to mean the rank, which is the only thing this list is for.
 
-**Ranks 1–7 and 13 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-17-and-13). **The
-five that remain keep their numbers**, so the list runs 8–12, by that same rule.
+**Ranks 1–8 and 13 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-18-and-13). **The
+four that remain keep their numbers**, so the list runs 9–12, by that same rule.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
@@ -30,18 +30,6 @@ review and is worth re-checking rather than assuming next time.
 
 ---
 
-## Rank 8 — Command classes in the CLI, and the handler that outgrew one
-
-**Project:** LTR.Cli · **Area:** Maintainability · **Criticality:** moderate · **Effort:** medium
-
-`Program.cs` is 380 lines of `Build*` functions. Proposal: one class per command exposing `Command Build()`,
-leaving `Program` as composition only.
-
-**Wider than this rank said when it was written.** The CLI's largest file is not `Program.cs` but
-`VodCommandHandler` at 412 code lines, and it takes **ten constructor dependencies** — because it does four
-jobs: listing, showing one item, forgetting a stored position, and play-testing. The dependencies already
-separate along those lines, which is what makes the split obvious rather than a judgement call. Raised from
-minor to moderate for it.
 
 ## Rank 9 — `resolve` cannot address a stored playlist source
 
@@ -103,9 +91,28 @@ older one.
 **Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
 else on that list is below.
 
-### In the same session as the renumbering — ranks 1–7 and 13
+### In the same session as the renumbering — ranks 1–8 and 13
 
-Eight ranks, cleared in one sitting. What is worth carrying forward:
+Nine ranks, cleared in one sitting. What is worth carrying forward:
+
+- **Rank 8 · one class per command, and the handler that was four.** `Program.cs` went from 380 lines to 57:
+  build the container, build the tree, invoke. Each command states its own options and action under
+  `Commands/`. Two things came out of the move rather than travelling with it — the catalogue preparation
+  `WithCatalogue<T>` did is now `CatalogueCommandRunner`, injected into the three commands that touch the
+  database, and the listing limit and hold duration are stated once in `CommandDefaults` where four commands
+  had their own 40 and two their own 5.
+
+  `VodCommandHandler`'s ten dependencies were the symptom the rank named, and they separated exactly where
+  the jobs did: `VodListingCommandHandler` (2 dependencies), `VodDetailCommandHandler` (2),
+  `WatchProgressCommandHandler` (2), `VodPlayTestCommandHandler` (6 — it opens a stream). What was genuinely
+  shared came out as two collaborators rather than being duplicated: `StoredSourceLookup`, which every
+  catalogue command starts with, and `VodText`, because a position reading "at 00:40:00" in one listing and
+  "2400" in another is how a check stops being a check.
+
+  **Nothing here is unit-testable — the CLI has no test project, and this rank did not add one.** Verified by
+  running `--help` over the whole tree (13 commands, all exit 0) and then every split handler against the
+  real catalogue, including both of the error paths: an unknown source id, and `forget` with neither id.
+  `vod play-test` was left alone deliberately, since it opens a stream against a one-connection subscription.
 
 - **Rank 7 · the timeline's channel names are pinned, and the markup is measured now.** Neither of the two
   approaches the rank proposed was taken. Two vertically synchronised lists would have cost the row list its
