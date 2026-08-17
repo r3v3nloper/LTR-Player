@@ -32,8 +32,8 @@ away with the programme blocks and no longer do — see rank 7 under Done there.
 
 `Docs/refactoring-backlog.md` is the work list, **renumbered 1–12 in the review after the URL-sanitisation
 rank** — that rank is done, and the review it triggered added four items belonging in the middle of the
-ranking, which is what forced a renumber rather than a gap. **Ranks 1–7 are done, and so is a rank 13 that was
-found while verifying rank 6**; the five that remain keep their numbers, so the list runs 8–12. None of them has
+ranking, which is what forced a renumber rather than a gap. **Ranks 1–8 are done, and so is a rank 13 that was
+found while verifying rank 6**; the four that remain keep their numbers, so the list runs 9–12. None of them has
 an effect while the player is running.
 **Ranks quoted in commit messages belong to whichever scheme was current when they were written**; that file
 carries both mappings. Its opening section says what to run before starting one.
@@ -121,7 +121,10 @@ LTR.Persistence                LtrDbContext. All database logic lives here (§3.
 LTR.Playback[.Abstractions]    Engine-neutral playback policy
 LTR.Playback.LibVlc            LibVLC engine
 LTR.Security.Dpapi             Windows credential protection, kept out of Core on purpose
-LTR.Cli                        Headless verification of everything below the UI (§2.12)
+LTR.Cli                        Headless verification of everything below the UI (§2.12). One class per
+                               command under Commands/ states its options and action; Program is
+                               composition only. A command touching the database goes through
+                               CatalogueCommandRunner, so probing a panel creates no database file
 LTR.Player.Wpf                 The only project that references WPF. MainViewModel composes the four
                                catalogue sections, the guide and the on-screen controls, and is the
                                sections' ISourceCoordinator; the sections never reference each other.

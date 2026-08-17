@@ -49,7 +49,7 @@ internal sealed class VodCommand
         command.Options.Add(limitOption);
 
         command.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
-            _catalogue.RunAsync<VodCommandHandler>(handler => handler.ListMoviesAsync(
+            _catalogue.RunAsync<VodListingCommandHandler>(handler => handler.ListMoviesAsync(
                 parseResult.GetValue(sourceIdOption),
                 parseResult.GetValue(filterOption),
                 parseResult.GetValue(limitOption),
@@ -68,7 +68,7 @@ internal sealed class VodCommand
         command.Options.Add(limitOption);
 
         command.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
-            _catalogue.RunAsync<VodCommandHandler>(handler => handler.ListSeriesAsync(
+            _catalogue.RunAsync<VodListingCommandHandler>(handler => handler.ListSeriesAsync(
                 parseResult.GetValue(sourceIdOption),
                 parseResult.GetValue(filterOption),
                 parseResult.GetValue(limitOption),
@@ -93,7 +93,7 @@ internal sealed class VodCommand
         command.Options.Add(seriesIdOption);
 
         command.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
-            _catalogue.RunAsync<VodCommandHandler>(handler => handler.ShowSeriesAsync(
+            _catalogue.RunAsync<VodDetailCommandHandler>(handler => handler.ShowSeriesAsync(
                 parseResult.GetValue(sourceIdOption),
                 parseResult.GetValue(seriesIdOption),
                 cancellationToken))));
@@ -117,7 +117,7 @@ internal sealed class VodCommand
         command.Options.Add(movieIdOption);
 
         command.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
-            _catalogue.RunAsync<VodCommandHandler>(handler => handler.ShowMovieAsync(
+            _catalogue.RunAsync<VodDetailCommandHandler>(handler => handler.ShowMovieAsync(
                 parseResult.GetValue(sourceIdOption),
                 parseResult.GetValue(movieIdOption),
                 cancellationToken))));
@@ -131,7 +131,7 @@ internal sealed class VodCommand
         command.Options.Add(sourceIdOption);
 
         command.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
-            _catalogue.RunAsync<VodCommandHandler>(handler => handler.ContinueWatchingAsync(
+            _catalogue.RunAsync<WatchProgressCommandHandler>(handler => handler.ContinueWatchingAsync(
                 parseResult.GetValue(sourceIdOption),
                 cancellationToken))));
 
@@ -152,7 +152,7 @@ internal sealed class VodCommand
         command.Options.Add(episodeIdOption);
 
         command.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
-            _catalogue.RunAsync<VodCommandHandler>(handler => handler.ForgetAsync(
+            _catalogue.RunAsync<WatchProgressCommandHandler>(handler => handler.ForgetAsync(
                 parseResult.GetValue(sourceIdOption),
                 parseResult.GetValue(movieIdOption),
                 parseResult.GetValue(episodeIdOption),
@@ -211,7 +211,7 @@ internal sealed class VodCommand
         command.Options.Add(rememberOption);
 
         command.SetAction((parseResult, cancellationToken) => CommandRunner.RunAsync(() =>
-            _catalogue.RunAsync<VodCommandHandler>(handler => handler.PlayTestAsync(
+            _catalogue.RunAsync<VodPlayTestCommandHandler>(handler => handler.ExecuteAsync(
                 parseResult.GetValue(sourceIdOption),
                 parseResult.GetValue(movieIdOption),
                 parseResult.GetValue(episodeIdOption),

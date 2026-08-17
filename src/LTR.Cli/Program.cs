@@ -81,7 +81,14 @@ static ServiceProvider BuildServiceProvider(bool verbose)
     services.AddSingleton<ChannelsCommandHandler>();
     services.AddSingleton<ResolveCommandHandler>();
     services.AddSingleton<PlayTestCommandHandler>();
-    services.AddSingleton<VodCommandHandler>();
+
+    // The four the 'vod' command dispatches to, which were one class taking ten dependencies.
+    services.AddSingleton<VodListingCommandHandler>();
+    services.AddSingleton<VodDetailCommandHandler>();
+    services.AddSingleton<WatchProgressCommandHandler>();
+    services.AddSingleton<VodPlayTestCommandHandler>();
+
+    services.AddSingleton<StoredSourceLookup>();
     services.AddSingleton<ConnectionReleaseCheck>();
     services.AddSingleton<StreamHoldTest>();
 
