@@ -80,6 +80,21 @@ public abstract class SensitiveUrlSanitizer<TSource> : ISensitiveUrlSanitizer
     /// </remarks>
     protected static string RedactQueryValues(string url)
     {
+        return RedactQueryValues(url, (_, _) => true);
+    }
+
+    /// <summary>
+    /// Replaces the query-string values <paramref name="shouldRedact"/> accepts, by name and value.
+    /// </summary>
+    /// <remarks>
+    /// The selective form exists for a protocol that knows its secrets: replacing them by value wherever they
+    /// occur also replaces them where they are not secrets, and a two-character username turns the host and
+    /// the action into <c>hd-ma***.org/pla***er_api.php</c> — removing the only reason the address was logged.
+    /// </remarks>
+    protected static string RedactQueryValues(string url, Func<string, string, bool> shouldRedact)
+    {
+        ArgumentNullException.ThrowIfNull(shouldRedact);
+
         var queryStart = url.IndexOf('?', StringComparison.Ordinal);
 
         if (queryStart < 0)
@@ -90,19 +105,62 @@ public abstract class SensitiveUrlSanitizer<TSource> : ISensitiveUrlSanitizer
         var fragmentStart = url.IndexOf('#', queryStart);
         var queryEnd = fragmentStart < 0 ? url.Length : fragmentStart;
         var query = url[(queryStart + 1)..queryEnd];
-        var redacted = string.Join('&', query.Split('&').Select(RedactQueryPair));
+        var redacted = string.Join('&', query.Split('&').Select(pair => RedactQueryPair(pair, shouldRedact)));
 
         return string.Concat(url.AsSpan(0, queryStart + 1), redacted, url.AsSpan(queryEnd));
+    }
+
+    /// <summary>
+    /// Replaces the path segments <paramref name="shouldRedact"/> accepts, keeping the rest of the path.
+    /// </summary>
+    /// <remarks>
+    /// The other place a credential travels: Xtream stream addresses spell it as whole segments, as in
+    /// <c>/live/{user}/{password}/1234.ts</c>. Offered only as a decision per segment, because a protocol
+    /// that cannot recognise its own credentials cannot use this at all — see the M3U sanitiser, which
+    /// deliberately leaves paths alone.
+    /// </remarks>
+    protected static string RedactPathSegments(string url, Func<string, bool> shouldRedact)
+    {
+        ArgumentNullException.ThrowIfNull(shouldRedact);
+
+        var pathStart = PathStart(url);
+
+        if (pathStart < 0)
+        {
+            return url;
+        }
+
+        var pathEnd = url.AsSpan(pathStart).IndexOfAny('?', '#');
+        pathEnd = pathEnd < 0 ? url.Length : pathStart + pathEnd;
+
+        var path = url[pathStart..pathEnd];
+        var redacted = string.Join(
+            '/',
+            path.Split('/').Select(segment => shouldRedact(segment) ? Placeholder : segment));
+
+        return string.Concat(url.AsSpan(0, pathStart), redacted, url.AsSpan(pathEnd));
+    }
+
+    /// <summary>
+    /// Where the path begins, which is after the authority for an absolute address.
+    /// </summary>
+    private static int PathStart(string url)
+    {
+        var schemeEnd = url.IndexOf("//", StringComparison.Ordinal);
+
+        return schemeEnd < 0
+            ? url.IndexOf('/', StringComparison.Ordinal)
+            : url.IndexOf('/', schemeEnd + 2);
     }
 
     /// <summary>
     /// Keeps the parameter's name and replaces its value.
     /// </summary>
     /// <remarks>
-    /// A parameter with no <c>=</c> at all goes entirely: a bare query string is as likely to be a token
-    /// as a flag, and there is no name to preserve.
+    /// A parameter with no <c>=</c> at all goes entirely when it is to be redacted: a bare query string is as
+    /// likely to be a token as a flag, and there is no name to preserve.
     /// </remarks>
-    private static string RedactQueryPair(string pair)
+    private static string RedactQueryPair(string pair, Func<string, string, bool> shouldRedact)
     {
         if (pair.Length == 0)
         {
@@ -111,9 +169,17 @@ public abstract class SensitiveUrlSanitizer<TSource> : ISensitiveUrlSanitizer
 
         var separator = pair.IndexOf('=', StringComparison.Ordinal);
 
-        return separator < 0
-            ? Placeholder
-            : string.Concat(pair.AsSpan(0, separator + 1), Placeholder);
+        if (separator < 0)
+        {
+            return shouldRedact(string.Empty, pair) ? Placeholder : pair;
+        }
+
+        var name = pair[..separator];
+        var value = pair[(separator + 1)..];
+
+        return shouldRedact(name, value)
+            ? string.Concat(pair.AsSpan(0, separator + 1), Placeholder)
+            : pair;
     }
 
     /// <summary>

@@ -32,9 +32,9 @@ considered a gap in the milestone.
 
 `Docs/refactoring-backlog.md` is the work list, **renumbered 1–12 in the review after the URL-sanitisation
 rank** — that rank is done, and the review it triggered added four items belonging in the middle of the
-ranking, which is what forced a renumber rather than a gap. **Ranks 1–6 are done too, and the rest keep their
-numbers**, so the list starts at 7 — plus a rank 13, found while verifying rank 6, filed where it belongs by
-value rather than by number. None of them has an effect while the player is running.
+ranking, which is what forced a renumber rather than a gap. **Ranks 1–6 are done, and so is a rank 13 that was
+found while verifying rank 6**; the six that remain keep their numbers, so the list runs 7–12. None of them has
+an effect while the player is running.
 **Ranks quoted in commit messages belong to whichever scheme was current when they were written**; that file
 carries both mappings. Its opening section says what to run before starting one.
 
@@ -153,10 +153,14 @@ pipeline, so `XtreamTimeouts` holds the deadline that replaces it along with the
 **Credentials travel inside the address, on both protocols, so nothing prints one unsanitised.** Anything
 about to log, print or store an address asks `IProviderRegistry.GetUrlSanitizer` — there were three
 hand-rolled copies of the masking before this existed, one of them typed to `XtreamSource` in the CLI. The
-rules differ by kind and not just by input: Xtream knows its secrets by value and replaces them wherever they
-occur, keeping the rest of the query readable because `action=…` is why the address is being logged, while a
-playlist source holds no credentials at all — whatever the provider issued is already in the address under a
-parameter name nothing here knows — so *every* query value goes and only the names stay. A playlist's **path**
+rules differ by kind and not just by input: Xtream knows its secrets, so it removes them **where the protocol
+puts them** — a query value or a path segment that *is* the credential — and leaves the host and `action=…`
+readable, because those are why the address is being logged. It replaces a secret wherever it occurs only as a
+fallback, when the structural pass found it nowhere, so an unfamiliar shape from a panel still cannot leak one;
+replacing by value unconditionally was the original rule and a two-character username redacted the host out of
+every logged address. A playlist source, by contrast, holds no credentials at all — whatever the provider
+issued is already in the address under a parameter name nothing here knows — so *every* query value goes and
+only the names stay. A playlist's **path**
 is left alone on purpose: with nothing to compare against, a credential segment and a route segment are
 indistinguishable. `user:password@host` is removed for every protocol by `SensitiveUrlSanitizer<TSource>`,
 which is the only form that needs no protocol knowledge. A failure that wants to carry an address throws
@@ -320,7 +324,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **687 tests pass on `main`.** A refactor should not move that number.
+- **691 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.
