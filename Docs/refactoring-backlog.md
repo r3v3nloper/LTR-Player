@@ -184,8 +184,25 @@ the same unit of work, so splitting the implementation would buy five files and 
 implements everything, because the shell harness builds every view model. The win is on the production side —
 each consumer now declares the surface it uses — and for any *new* double, which can implement one face.
 
-`IPlaybackSession` at sixteen members is the same shape one layer down, and is still open — rank 9 of the
-post-M5 review. The argument there is the same, and it now has a worked example to follow.
+## Rank 9 of the post-M5 review · done after M6 — `IPlaybackSession` had sixteen members
+
+Split into the session — `Current`, `StateChanged`, `SwitchToAsync`, `StopAsync` — and `IPlaybackTransport`,
+holding the twelve members that act on a stream already open.
+
+**The session does not inherit the transport, and that is the whole point.** `PlayerOverlayViewModel` takes the
+transport alone, so it *cannot* open or release a provider connection: the type it holds has no way to. M5
+argued that division in prose, and prose is not enforcement.
+
+**The payoff is smaller than rank 10's, and the difference is instructive.** Three of the four consumers need
+both halves and now take two parameters, because everything that opens a stream also observes one. The
+catalogue split worked cleanly because consumption there was genuinely disjoint; playback's is not. Nor does
+this shrink a fake — `FakePlaybackSession` stands in for the real object, which does both. What it buys is one
+consumer's declared surface, and that consumer is the one where a mistake costs the viewer their subscription
+for minutes.
+
+Noticed on the way past: **`IPlaybackSession.Current` has no production caller.** Kept deliberately, with a
+comment saying so — it states the guarantee the interface exists for, and it is what the session's own tests
+assert to prove a stream was let go.
 
 Proposal: split into `ISourceStore` / `ILiveCatalogue` / `IGuideCatalogue` / `IVodCatalogue`, composed where
 more than one is needed.

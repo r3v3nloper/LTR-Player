@@ -33,11 +33,13 @@ and the seek bar needed the same widening of the playback surface.
 
 `Docs/player.md` has the design. The parts worth knowing before touching them again:
 
-- **The transport lives on `IPlaybackSession`, not on the engine and not on the coordinator.** Pause, seek,
-  volume, tracks and aspect ratio are all there. The division that matters: `PlaybackCoordinator` decides
-  *what* plays and still owns the only call to `SwitchToAsync`, while `PlayerOverlayViewModel` acts on a
-  stream already open. An overlay holding the engine is how the one-connection guarantee gets bypassed by
-  the next thing that needs "just one" call.
+- **The transport lives on `IPlaybackTransport`, not on the engine and not on the coordinator.** Pause, seek,
+  volume, tracks and aspect ratio are all there; `IPlaybackSession` keeps only what opens and releases a
+  stream, and deliberately does not inherit the transport. One class implements both. The division that
+  matters: `PlaybackCoordinator` decides *what* plays and owns the only call to `SwitchToAsync`, while
+  `PlayerOverlayViewModel` takes the transport alone and therefore *cannot* open a connection. An overlay
+  holding the engine is how the one-connection guarantee gets bypassed by the next thing that needs "just
+  one" call.
 - **Nothing in the overlay subscribes to the session's events.** An engine raises them on its own threads;
   WPF marshals a property change for a plain binding but *not* for a collection, so a track list rebuilt from
   an engine callback takes the window down. Everything is read in `Sample()`, from the window's timer.

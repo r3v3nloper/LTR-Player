@@ -4,8 +4,12 @@ What M5 built, and the reasoning that is not obvious from the code.
 
 ## Where the transport lives, and why not somewhere else
 
-Three places could plausibly own pausing, seeking, volume, tracks and aspect ratio. The one chosen is
-`IPlaybackSession`, and the other two were rejected for the same reason.
+Three places could plausibly own pausing, seeking, volume, tracks and aspect ratio. The one chosen is the
+playback session, and the other two were rejected for the same reason.
+
+*(Since the review after M6, "the session" is two interfaces over one class: `IPlaybackSession` for opening and
+releasing, `IPlaybackTransport` for everything below. The reasoning here is unchanged — the split only makes
+the last paragraph of this section true by construction instead of by discipline.)*
 
 **Not the engine.** `IMediaEngine` implements all of it, but an overlay that held the engine to read a
 position would be a second holder of the object whose single ownership is the whole playback design. The
@@ -20,7 +24,9 @@ the session's API on top of the two things it actually does. The division that r
 PlaybackCoordinator     decides WHAT plays — builds the address, opens the stream, words the failure,
                         follows the position, writes it down. Sole caller of SwitchToAsync.
 PlayerOverlayViewModel  acts on a stream ALREADY OPEN — pause, seek, volume, tracks, aspect, fullscreen.
-IPlaybackSession        the one point through which both address playback.
+                        Holds IPlaybackTransport only, so it cannot open or release one.
+IPlaybackSession        opening and releasing. The coordinator is the only thing that holds it.
+IPlaybackTransport      everything doable to a stream already open. One class implements both.
 ```
 
 Opening stays privileged. Everything the overlay can do is something a viewer can do to a stream that is
@@ -75,8 +81,8 @@ the answer is the stream's rather than a guess from the content kind.
 ## Two ways to reach a position, and they are not the same call
 
 ```
-MediaRequest.StartAt    honoured while the stream is opening.  Resuming.
-IPlaybackSession.SeekTo issued against a stream already playing.  The seek bar.
+MediaRequest.StartAt        honoured while the stream is opening.  Resuming.
+IPlaybackTransport.SeekTo   issued against a stream already playing.  The seek bar.
 ```
 
 They stay separate because they are honoured at different moments and only the first can be relied upon to
