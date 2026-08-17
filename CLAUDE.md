@@ -30,11 +30,11 @@ considered a gap in the milestone.
 
 ### Where to pick up
 
-`Docs/refactoring-backlog.md` is the work list, **renumbered 1–9 after M6**. Rank 1 (protocol-neutral URL
-sanitisation) is done; **eight remain, and they keep their numbers**, so the list starts at 2 — a gap in the
-sequence costs less than a third numbering scheme. None of them has an effect while the player is running.
-Ranks quoted in commit messages up to the M6 merge belong to older schemes; that file carries the mapping.
-Its opening section says what to run before starting one.
+`Docs/refactoring-backlog.md` is the work list, **renumbered 1–12 in the review after the URL-sanitisation
+rank** — that rank is done, and the review it triggered added four items belonging in the middle of the
+ranking, which is what forced a renumber rather than a gap. None of the twelve has an effect while the player
+is running. **Ranks quoted in commit messages belong to whichever scheme was current when they were written**;
+that file carries both mappings. Its opening section says what to run before starting one.
 
 Two things are outstanding that are *not* refactors, because only the person with the subscription can do
 them:
