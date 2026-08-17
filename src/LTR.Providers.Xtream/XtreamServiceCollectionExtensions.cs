@@ -8,26 +8,6 @@ namespace LTR.Providers.Xtream;
 /// </summary>
 public static class XtreamServiceCollectionExtensions
 {
-    /// <summary>
-    /// Timeout for a single attempt. Generous because a large subscription's channel list is a
-    /// single multi-megabyte JSON response served by a frequently overloaded panel.
-    /// </summary>
-    private static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(30);
-
-    private static readonly TimeSpan TotalRequestTimeout = TimeSpan.FromSeconds(120);
-
-    /// <summary>
-    /// Must be at least twice the attempt timeout for the circuit breaker to have a meaningful
-    /// sample; the resilience package validates this.
-    /// </summary>
-    private static readonly TimeSpan BreakerSamplingDuration = TimeSpan.FromSeconds(60);
-
-    /// <summary>
-    /// A full guide is one response of tens to hundreds of megabytes, frequently from the same
-    /// overloaded host. Nothing about it can be retried usefully, so it gets one generous attempt.
-    /// </summary>
-    private static readonly TimeSpan GuideDownloadTimeout = TimeSpan.FromMinutes(10);
-
     public static IServiceCollection AddXtreamProvider(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -45,9 +25,11 @@ public static class XtreamServiceCollectionExtensions
             .AddHttpClient<XtreamApiClient>()
             .AddStandardResilienceHandler(options =>
             {
-                options.AttemptTimeout.Timeout = AttemptTimeout;
-                options.TotalRequestTimeout.Timeout = TotalRequestTimeout;
-                options.CircuitBreaker.SamplingDuration = BreakerSamplingDuration;
+                // The figures live in XtreamTimeouts because the client needs one of them too: it reads a
+                // response body as a stream, which is outside this pipeline.
+                options.AttemptTimeout.Timeout = XtreamTimeouts.Attempt;
+                options.TotalRequestTimeout.Timeout = XtreamTimeouts.TotalRequest;
+                options.CircuitBreaker.SamplingDuration = XtreamTimeouts.BreakerSampling;
             });
 
         // Transient, because the typed client they depend on is transient by design: capturing it in
@@ -61,7 +43,7 @@ public static class XtreamServiceCollectionExtensions
         // Deliberately not behind the resilience pipeline above: see XtreamGuideSource. Registered
         // through a factory rather than by type, so the instance comes from the typed-client
         // registration and arrives with its configured HttpClient instead of a default one.
-        services.AddHttpClient<XtreamGuideSource>(client => client.Timeout = GuideDownloadTimeout);
+        services.AddHttpClient<XtreamGuideSource>(client => client.Timeout = XtreamTimeouts.GuideDownload);
         services.AddTransient<IGuideSource>(provider => provider.GetRequiredService<XtreamGuideSource>());
 
         return services;

@@ -32,8 +32,9 @@ considered a gap in the milestone.
 
 `Docs/refactoring-backlog.md` is the work list, **renumbered 1–12 in the review after the URL-sanitisation
 rank** — that rank is done, and the review it triggered added four items belonging in the middle of the
-ranking, which is what forced a renumber rather than a gap. **Ranks 1–5 are done too, and the seven that
-remain keep their numbers**, so the list starts at 6. None of them has an effect while the player is running.
+ranking, which is what forced a renumber rather than a gap. **Ranks 1–6 are done too, and the rest keep their
+numbers**, so the list starts at 7 — plus a rank 13, found while verifying rank 6, filed where it belongs by
+value rather than by number. None of them has an effect while the player is running.
 **Ranks quoted in commit messages belong to whichever scheme was current when they were written**; that file
 carries both mappings. Its opening section says what to run before starting one.
 
@@ -143,7 +144,11 @@ file in the repository; its fake engine throws if two streams are ever open at o
 **Xtream panels are divergent forks with no specification.** Probe capabilities per source, never
 assume an endpoint exists. The same scalar arrives as `5`, `"5"`, `""` or `null` depending on the
 panel, which is why `LTR.Providers.Xtream/Json` exists. Panels also serve HTML error pages at HTTP 200,
-reject unfamiliar user agents, and redirect to streaming nodes.
+reject unfamiliar user agents, redirect to streaming nodes, and — being PHP files — sometimes emit a
+byte-order mark ahead of their JSON. A response body is **streamed**, not read into a string: the first 512
+bytes are peeked through a `PipeReader` without being consumed, which is what lets the empty, HTML and mark
+checks run before `JsonDocument` reads the document whole. Streaming puts the body outside the resilience
+pipeline, so `XtreamTimeouts` holds the deadline that replaces it along with the pipeline's own.
 
 **Credentials travel inside the address, on both protocols, so nothing prints one unsanitised.** Anything
 about to log, print or store an address asks `IProviderRegistry.GetUrlSanitizer` — there were three
@@ -315,7 +320,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **683 tests pass on `main`.** A refactor should not move that number.
+- **687 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.
