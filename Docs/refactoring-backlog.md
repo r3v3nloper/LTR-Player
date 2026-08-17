@@ -8,8 +8,8 @@ Renumbered then rather than appended, unlike the removal before it: a *removed* 
 less than a new scheme, but four items belonging in the middle of the ranking cannot be appended without the
 number ceasing to mean the rank, which is the only thing this list is for.
 
-**Ranks 1–6 and 13 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-16-and-13). **The
-six that remain keep their numbers**, so the list runs 7–12 with no gaps left inside it, by that same rule.
+**Ranks 1–7 and 13 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-17-and-13). **The
+five that remain keep their numbers**, so the list runs 8–12, by that same rule.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
@@ -19,7 +19,7 @@ review and is worth re-checking rather than assuming next time.
 
 ## Before starting one of these
 
-- `dotnet test LTR-Player.slnx` — 691 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 694 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
@@ -29,16 +29,6 @@ review and is worth re-checking rather than assuming next time.
   survives, suspect the fake before the assertion.
 
 ---
-
-## Rank 7 — Pin the timeline's channel-name column
-
-**Project:** LTR.Player.Wpf · **Area:** Usability · **Criticality:** moderate · **Effort:** medium
-
-The timeline puts its header and every row inside one horizontal `ScrollViewer`, so the channel names scroll
-out of view with the programme blocks. Names staying put is most of what makes an EPG readable.
-
-Doing it properly means two vertically synchronised lists or a custom panel. It is mostly hidden today
-because the window is moved with the buttons rather than by scrolling. Stated on screen; not a gap in M3.
 
 ## Rank 8 — Command classes in the CLI, and the handler that outgrew one
 
@@ -113,9 +103,31 @@ older one.
 **Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
 else on that list is below.
 
-### In the same session as the renumbering — ranks 1–6 and 13
+### In the same session as the renumbering — ranks 1–7 and 13
 
-Seven ranks, cleared in one sitting. What is worth carrying forward:
+Eight ranks, cleared in one sitting. What is worth carrying forward:
+
+- **Rank 7 · the timeline's channel names are pinned, and the markup is measured now.** Neither of the two
+  approaches the rank proposed was taken. Two vertically synchronised lists would have cost the row list its
+  virtualisation, and a custom panel was more than the problem needed. Instead there is **one scroller, around
+  the header only**, and everything below it follows that scroller's `HorizontalOffset` through a
+  `TranslateTransform` — each row's block strip and the now-marker. The names are outside it, so they cannot
+  scroll away; the shared offset is what keeps a heading over its own blocks, which is the property the old
+  single-scroller layout existed to protect.
+
+  `GuideTimeline.PixelsPerHour` stays fixed at 260, deliberately: its own comment explains that a block keeps
+  its size when the panel is resized, so scaling the window to fit the pane — which would have removed
+  horizontal scrolling altogether — was rejected as overturning a stated decision by side effect.
+
+  **This is the first test in the project that builds a visual tree**, and it exists because nothing else can
+  state a layout property: scroll the timeline, assert the name has not moved and that the blocks and the
+  marker have moved by exactly as much. Every WPF defect this repository has shipped was in markup, which was
+  the part nothing measured. It runs on an STA thread of its own and loads `Theme.xaml`, so the converters and
+  styles resolve as they do in the application.
+
+  It also settles a question the compiler does not answer: an `ElementName` binding reaching out of a
+  `DataTemplate` into the file's outer namescope does resolve — which the two bindings already in that
+  template depended on without anything proving it.
 
 - **Rank 13 · a credential is removed where the protocol puts it, not wherever it occurs.** A query value or
   a path segment that *is* the credential goes; the host, the path and `action=…` stay. Found by running the
