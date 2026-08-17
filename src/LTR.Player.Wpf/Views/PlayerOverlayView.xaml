@@ -1,9 +1,7 @@
 <UserControl x:Class="LTR.Player.Wpf.Views.PlayerOverlayView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:LTR.Player.Wpf"
-             MouseMove="OnPointerActivity"
-             MouseDoubleClick="OnPictureDoubleClicked">
+             xmlns:local="clr-namespace:LTR.Player.Wpf">
 
   <!--
     The on-screen display. Hosted inside VideoView.Content by the window, for the same reason the guide is:
@@ -14,13 +12,16 @@
     lives in an overlay window of its own, so input over it does not reach the shell window's handlers. The
     keyboard is still the shell's business, because focus stays with the shell window; the pointer is not.
 
-    The outer grid is transparent rather than unset, and covers the whole picture — that is what makes the
-    pointer moving anywhere over the video wake the controls, and a double-click anywhere on it go
-    fullscreen. Nothing is obscured: the video underneath is a native surface, not part of this visual tree.
+    The pointer is taken from that window rather than from this control — see the code-behind. The outer grid
+    is still transparent rather than unset, so the picture answers a double-click and nothing beneath it takes
+    the pointer instead. Nothing is obscured: the video underneath is a native surface, not part of this
+    visual tree.
   -->
   <Grid Background="Transparent">
     <Border x:Name="OverlayRoot"
             DataContext="{Binding PlayerOverlay}"
+            MouseEnter="OnPointerEnteredControls"
+            MouseLeave="OnPointerLeftControls"
             VerticalAlignment="Bottom"
             Background="#D9000000"
             Padding="16,12"
