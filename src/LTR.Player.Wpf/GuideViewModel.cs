@@ -26,15 +26,21 @@ namespace LTR.Player.Wpf;
 public sealed partial class GuideViewModel : ObservableObject
 {
     /// <summary>
-    /// How many channels the timeline will draw.
+    /// How many channels the timeline draws at once.
     /// </summary>
     /// <remarks>
-    /// A real subscription lists tens of thousands, and a timeline is a grid of blocks rather than a list
-    /// of rows — a window over 17,000 channels would be several hundred thousand elements. The limit is
-    /// reported on screen rather than applied silently, because a guide that quietly stops after 200
-    /// channels reads as a guide with missing channels.
+    /// <para>
+    /// A real subscription lists tens of thousands, and a timeline is a grid of blocks rather than a list of
+    /// rows — a window over 17,000 channels would be several hundred thousand elements. So it draws a page,
+    /// and the channels beyond it are reached by moving to the next one.
+    /// </para>
+    /// <para>
+    /// This used to be a cap: the first 200 and nothing else, with the rest reachable only by narrowing the
+    /// channel list until they fell inside it. Two hundred is kept as the page size because it is the figure
+    /// this timeline is known to draw comfortably.
+    /// </para>
     /// </remarks>
-    public const int MaximumRows = 200;
+    public const int RowsPerPage = 200;
 
     private static readonly TimeSpan Step = TimeSpan.FromMinutes(30);
 
@@ -63,6 +69,28 @@ public sealed partial class GuideViewModel : ObservableObject
     [ObservableProperty]
     private string _notice = string.Empty;
 
+    /// <summary>
+    /// Index of the first channel the current page draws, among those the guide covers.
+    /// </summary>
+    /// <remarks>
+    /// Paged by command rather than scrolled, for the reason the time window is: moving it changes which
+    /// programmes have to be fetched, and a scrollbar that silently issues a query per flick hides that. It
+    /// also spares the timeline a data-virtualising collection whose rows would appear empty and fill in
+    /// afterwards — in a grid where every row is already a mosaic of blocks, that reads as a fault.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ShowEarlierChannelsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ShowLaterChannelsCommand))]
+    private int _rowOffset;
+
+    /// <summary>
+    /// How many of the source's channels the guide covers at all, which is what the pages run over.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ShowEarlierChannelsCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ShowLaterChannelsCommand))]
+    private int _channelsWithGuide;
+
     public GuideViewModel(IGuideCatalogue catalogue, TimeProvider timeProvider)
     {
         _catalogue = catalogue;
@@ -87,6 +115,10 @@ public sealed partial class GuideViewModel : ObservableObject
 
         _source = source;
         _channels = channels;
+
+        // A different set of channels makes the current page meaningless: page three of a filtered list is
+        // not page three of the same list unfiltered.
+        RowOffset = 0;
     }
 
     /// <summary>
@@ -129,7 +161,8 @@ public sealed partial class GuideViewModel : ObservableObject
 
         if (_source is null)
         {
-            Notice = DescribeCoverage(shownRows: 0, channelsWithGuide: 0);
+            ChannelsWithGuide = 0;
+            Notice = DescribeCoverage(shownRows: 0);
             return;
         }
 
@@ -138,12 +171,16 @@ public sealed partial class GuideViewModel : ObservableObject
         // timeline reported "no guide data" for a guide that had just been imported successfully.
         var links = await _catalogue.GetGuideLinksAsync(_source.Id, cancellationToken).ConfigureAwait(true);
 
-        var rowChannels = _channels
-            .Where(channel => links.ContainsKey(channel.Id))
-            .Take(MaximumRows)
-            .ToList();
+        var covered = _channels.Where(channel => links.ContainsKey(channel.Id)).ToList();
+        ChannelsWithGuide = covered.Count;
 
-        Notice = DescribeCoverage(rowChannels.Count, _channels.Count(channel => links.ContainsKey(channel.Id)));
+        // Clamped rather than trusted: the page can outlive the set it indexes into — a guide import adds
+        // covered channels, and moving the time window reloads on whatever page was showing.
+        RowOffset = covered.Count == 0 ? 0 : Math.Min(RowOffset, LastPageOffset(covered.Count));
+
+        var rowChannels = covered.Skip(RowOffset).Take(RowsPerPage).ToList();
+
+        Notice = DescribeCoverage(rowChannels.Count);
 
         if (rowChannels.Count == 0)
         {
@@ -202,6 +239,50 @@ public sealed partial class GuideViewModel : ObservableObject
         return LoadAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Draws the page of channels before this one.
+    /// </summary>
+    /// <remarks>
+    /// The channel axis is moved the same way the time axis is, and for the same reason: each move is a
+    /// fetch, and saying so with a button is more honest than a scrollbar that hides it.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanShowEarlierChannels))]
+    private Task ShowEarlierChannelsAsync(CancellationToken cancellationToken)
+    {
+        RowOffset = Math.Max(0, RowOffset - RowsPerPage);
+        return LoadAsync(cancellationToken);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanShowLaterChannels))]
+    private Task ShowLaterChannelsAsync(CancellationToken cancellationToken)
+    {
+        RowOffset = Math.Min(LastPageOffset(ChannelsWithGuide), RowOffset + RowsPerPage);
+        return LoadAsync(cancellationToken);
+    }
+
+    private bool CanShowEarlierChannels()
+    {
+        return RowOffset > 0;
+    }
+
+    private bool CanShowLaterChannels()
+    {
+        return RowOffset + RowsPerPage < ChannelsWithGuide;
+    }
+
+    /// <summary>
+    /// Where the last page starts, so a page is never opened past the end of the channels.
+    /// </summary>
+    private static int LastPageOffset(int channelsWithGuide)
+    {
+        if (channelsWithGuide <= RowsPerPage)
+        {
+            return 0;
+        }
+
+        return (channelsWithGuide - 1) / RowsPerPage * RowsPerPage;
+    }
+
     [RelayCommand]
     private void SelectProgramme(GuideProgrammeViewModel? programme)
     {
@@ -226,9 +307,18 @@ public sealed partial class GuideViewModel : ObservableObject
         }
     }
 
-    private string DescribeCoverage(int shownRows, int channelsWithGuide)
+    /// <summary>
+    /// Says where in the covered channels this page sits, and why the timeline is empty when it is.
+    /// </summary>
+    /// <remarks>
+    /// Silent when everything covered is on screen, which is the common case for a filtered list and for a
+    /// modest subscription. When it is not, it states the range rather than a count: "showing 200 of 4,531"
+    /// answers how many are missing but not which, and the whole point of paging is that the viewer can now
+    /// go and see them.
+    /// </remarks>
+    private string DescribeCoverage(int shownRows)
     {
-        if (channelsWithGuide == 0)
+        if (ChannelsWithGuide == 0)
         {
             return _channels.Count == 0
                 ? "No channels are listed."
@@ -236,9 +326,14 @@ public sealed partial class GuideViewModel : ObservableObject
                     + "channels the guide covers.";
         }
 
-        return shownRows < channelsWithGuide
-            ? $"Showing {shownRows} of {channelsWithGuide} channels with guide data. Filter the channel "
-                + "list to see the others."
-            : string.Empty;
+        if (shownRows >= ChannelsWithGuide)
+        {
+            return string.Empty;
+        }
+
+        var first = RowOffset + 1;
+        var last = RowOffset + shownRows;
+
+        return $"Channels {first}–{last} of {ChannelsWithGuide} with guide data.";
     }
 }

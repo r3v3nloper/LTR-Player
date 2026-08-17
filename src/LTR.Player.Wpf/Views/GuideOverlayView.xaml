@@ -22,14 +22,23 @@
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
-    <!-- Window navigation. Moving the window is a reload, not a scroll, so it is stated as
-         buttons over time rather than as a scrollbar. -->
+    <!--
+      Navigation on both axes, and neither is a scrollbar: moving either one is a reload, and buttons say so
+      where a scrollbar would hide it. Time on the left, channels next to it — the channel buttons disable
+      themselves at the ends, which is how the viewer sees there is nothing further.
+    -->
     <StackPanel Grid.Row="0" Orientation="Horizontal">
       <Button Content="◀ 30 min" Command="{Binding MoveEarlierCommand}"
               Background="{StaticResource BorderBrush}" />
       <Button Content="Now" Command="{Binding JumpToNowCommand}" Margin="6,0,0,0" />
       <Button Content="30 min ▶" Command="{Binding MoveLaterCommand}" Margin="6,0,0,0"
               Background="{StaticResource BorderBrush}" />
+
+      <Button Content="▲ channels" Command="{Binding ShowEarlierChannelsCommand}" Margin="18,0,0,0"
+              Background="{StaticResource BorderBrush}" />
+      <Button Content="channels ▼" Command="{Binding ShowLaterChannelsCommand}" Margin="6,0,0,0"
+              Background="{StaticResource BorderBrush}" />
+
       <Button Content="Close" Command="{Binding DataContext.ToggleGuideCommand,
                                                 RelativeSource={RelativeSource AncestorType=Window}}"
               Margin="18,0,0,0" Background="{StaticResource BorderBrush}" />

@@ -24,21 +24,21 @@ exists and not what was considered finished.
 **All six are merged into `main` and pushed.** Version 0.6.0; `pwsh build/publish.ps1` produces a
 self-contained folder and a zip that runs on a machine with no .NET.
 
-M3's timeline draws at most 200 rows, which is stated on screen and carried as rank 12 in
-`Docs/refactoring-backlog.md`; it is not considered a gap in the milestone. Its channel names used to scroll
-away with the programme blocks and no longer do — see rank 7 under Done there.
+Both of M3's stated limits are gone: the timeline's channel names used to scroll away with the programme
+blocks, and it drew only the first 200 channels. It now pins the names and **pages** along the channel axis,
+200 at a time, by command — the same way it has always moved along the time axis, and for the same reason.
+See ranks 7 and 12 under Done in `Docs/refactoring-backlog.md`.
 
 ### Where to pick up
 
-`Docs/refactoring-backlog.md` is the work list, **renumbered 1–12 in the review after the URL-sanitisation
-rank** — that rank is done, and the review it triggered added four items belonging in the middle of the
-ranking, which is what forced a renumber rather than a gap. **Ranks 1–11 are done, plus a rank 13 found while
-verifying rank 6 and a rank 14 found while verifying rank 9** — so one remains, rank 12, standing alone now that
-the rank it was to be paired with has been measured and dropped. It has no effect while the player is running
-— a claim that briefly stopped being true (rank 14 printed a credential in clear) and is therefore worth
-re-checking at each review rather than assuming.
-**Ranks quoted in commit messages belong to whichever scheme was current when they were written**; that file
-carries both mappings. Its opening section says what to run before starting one.
+**`Docs/refactoring-backlog.md` is empty.** All fourteen ranked items are done — twelve from the review after
+the URL-sanitisation rank, plus two found while verifying others — and that file is now the record of how,
+newest first. **One was dropped rather than built:** rank 11's store-side paging of the channel list, on a
+measurement that is written down there so it is not re-derived. **Ranks quoted in commit messages belong to
+whichever scheme was current when they were written**; that file carries both mappings.
+
+Read it before proposing a refactor here. Several entries record a *considered and rejected* design, and three
+record a rank whose own premise turned out to be half wrong once the code was read.
 
 Two things are outstanding that are *not* refactors, because only the person with the subscription can do
 them:
@@ -343,7 +343,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **716 tests pass on `main`.** A refactor should not move that number.
+- **724 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.
