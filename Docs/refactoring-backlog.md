@@ -8,8 +8,9 @@ Renumbered then rather than appended, unlike the removal before it: a *removed* 
 less than a new scheme, but four items belonging in the middle of the ranking cannot be appended without the
 number ceasing to mean the rank, which is the only thing this list is for.
 
-**Ranks 1–5 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-15). **The seven that
-remain keep their numbers**, so the list starts at 6, by that same rule.
+**Ranks 1–6 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-16). **The rest keep their
+numbers**, so the list starts at 7, by that same rule — and rank 13, found while verifying rank 6, sits where
+it belongs by value rather than by number.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
@@ -19,7 +20,7 @@ review and is worth re-checking rather than assuming next time.
 
 ## Before starting one of these
 
-- `dotnet test LTR-Player.slnx` — 683 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 687 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
@@ -29,18 +30,6 @@ review and is worth re-checking rather than assuming next time.
   survives, suspect the fake before the assertion.
 
 ---
-
-## Rank 6 — Stream the Xtream response instead of buffering it
-
-**Project:** LTR.Providers.Xtream · **Area:** Performance · **Criticality:** moderate · **Effort:** medium
-
-`XtreamApiClient.GetStringAsync` reads the whole response into a `string` and then parses a `JsonDocument`
-from it — two multi-megabyte copies. Worse since M4: the film listing is larger than the channel listing, and
-the subscription this was built against lists 66,447 films.
-
-Proposal: `JsonDocument.ParseAsync` over the content stream. The HTML-detection guard has to move to the
-first bytes of the stream, which is the only fiddly part: panels answer with an HTML error page at HTTP 200
-and that must still be recognised.
 
 ## Rank 7 — Pin the timeline's channel-name column
 
@@ -77,6 +66,23 @@ Proposal: accept `--source-id` and go through the registry, as `vod play-test` d
 
 **Ranked by usefulness rather than by effort**, and therefore below items that cost more: this adds a
 capability rather than restructuring one, so it is the only entry here that is not a refactor.
+
+## Rank 13 — A short Xtream credential redacts the rest of the address
+
+**Project:** LTR.Providers.Xtream · **Area:** Security · **Criticality:** minor · **Effort:** low
+
+`XtreamUrlSanitizer` replaces its secrets wherever they occur, which is what covers the path form. With a
+short or common credential it also replaces them where they are not secrets: a username of `x` against
+`hd-max.org` logs `http://hd-ma***.org:8080/pla***er_api.php` — host and action both mangled, and those are
+the whole reason the address is logged. Seen while verifying rank 6 with dummy credentials, but panels do
+issue two-character trial usernames.
+
+Over-redaction is the safe direction, so this is diagnostics rather than a leak. Proposal: replace a
+credential where it is a whole query value or a whole path segment, which is where Xtream actually puts it,
+rather than as any substring.
+
+**Numbered 13 because it was found mid-session, not because it ranks there** — on value per effort it belongs
+between 9 and 10. It will move when this list is next renumbered; the number is a name until then.
 
 ## Rank 10 — Extract the reconciliation diff
 
@@ -125,9 +131,30 @@ older one.
 **Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
 else on that list is below.
 
-### In the same session as the renumbering — ranks 1–5
+### In the same session as the renumbering — ranks 1–6
 
-Five ranks, cleared in one sitting. What is worth carrying forward:
+Six ranks, cleared in one sitting. What is worth carrying forward:
+
+- **Rank 6 · the Xtream response is streamed, and the fiddly part was not the one the rank named.** The
+  HTML-at-HTTP-200 guard moved to the first bytes as expected: a `PipeReader` peeks 512 bytes, nothing is
+  advanced past, and `JsonDocument.ParseAsync` then reads the document from its first byte. The
+  multi-megabyte `string` is gone — UTF-16, so it was twice the size of the response it held.
+
+  **What the rank did not foresee is the timeout.** Buffering put the body inside the resilience pipeline's
+  30-second attempt; streaming takes it outside, and a panel that sends headers and then stalls would have
+  held an import until the window closed. The read now carries a deadline of its own, and `XtreamTimeouts`
+  exists so that deadline and the pipeline's cannot drift apart — the figures were in the service
+  registration, where the client could not see them.
+
+  **A mutation proved a comment wrong, which is why the byte-order-mark handling now says something else.**
+  Disabling the mark skip changed nothing: `JsonDocument`'s stream overloads skip one themselves. What the
+  skip is actually for is the *inspection* — a mark is not whitespace to .NET, so it sits in front of
+  `<html` and an error page would be reported as malformed JSON instead of as a panel serving its
+  maintenance page. The test that pins it is a mark in front of an HTML page, and that one does fail without
+  the skip.
+
+  Verified against the real panel by a full import: 17,283 channels, 66,529 films, 11,000 series. The film
+  listing is the largest response this client ever reads, which is the case the rank was written for.
 
 - **Rank 5 · the shell's notification forwarding, and the premise that turned out to be half wrong.** The
   rank called it "about ninety lines that exist only to forward notifications". Reading it first showed that

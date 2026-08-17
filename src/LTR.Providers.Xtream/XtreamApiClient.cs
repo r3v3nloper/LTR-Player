@@ -1,4 +1,7 @@
+using System.Buffers;
+using System.IO.Pipelines;
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using LTR.Core.Content;
 using LTR.Core.Sources;
@@ -24,6 +27,17 @@ internal sealed class XtreamApiClient
     /// </summary>
     private static readonly string[] HtmlMarkers = ["<!doctype", "<html", "<br", "<b>", "<?php"];
 
+    private static readonly byte[] Utf8ByteOrderMark = [0xEF, 0xBB, 0xBF];
+
+    /// <summary>
+    /// How much of the response is examined before parsing begins.
+    /// </summary>
+    /// <remarks>
+    /// Enough for a byte-order mark, any leading whitespace and the longest marker above, with room to spare.
+    /// It is a peek and not a read: none of it is consumed, so the parser still receives the whole document.
+    /// </remarks>
+    private const int PeekLength = 512;
+
     private readonly HttpClient _httpClient;
     private readonly XtreamUrlSanitizer _urlSanitizer;
     private readonly ILogger<XtreamApiClient> _logger;
@@ -46,9 +60,8 @@ internal sealed class XtreamApiClient
         CancellationToken cancellationToken)
     {
         var url = XtreamEndpoints.PlayerApi(source);
-        var body = await GetStringAsync(source, url, cancellationToken).ConfigureAwait(false);
 
-        using var document = ParseJson(body, url, source);
+        using var document = await GetJsonAsync(source, url, cancellationToken).ConfigureAwait(false);
 
         // A bare array — usually empty — is how several panels signal rejected credentials.
         if (document.RootElement.ValueKind is not JsonValueKind.Object)
@@ -142,8 +155,7 @@ internal sealed class XtreamApiClient
 
         try
         {
-            var body = await GetStringAsync(source, url, cancellationToken).ConfigureAwait(false);
-            using var document = ParseJson(body, url, source);
+            using var document = await GetJsonAsync(source, url, cancellationToken).ConfigureAwait(false);
             return document.RootElement.ValueKind;
         }
         catch (XtreamApiException exception)
@@ -215,8 +227,7 @@ internal sealed class XtreamApiClient
         Uri url,
         CancellationToken cancellationToken)
     {
-        var body = await GetStringAsync(source, url, cancellationToken).ConfigureAwait(false);
-        using var document = ParseJson(body, url, source);
+        using var document = await GetJsonAsync(source, url, cancellationToken).ConfigureAwait(false);
 
         // Panels answer "nothing here" with an object, with false, or with an empty string. None of
         // those is an error worth surfacing; an empty catalogue section is the correct reading.
@@ -247,8 +258,7 @@ internal sealed class XtreamApiClient
     private async Task<T?> GetObjectAsync<T>(XtreamSource source, Uri url, CancellationToken cancellationToken)
         where T : class
     {
-        var body = await GetStringAsync(source, url, cancellationToken).ConfigureAwait(false);
-        using var document = ParseJson(body, url, source);
+        using var document = await GetJsonAsync(source, url, cancellationToken).ConfigureAwait(false);
 
         if (document.RootElement.ValueKind is not JsonValueKind.Object)
         {
@@ -277,7 +287,19 @@ internal sealed class XtreamApiClient
         }
     }
 
-    private async Task<string> GetStringAsync(XtreamSource source, Uri url, CancellationToken cancellationToken)
+    /// <summary>
+    /// Fetches one address and parses its response as JSON.
+    /// </summary>
+    /// <remarks>
+    /// The body is streamed rather than read into a <see cref="string"/> first. That string was the larger of
+    /// two multi-megabyte copies — UTF-16, so twice the size of the response — and the film listing of the
+    /// subscription this was built against runs to 66,447 entries. What it costs is that the body arrives
+    /// outside the resilience pipeline, which is why the read carries a deadline of its own.
+    /// </remarks>
+    private async Task<JsonDocument> GetJsonAsync(
+        XtreamSource source,
+        Uri url,
+        CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         ApplyHeaders(request, source);
@@ -285,7 +307,9 @@ internal sealed class XtreamApiClient
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            response = await _httpClient
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (HttpRequestException exception)
         {
@@ -299,8 +323,6 @@ internal sealed class XtreamApiClient
 
         using (response)
         {
-            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-
             if (!response.IsSuccessStatusCode)
             {
                 throw new XtreamApiException(
@@ -310,7 +332,17 @@ internal sealed class XtreamApiClient
                 };
             }
 
-            return body;
+            // Bounded here because reading a streamed body is no longer the pipeline's business: a panel that
+            // sends its headers and then stalls would otherwise hold the import until the window closes.
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(XtreamTimeouts.BodyRead);
+
+            var body = await response.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false);
+
+            await using (body.ConfigureAwait(false))
+            {
+                return await ReadJsonAsync(body, url, source, deadline.Token).ConfigureAwait(false);
+            }
         }
     }
 
@@ -326,42 +358,110 @@ internal sealed class XtreamApiClient
         request.Headers.Accept.TryParseAdd("application/json, text/plain, */*");
     }
 
-    private JsonDocument ParseJson(string body, Uri url, XtreamSource source)
+    /// <summary>
+    /// Reads a response body as JSON, recognising the two things panels answer with that are not.
+    /// </summary>
+    /// <remarks>
+    /// The emptiness and HTML checks used to run against the whole body as text. They only ever needed its
+    /// first bytes, and a <see cref="PipeReader"/> is what makes looking at those possible without consuming
+    /// them: nothing is advanced past, so the parser still sees the document from its first byte.
+    /// </remarks>
+    private async Task<JsonDocument> ReadJsonAsync(
+        Stream body,
+        Uri url,
+        XtreamSource source,
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            throw new XtreamApiException("The panel returned an empty response.")
-            {
-                SanitizedUrl = _urlSanitizer.Sanitize(url, source),
-            };
-        }
-
-        if (LooksLikeHtml(body))
-        {
-            throw new XtreamApiException(
-                "The panel returned an HTML page instead of API data. The address may be wrong, or "
-                + "the panel may be blocking this client.")
-            {
-                SanitizedUrl = _urlSanitizer.Sanitize(url, source),
-            };
-        }
+        var reader = PipeReader.Create(body);
 
         try
         {
-            return JsonDocument.Parse(body);
-        }
-        catch (JsonException exception)
-        {
-            throw new XtreamApiException($"The panel returned malformed JSON: {exception.Message}", exception)
+            var peeked = await reader.ReadAtLeastAsync(PeekLength, cancellationToken).ConfigureAwait(false);
+            var start = SkipByteOrderMark(peeked.Buffer);
+            var beginning = Decode(peeked.Buffer.Slice(start));
+
+            if (string.IsNullOrWhiteSpace(beginning) && peeked.IsCompleted)
             {
-                SanitizedUrl = _urlSanitizer.Sanitize(url, source),
-            };
+                throw new XtreamApiException("The panel returned an empty response.")
+                {
+                    SanitizedUrl = _urlSanitizer.Sanitize(url, source),
+                };
+            }
+
+            if (LooksLikeHtml(beginning))
+            {
+                throw new XtreamApiException(
+                    "The panel returned an HTML page instead of API data. The address may be wrong, or "
+                    + "the panel may be blocking this client.")
+                {
+                    SanitizedUrl = _urlSanitizer.Sanitize(url, source),
+                };
+            }
+
+            // Only the byte-order mark is consumed. Not for the parser's sake — JsonDocument's stream
+            // overloads skip one themselves, which a mutation of this line proved — but for the two checks
+            // above: a mark is not whitespace to .NET, so it would sit in front of "<html" and stop an HTML
+            // error page being recognised as one. Everything else is left for the parser.
+            reader.AdvanceTo(start);
+
+            try
+            {
+                return await JsonDocument
+                    .ParseAsync(reader.AsStream(leaveOpen: true), cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (JsonException exception)
+            {
+                throw new XtreamApiException(
+                    $"The panel returned malformed JSON: {exception.Message}",
+                    exception)
+                {
+                    SanitizedUrl = _urlSanitizer.Sanitize(url, source),
+                };
+            }
+        }
+        finally
+        {
+            await reader.CompleteAsync().ConfigureAwait(false);
         }
     }
 
-    private static bool LooksLikeHtml(string body)
+    /// <summary>
+    /// Returns where the content starts, which is after a byte-order mark when the panel wrote one.
+    /// </summary>
+    /// <remarks>
+    /// Panels are PHP files, and one saved with a mark emits it ahead of its response. What needs the mark
+    /// out of the way is the inspection rather than the parsing: <see cref="char.IsWhiteSpace(char)"/> is
+    /// false for it, so it would hide an HTML page behind a character no check accounts for.
+    /// </remarks>
+    private static SequencePosition SkipByteOrderMark(ReadOnlySequence<byte> buffer)
     {
-        var start = body.AsSpan().TrimStart();
+        if (buffer.Length < Utf8ByteOrderMark.Length)
+        {
+            return buffer.Start;
+        }
+
+        Span<byte> first = stackalloc byte[Utf8ByteOrderMark.Length];
+        buffer.Slice(0, Utf8ByteOrderMark.Length).CopyTo(first);
+
+        return first.SequenceEqual(Utf8ByteOrderMark)
+            ? buffer.GetPosition(Utf8ByteOrderMark.Length)
+            : buffer.Start;
+    }
+
+    /// <summary>Reads the first <see cref="PeekLength"/> bytes as text, which is all the checks look at.</summary>
+    private static string Decode(ReadOnlySequence<byte> buffer)
+    {
+        var length = (int)Math.Min(buffer.Length, PeekLength);
+        Span<byte> beginning = stackalloc byte[PeekLength];
+        buffer.Slice(0, length).CopyTo(beginning);
+
+        return Encoding.UTF8.GetString(beginning[..length]);
+    }
+
+    private static bool LooksLikeHtml(string beginning)
+    {
+        var start = beginning.AsSpan().TrimStart();
 
         foreach (var marker in HtmlMarkers)
         {

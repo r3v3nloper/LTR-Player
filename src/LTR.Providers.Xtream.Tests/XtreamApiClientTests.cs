@@ -166,8 +166,119 @@ public sealed class XtreamApiClientTests
         streams.ShouldBeEmpty();
     }
 
+    /// <summary>
+    /// A panel whose PHP file was saved with a byte-order mark emits one ahead of its response.
+    /// </summary>
+    /// <remarks>
+    /// The parse survives one either way — <c>JsonDocument</c>'s stream overloads skip a mark themselves, and
+    /// a mutation proved it. What does not survive is the inspection: a mark is not whitespace to .NET, so it
+    /// sits in front of <c>&lt;html</c> and an error page reads as valid content the parser then chokes on,
+    /// reported as malformed JSON. Both halves are here, and the second is the one that earns the skip.
+    /// </remarks>
     [Fact]
-    public async Task GetStringAsync_SendsTheConfiguredUserAgent()
+    public async Task AuthenticateAsync_WhenThePanelPrefixesAByteOrderMark_StillReadsTheAccount()
+    {
+        // Arrange
+        await using var panel = await FakePanel.StartAsync(context =>
+            WriteWithByteOrderMarkAsync(context, "application/json", ActiveAccountJson));
+
+        var (client, source) = CreateClient(panel);
+
+        // Act
+        var account = await client.AuthenticateAsync(source, TestContext.Current.CancellationToken);
+
+        // Assert
+        account.UserInfo.ShouldNotBeNull();
+        account.UserInfo.Username.ShouldBe("alice");
+    }
+
+    [Fact]
+    public async Task AuthenticateAsync_WhenAnHtmlPageCarriesAByteOrderMark_StillReportsItAsHtml()
+    {
+        // Arrange: the combination that reads as a parse failure rather than as what it is — a panel serving
+        // its maintenance page, which is worth saying plainly because the address or the agent is the cause.
+        await using var panel = await FakePanel.StartAsync(context => WriteWithByteOrderMarkAsync(
+            context,
+            "text/html",
+            "<!DOCTYPE html><html><body>Under maintenance</body></html>"));
+
+        var (client, source) = CreateClient(panel);
+
+        // Act
+        var act = async () => await client.AuthenticateAsync(source, TestContext.Current.CancellationToken);
+
+        // Assert
+        var exception = await act.ShouldThrowAsync<XtreamApiException>();
+        exception.Message.ShouldContain("HTML");
+    }
+
+    /// <summary>
+    /// A response longer than the peek window, which is the property the streamed read has to keep.
+    /// </summary>
+    /// <remarks>
+    /// The emptiness and HTML checks look at the first bytes without consuming them. Get that wrong and a
+    /// short response still parses — every other test here sends one — while a real channel list loses its
+    /// opening bytes. Fifty entries is well past the window, and the assertions are on the first and last of
+    /// them so that a loss at either end fails.
+    /// </remarks>
+    [Fact]
+    public async Task GetLiveStreamsAsync_WhenTheResponseIsLongerThanThePeek_ParsesAllOfIt()
+    {
+        // Arrange
+        var entries = Enumerable
+            .Range(1, 50)
+            .Select(number => $$"""{"stream_id": {{number}}, "name": "Channel {{number}}"}""");
+
+        var json = $"[{string.Join(",", entries)}]";
+        json.Length.ShouldBeGreaterThan(512, "the point of this test is a body past the peek window");
+
+        await using var panel = await FakePanel.StartAsync(new Dictionary<string, string>
+        {
+            ["get_live_streams"] = json,
+        });
+
+        var (client, source) = CreateClient(panel);
+
+        // Act
+        var streams = await client.GetLiveStreamsAsync(source, TestContext.Current.CancellationToken);
+
+        // Assert
+        streams.Count.ShouldBe(50);
+        streams[0].Name.ShouldBe("Channel 1");
+        streams[^1].Name.ShouldBe("Channel 50");
+    }
+
+    [Fact]
+    public async Task GetLiveStreamsAsync_WhenThePanelReturnsMalformedJson_FailsWithAnActionableMessage()
+    {
+        // Arrange: truncated responses do arrive from panels that time out mid-write.
+        await using var panel = await FakePanel.StartAsync(new Dictionary<string, string>
+        {
+            ["get_live_streams"] = """[{"stream_id": 1, "name": "Erste"”""",
+        });
+
+        var (client, source) = CreateClient(panel);
+
+        // Act
+        var act = async () => await client.GetLiveStreamsAsync(source, TestContext.Current.CancellationToken);
+
+        // Assert
+        var exception = await act.ShouldThrowAsync<XtreamApiException>();
+        exception.Message.ShouldContain("malformed");
+        exception.SanitizedUrl.ShouldNotBeNull().ShouldNotContain("s3cret");
+    }
+
+    private static async Task WriteWithByteOrderMarkAsync(HttpContext context, string contentType, string body)
+    {
+        context.Response.ContentType = contentType;
+
+        byte[] mark = [0xEF, 0xBB, 0xBF];
+        await context.Response.Body.WriteAsync(mark);
+        await context.Response.Body.WriteAsync(System.Text.Encoding.UTF8.GetBytes(body));
+    }
+
+    [Fact]
+    public async Task AuthenticateAsync_SendsTheConfiguredUserAgent()
     {
         // Arrange: panels filter on the agent, so the configured value must reach the wire.
         await using var panel = await FakePanel.StartAsync(new Dictionary<string, string>
