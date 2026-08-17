@@ -90,6 +90,32 @@ public sealed class PlayerControlTests
     }
 
     /// <remarks>
+    /// Zapping walks what the viewer can see, not what is loaded: a search or a category having narrowed the
+    /// list is exactly the set they mean by "the next channel". This is also the case that keeps the selection
+    /// honest now that a key press asks the view by index instead of copying it out — an index into the
+    /// backing list would land on a hidden row here.
+    /// </remarks>
+    [Fact]
+    public async Task Zapping_WithTheListFiltered_SkipsWhatIsHidden()
+    {
+        // Arrange: only Erste and Dritte contain an "r", so Zweite is hidden between them.
+        var context = new MainViewModelHarness();
+        var viewModel = await WithThreeChannelsAsync(context);
+
+        viewModel.Channels.ChannelFilterText = "r";
+        viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
+        viewModel.Channels.SelectedChannel.Name.ShouldBe("Erste");
+
+        // Act
+        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+
+        // Assert
+        viewModel.Channels.SelectedChannel.ShouldNotBeNull();
+        viewModel.Channels.SelectedChannel.Name.ShouldBe("Dritte");
+        context.Session.Started.ShouldHaveSingleItem().DisplayName.ShouldBe("Dritte");
+    }
+
+    /// <remarks>
     /// Zapping only means anything in the channel list, so it switches back to it. Having the picture change
     /// while the film catalogue stays on screen leaves no way to tell what is playing.
     /// </remarks>

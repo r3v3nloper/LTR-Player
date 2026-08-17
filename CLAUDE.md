@@ -32,10 +32,11 @@ away with the programme blocks and no longer do — see rank 7 under Done there.
 
 `Docs/refactoring-backlog.md` is the work list, **renumbered 1–12 in the review after the URL-sanitisation
 rank** — that rank is done, and the review it triggered added four items belonging in the middle of the
-ranking, which is what forced a renumber rather than a gap. **Ranks 1–10 are done, plus a rank 13 found while
-verifying rank 6 and a rank 14 found while verifying rank 9** — so two remain, 11 and 12, and they belong together or not at all. None of them has an
-effect while the player is running, a claim that briefly stopped being true (rank 14 printed a credential in
-clear) and is therefore worth re-checking at each review rather than assuming.
+ranking, which is what forced a renumber rather than a gap. **Ranks 1–11 are done, plus a rank 13 found while
+verifying rank 6 and a rank 14 found while verifying rank 9** — so one remains, rank 12, standing alone now that
+the rank it was to be paired with has been measured and dropped. It has no effect while the player is running
+— a claim that briefly stopped being true (rank 14 printed a credential in clear) and is therefore worth
+re-checking at each review rather than assuming.
 **Ranks quoted in commit messages belong to whichever scheme was current when they were written**; that file
 carries both mappings. Its opening section says what to run before starting one.
 
@@ -342,7 +343,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **715 tests pass on `main`.** A refactor should not move that number.
+- **716 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.
