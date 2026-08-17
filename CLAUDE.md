@@ -32,8 +32,8 @@ away with the programme blocks and no longer do — see rank 7 under Done there.
 
 `Docs/refactoring-backlog.md` is the work list, **renumbered 1–12 in the review after the URL-sanitisation
 rank** — that rank is done, and the review it triggered added four items belonging in the middle of the
-ranking, which is what forced a renumber rather than a gap. **Ranks 1–9 are done, plus a rank 13 found while
-verifying rank 6 and a rank 14 found while verifying rank 9** — so three remain, 10 to 12. None of them has an
+ranking, which is what forced a renumber rather than a gap. **Ranks 1–10 are done, plus a rank 13 found while
+verifying rank 6 and a rank 14 found while verifying rank 9** — so two remain, 11 and 12, and they belong together or not at all. None of them has an
 effect while the player is running, a claim that briefly stopped being true (rank 14 printed a credential in
 clear) and is therefore worth re-checking at each review rather than assuming.
 **Ranks quoted in commit messages belong to whichever scheme was current when they were written**; that file
@@ -211,6 +211,12 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   at once. Category reconciliation is therefore scoped to the *kinds* an import covers, not to the source —
   scoped to the source, a live refresh deletes every film category — and its lookup is keyed by
   `(ExternalId, Kind)`, because a dictionary keyed by the identifier alone throws on the duplicate.
+- **A reconciliation is three things, and they live in three places.** `CatalogueReconciler.Match` does the
+  matching for all four entity types and decides nothing about fields; **what a provider owns is stated on the
+  entity** (`Channel.AdoptProviderFields`, `VodItem.AdoptListingFields` and the two others) because that is a
+  fact about a channel and not about a table; and `SeriesReconciliation` in Core holds the season algorithm,
+  which performs no I/O. Add a field to an entity and the adopt method is where you decide whether a refresh
+  may overwrite it — the context will not tell you.
 - **An empty answer from a provider is an answer; an unreachable provider is not.** `VodItem.HasDetail`
   records that a detail arrived, `DetailAttemptedUtc` records that the panel was asked, and only the second
   is written when the answer was nothing — for a day, after which it is asked again, because panels do fill
@@ -336,7 +342,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **698 tests pass on `main`.** A refactor should not move that number.
+- **715 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.

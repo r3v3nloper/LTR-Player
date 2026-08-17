@@ -68,4 +68,40 @@ public sealed class Series
     /// <summary>Whether the stored seasons still match what the provider says it holds.</summary>
     public bool HasCurrentDetail =>
         DetailFetchedUtc.HasValue && DetailModifiedUtc == LastModifiedUtc;
+
+    /// <summary>
+    /// Takes on what a series *listing* owns from a freshly fetched copy of this series.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Split the same way a film's listing fields are: assigned outright where the listing owns them, and
+    /// left alone where it is silent, because on many panels the detail call is the only source of a synopsis
+    /// or a cast.
+    /// </para>
+    /// <para>
+    /// <see cref="LastModifiedUtc"/> is the one field a refresh must always adopt, even to an older value: it
+    /// is what tells stored seasons apart from stale ones, so keeping the previous one would leave a series
+    /// the provider has changed never fetched again. The seasons themselves are not touched here — a listing
+    /// does not carry them, and <see cref="SeriesReconciliation"/> is what brings them in line.
+    /// </para>
+    /// </remarks>
+    public void AdoptListingFields(Series fetched)
+    {
+        ArgumentNullException.ThrowIfNull(fetched);
+
+        Name = fetched.Name;
+        CoverUrl = fetched.CoverUrl;
+        CategoryExternalId = fetched.CategoryExternalId;
+        CategoryId = fetched.CategoryId;
+        SortOrder = fetched.SortOrder;
+
+        Plot = fetched.Plot ?? Plot;
+        Genre = fetched.Genre ?? Genre;
+        Cast = fetched.Cast ?? Cast;
+        Director = fetched.Director ?? Director;
+        Rating = fetched.Rating ?? Rating;
+        Year = fetched.Year ?? Year;
+
+        LastModifiedUtc = fetched.LastModifiedUtc;
+    }
 }

@@ -173,7 +173,9 @@ public sealed partial class LtrDbContext
         stored.Year = detail.Year ?? stored.Year;
         stored.Rating = detail.Rating ?? stored.Rating;
 
-        var episodeCount = ReconcileSeasons(stored, detail);
+        // The algorithm itself is in Core: it works on entities already in hand and performs no I/O, and
+        // living here meant real SQLite was the only way to test the one thing it is subtle about.
+        var episodeCount = SeriesReconciliation.Apply(stored, detail);
 
         stored.DetailFetchedUtc = fetchedAtUtc;
         stored.DetailModifiedUtc = providerModifiedUtc;
@@ -523,38 +525,31 @@ public sealed partial class LtrDbContext
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var existingByExternalId = existing.ToDictionary(movie => movie.ExternalId, StringComparer.Ordinal);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-
         foreach (var movie in incoming)
         {
-            seen.Add(movie.ExternalId);
             movie.CategoryId = ResolveCategoryId(movie.CategoryExternalId, ContentKind.Movie, categoryIds);
-
-            if (!existingByExternalId.TryGetValue(movie.ExternalId, out var stored))
-            {
-                movie.SourceId = sourceId;
-                Movies.Add(movie);
-                continue;
-            }
-
-            stored.Name = movie.Name;
-            stored.CoverUrl = movie.CoverUrl;
-            stored.CategoryExternalId = movie.CategoryExternalId;
-            stored.CategoryId = movie.CategoryId;
-            stored.AddedUtc = movie.AddedUtc;
-            stored.SortOrder = movie.SortOrder;
-
-            // Assigned only where the listing has something to say. These four are also what the detail
-            // call fills in, and a listing that omits them would otherwise erase it.
-            stored.ContainerExtension = movie.ContainerExtension ?? stored.ContainerExtension;
-            stored.Plot = movie.Plot ?? stored.Plot;
-            stored.Genre = movie.Genre ?? stored.Genre;
-            stored.Rating = movie.Rating ?? stored.Rating;
-            stored.Year = movie.Year ?? stored.Year;
         }
 
-        Movies.RemoveRange(existing.Where(movie => !seen.Contains(movie.ExternalId)));
+        var reconciliation = CatalogueReconciler.Match(
+            existing,
+            incoming,
+            movie => movie.ExternalId,
+            StringComparer.Ordinal);
+
+        // Which fields a listing may assign and which it must leave alone is stated on VodItem, because it is
+        // a fact about a film and not about this table.
+        foreach (var (stored, fetched) in reconciliation.Matched)
+        {
+            stored.AdoptListingFields(fetched);
+        }
+
+        foreach (var movie in reconciliation.Added)
+        {
+            movie.SourceId = sourceId;
+            Movies.Add(movie);
+        }
+
+        Movies.RemoveRange(reconciliation.Removed);
     }
 
     private async Task ReconcileSeriesAsync(
@@ -568,138 +563,29 @@ public sealed partial class LtrDbContext
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var existingByExternalId = existing.ToDictionary(series => series.ExternalId, StringComparer.Ordinal);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-
         foreach (var series in incoming)
         {
-            seen.Add(series.ExternalId);
             series.CategoryId = ResolveCategoryId(series.CategoryExternalId, ContentKind.Series, categoryIds);
-
-            if (!existingByExternalId.TryGetValue(series.ExternalId, out var stored))
-            {
-                series.SourceId = sourceId;
-                Series.Add(series);
-                continue;
-            }
-
-            stored.Name = series.Name;
-            stored.CoverUrl = series.CoverUrl;
-            stored.CategoryExternalId = series.CategoryExternalId;
-            stored.CategoryId = series.CategoryId;
-            stored.SortOrder = series.SortOrder;
-
-            // Left where the listing is silent, exactly as for a film. The detail call is the only source
-            // of these on many panels.
-            stored.Plot = series.Plot ?? stored.Plot;
-            stored.Genre = series.Genre ?? stored.Genre;
-            stored.Cast = series.Cast ?? stored.Cast;
-            stored.Director = series.Director ?? stored.Director;
-            stored.Rating = series.Rating ?? stored.Rating;
-            stored.Year = series.Year ?? stored.Year;
-
-            // The one field a refresh must always adopt: it is what tells the stored seasons apart from
-            // stale ones, so keeping an older value would leave a changed series never re-fetched.
-            stored.LastModifiedUtc = series.LastModifiedUtc;
         }
 
-        Series.RemoveRange(existing.Where(series => !seen.Contains(series.ExternalId)));
-    }
+        var reconciliation = CatalogueReconciler.Match(
+            existing,
+            incoming,
+            series => series.ExternalId,
+            StringComparer.Ordinal);
 
-    /// <summary>
-    /// Brings a stored series' seasons and episodes in line with a detail response, and returns the
-    /// episode count.
-    /// </summary>
-    private static int ReconcileSeasons(Series stored, SeriesDetail detail)
-    {
-        // Indexed across the whole series rather than per season, so an episode the provider moves between
-        // seasons is recognised as the same episode and keeps its position.
-        var storedEpisodes = stored.Seasons.SelectMany(season => season.Episodes).ToList();
-        var episodesByExternalId = new Dictionary<string, Episode>(StringComparer.Ordinal);
-
-        foreach (var episode in storedEpisodes)
+        foreach (var (stored, fetched) in reconciliation.Matched)
         {
-            // TryAdd rather than Add: a provider that lists the same episode under two seasons would
-            // otherwise throw here, and the duplicate is dealt with below by keeping only what was matched.
-            episodesByExternalId.TryAdd(episode.ExternalId, episode);
+            stored.AdoptListingFields(fetched);
         }
 
-        var storedSeasons = stored.Seasons.ToDictionary(season => season.Number);
-        var seenSeasons = new HashSet<int>();
-        var kept = new HashSet<Episode>();
-        var episodeCount = 0;
-
-        foreach (var incomingSeason in detail.Seasons)
+        foreach (var series in reconciliation.Added)
         {
-            seenSeasons.Add(incomingSeason.Number);
-
-            if (!storedSeasons.TryGetValue(incomingSeason.Number, out var season))
-            {
-                season = new Season { Number = incomingSeason.Number, Episodes = [] };
-                stored.Seasons.Add(season);
-                storedSeasons[incomingSeason.Number] = season;
-            }
-
-            season.Name = incomingSeason.Name ?? season.Name;
-            season.CoverUrl = incomingSeason.CoverUrl ?? season.CoverUrl;
-            season.Plot = incomingSeason.Plot ?? season.Plot;
-
-            foreach (var incomingEpisode in incomingSeason.Episodes)
-            {
-                episodeCount++;
-
-                if (!episodesByExternalId.TryGetValue(incomingEpisode.ExternalId, out var episode))
-                {
-                    season.Episodes.Add(incomingEpisode);
-                    episodesByExternalId[incomingEpisode.ExternalId] = incomingEpisode;
-                    kept.Add(incomingEpisode);
-                    continue;
-                }
-
-                kept.Add(episode);
-                episode.Title = incomingEpisode.Title;
-                episode.Number = incomingEpisode.Number;
-                episode.ContainerExtension = incomingEpisode.ContainerExtension
-                    ?? episode.ContainerExtension;
-                episode.Plot = incomingEpisode.Plot ?? episode.Plot;
-                episode.StillUrl = incomingEpisode.StillUrl ?? episode.StillUrl;
-                episode.DurationSeconds = incomingEpisode.DurationSeconds ?? episode.DurationSeconds;
-                episode.AddedUtc = incomingEpisode.AddedUtc ?? episode.AddedUtc;
-
-                // Refiled by the provider: move it rather than duplicating it, and the viewer's position
-                // travels with the row.
-                if (episode.SeasonId != season.Id || !season.Episodes.Contains(episode))
-                {
-                    RemoveFromCurrentSeason(stored, episode);
-                    season.Episodes.Add(episode);
-                }
-            }
+            series.SourceId = sourceId;
+            Series.Add(series);
         }
 
-        // Driven by which instances were matched rather than by which identifiers were seen, so that a row
-        // the provider has stopped listing goes — and so does the second copy of one it listed twice.
-        foreach (var episode in storedEpisodes.Where(item => !kept.Contains(item)))
-        {
-            RemoveFromCurrentSeason(stored, episode);
-        }
-
-        foreach (var season in stored.Seasons.Where(item => !seenSeasons.Contains(item.Number)).ToList())
-        {
-            stored.Seasons.Remove(season);
-        }
-
-        return episodeCount;
-    }
-
-    private static void RemoveFromCurrentSeason(Series stored, Episode episode)
-    {
-        foreach (var season in stored.Seasons)
-        {
-            if (season.Episodes.Remove(episode))
-            {
-                return;
-            }
-        }
+        Series.RemoveRange(reconciliation.Removed);
     }
 
     private static void ConfigureVod(ModelBuilder modelBuilder)

@@ -84,4 +84,34 @@ public sealed class Channel
     public bool IsFavorite { get; set; }
 
     public int SortOrder { get; set; }
+
+    /// <summary>
+    /// Takes on everything the provider owns from a freshly fetched copy of this channel.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The division this states is the reason a refresh reconciles rather than replacing the table:
+    /// <see cref="IsFavorite"/> and <see cref="GuideChannelId"/> are not touched, because the first is the
+    /// user's own data and the second is a link the guide import makes. Wiping the row would discard both.
+    /// </para>
+    /// <para>
+    /// <see cref="CategoryId"/> is copied rather than resolved, so the caller has to have resolved it on
+    /// <paramref name="fetched"/> first — a local key is not something a provider can state.
+    /// </para>
+    /// </remarks>
+    public void AdoptProviderFields(Channel fetched)
+    {
+        ArgumentNullException.ThrowIfNull(fetched);
+
+        Name = fetched.Name;
+        StreamUrl = fetched.StreamUrl;
+        LogoUrl = fetched.LogoUrl;
+        EpgChannelId = fetched.EpgChannelId;
+        CategoryExternalId = fetched.CategoryExternalId;
+        CategoryId = fetched.CategoryId;
+        Number = fetched.Number;
+        HasArchive = fetched.HasArchive;
+        ArchiveDurationDays = fetched.ArchiveDurationDays;
+        SortOrder = fetched.SortOrder;
+    }
 }

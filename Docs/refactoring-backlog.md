@@ -8,8 +8,8 @@ Renumbered then rather than appended, unlike the removal before it: a *removed* 
 less than a new scheme, but four items belonging in the middle of the ranking cannot be appended without the
 number ceasing to mean the rank, which is the only thing this list is for.
 
-**Ranks 1–9, 13 and 14 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-19-13-and-14).
-**The three that remain keep their numbers**, so the list runs 10–12.
+**Ranks 1–10, 13 and 14 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-110-13-and-14).
+**The two that remain keep their numbers**, so the list runs 11–12 — and they belong together or not at all.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
@@ -19,7 +19,7 @@ is fixed. The claim is worth re-checking at each review rather than assuming, wh
 
 ## Before starting one of these
 
-- `dotnet test LTR-Player.slnx` — 698 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 715 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
@@ -30,13 +30,6 @@ is fixed. The claim is worth re-checking at each review rather than assuming, wh
 
 ---
 
-## Rank 10 — Extract the reconciliation diff
-
-**Project:** LTR.Persistence · **Area:** Maintainability · **Criticality:** moderate · **Effort:** high
-
-`LtrDbContext.cs` and `LtrDbContext.Vod.cs` hold roughly 250 non-comment lines that compute a diff and have
-no database concern — `ReconcileSeasons` alone is about 90. A `CatalogueReconciler` could compute it while
-the context performs the writes, which keeps §3.3.2 intact and makes the algorithm testable on its own.
 
 ## Rank 11 — Do not materialise the whole channel list
 
@@ -77,9 +70,37 @@ older one.
 **Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
 else on that list is below.
 
-### In the same session as the renumbering — ranks 1–9, 13 and 14
+### In the same session as the renumbering — ranks 1–10, 13 and 14
 
-Eleven ranks, cleared in one sitting. What is worth carrying forward:
+Twelve ranks, cleared in one sitting. What is worth carrying forward:
+
+- **Rank 10 · the reconciliation diff came out in three pieces, not one.** The rank proposed a
+  `CatalogueReconciler` that computes while the context writes. Reading it first showed the ~250 lines were
+  three different things, and each wanted a different home:
+
+  - **The matching** — index the stored rows by key, walk the incoming, remember what was seen, remove the
+    rest — was written out four times, for categories, channels, films and series. That is
+    `CatalogueReconciler.Match` in LTR.Persistence, 39 lines, and it decides nothing about fields.
+  - **What a provider owns** is now stated on the entities in Core: `Channel.AdoptProviderFields`,
+    `VodItem.AdoptListingFields`, and the two others. It belongs there because it is a fact about a channel
+    rather than about a table — a favourite is the user's, a synopsis is the detail call's — and because it is
+    the rule a reconciliation exists to keep.
+  - **The season algorithm** (~90 lines) moved to `SeriesReconciliation` in Core unchanged in substance. It
+    performed no I/O and never had: it works on entities already in hand. Living in the context meant real
+    SQLite was the only way to reach it.
+
+  `LtrDbContext.cs` 375 → 366 code lines and `.Vod.cs` 505 → 452, which is a modest return on the
+  restructuring — **the point was never the count.** It was that a panel refiling an episode between seasons,
+  or listing one twice, is now a six-line unit test instead of a database fixture.
+
+  **The proof that it is the same behaviour is that no test changed.** Seventy persistence tests over real
+  SQLite — favourites surviving, synopses not erased, positions travelling with a refiled episode, categories
+  scoped per kind — all passed against the restructured code with not one assertion touched. Seventeen unit
+  tests were then *added* for what had been unreachable, and a mutation check confirmed both layers see it:
+  copying `IsFavorite` in the adopt method fails one Core test and one persistence test.
+
+  Verified against the real subscription too, which is the case that matters: a refresh of 17,283 channels,
+  66,537 films and 11,001 series left the one favourite and the stored resume position exactly where they were.
 
 - **Rank 14 · a playlist's path credentials are removed, and the fact came from where it already was.** Not by
   comparing channels, which is what this rank proposed: the segments common to every channel include the route
