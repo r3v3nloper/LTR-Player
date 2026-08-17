@@ -8,20 +8,18 @@ Renumbered then rather than appended, unlike the removal before it: a *removed* 
 less than a new scheme, but four items belonging in the middle of the ranking cannot be appended without the
 number ceasing to mean the rank, which is the only thing this list is for.
 
-**Ranks 1–9 and 13 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-19-and-13). **The
-three that remain keep their numbers**, so the list runs 10–12 — plus a rank 14 that rank 9 uncovered,
-filed where it belongs by value rather than by number.
+**Ranks 1–9, 13 and 14 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-19-13-and-14).
+**The three that remain keep their numbers**, so the list runs 10–12.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
-**That "nothing left has an effect while the player is running" no longer holds, and rank 14 is why.** It had
-been true since the post-M4 review, which is exactly the sort of claim worth re-checking rather than
-assuming — a credential printed in clear by `live resolve` is an effect, even if the window never shows it.
-Ranks 10–12 remain what the claim described: structure, and a limit that is stated on screen.
+Everything left is structure or a limit that is stated on screen, and **nothing left has an effect while the
+player is running** — true again, having briefly not been: rank 14 was a credential printed in clear, and it
+is fixed. The claim is worth re-checking at each review rather than assuming, which is how that one surfaced.
 
 ## Before starting one of these
 
-- `dotnet test LTR-Player.slnx` — 694 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 698 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
@@ -31,30 +29,6 @@ Ranks 10–12 remain what the claim described: structure, and a limit that is st
   survives, suspect the fake before the assertion.
 
 ---
-
-## Rank 14 — A playlist's path credentials could be found by comparing channels
-
-**Project:** LTR.Providers.M3u · **Area:** Security · **Criticality:** moderate · **Effort:** medium
-
-The M3U sanitiser leaves paths alone, and its reasoning is sound as far as it goes: with no credentials on
-record, nothing tells a secret segment from a route. `live resolve` now makes the consequence visible —
-
-```
-URL         http://provider.invalid/live/alice/s3cret/101.ts
-```
-
-— for a provider that puts them in the path rather than the query. Found by building rank 9 and pointing it
-at a playlist of exactly that shape.
-
-**But the information is there, in the other channels.** A playlist holds hundreds of addresses from one
-subscription: the credential segments are the ones *identical in every one of them*, while the id segment
-varies. That is a real signal and it is available at import time, when the whole document is in hand — the
-segments common to every entry could be recorded on the source and then redacted by value, which is how the
-Xtream sanitiser already works.
-
-Ranked at moderate rather than minor because it is a credential printed in clear, and at medium effort
-because the sanitiser would need something the source does not currently carry. Until then the command says
-so rather than claiming a masking it did not perform, which is what makes this a gap and not a lie.
 
 ## Rank 10 — Extract the reconciliation diff
 
@@ -103,9 +77,30 @@ older one.
 **Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
 else on that list is below.
 
-### In the same session as the renumbering — ranks 1–9 and 13
+### In the same session as the renumbering — ranks 1–9, 13 and 14
 
-Ten ranks, cleared in one sitting. What is worth carrying forward:
+Eleven ranks, cleared in one sitting. What is worth carrying forward:
+
+- **Rank 14 · a playlist's path credentials are removed, and the fact came from where it already was.** Not by
+  comparing channels, which is what this rank proposed: the segments common to every channel include the route
+  (`/live/`) as well as the credentials, and reaching the channel list from a sanitiser would have meant
+  storing that comparison on the source — a migration, for a heuristic. **The values were already on the
+  source**, in the query of its own playlist and guide addresses, which is where the provider put them.
+  Reading them there is a fact rather than a guess, and it needed no new state at all.
+
+  Redacted only where such a value is a **whole path segment**, which is what makes it safe: a playlist
+  address also carries `output=ts`, and replacing "ts" wherever it occurred would take the extension off every
+  channel — the mistake rank 13 corrected in the Xtream sanitiser, one rank earlier.
+
+  **The uncovered case turned out to be much narrower than expected.** A playlist held as a file still has no
+  query of its own — but subscription playlists declare `x-tvg-url`, the import adopts it, and its query
+  carries the same credentials. So what remains is a playlist file with no guide address either. That was
+  verified rather than assumed, and it reports itself honestly.
+
+  **The end-to-end run is what earned its keep.** The unit tests passed while the real command still printed
+  the credentials, which looked like a defect for several minutes — it was a stale build: the CLI had been
+  run with `--no-build` against a provider assembly compiled before the change. Worth remembering next time
+  the tests and the application disagree.
 
 - **Rank 9 · a stored channel can be addressed, and it found a credential in clear.** Not by extending
   `resolve` as the rank proposed: that command's panel options are `Required`, on instances shared with three
