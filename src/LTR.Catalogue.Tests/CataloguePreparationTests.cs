@@ -44,7 +44,7 @@ public sealed class CataloguePreparationTests : IDisposable
         preparation.WasQuarantined.ShouldBeFalse();
         preparation.UpgradedCredentials.ShouldBe(0);
 
-        var store = services.GetRequiredService<ICatalogueStore>();
+        var store = services.GetRequiredService<CatalogueStore>();
         (await store.GetSourcesAsync(cancellationToken)).ShouldBeEmpty();
     }
 
@@ -72,7 +72,7 @@ public sealed class CataloguePreparationTests : IDisposable
             .ShouldBe("this is not a database");
 
         // And the catalogue works afterwards, rather than merely not throwing.
-        var store = services.GetRequiredService<ICatalogueStore>();
+        var store = services.GetRequiredService<CatalogueStore>();
         (await store.GetSourcesAsync(cancellationToken)).ShouldBeEmpty();
     }
 

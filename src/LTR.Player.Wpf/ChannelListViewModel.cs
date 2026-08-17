@@ -15,7 +15,9 @@ namespace LTR.Player.Wpf;
 /// </summary>
 public sealed partial class ChannelListViewModel : ObservableObject
 {
-    private readonly ICatalogueStore _catalogue;
+    private readonly ILiveCatalogue _liveCatalogue;
+    private readonly ISourceStore _sources;
+    private readonly IGuideCatalogue _guide;
     private readonly TimeProvider _timeProvider;
     private readonly StatusLine _status;
     private readonly ILogger<ChannelListViewModel> _logger;
@@ -49,13 +51,24 @@ public sealed partial class ChannelListViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ToggleFavoriteCommand))]
     private ChannelItemViewModel? _selectedChannel;
 
+    /// <remarks>
+    /// Three faces of the store, because this list genuinely does three things: it presents the channels, it
+    /// offers the categories the source declares, and it decorates each row with what is on now. The guide is
+    /// separate from the channels for a reason worth keeping in view — the two are published by different
+    /// parties and imported on different schedules, and most of a real subscription's channels have no guide
+    /// entry at all.
+    /// </remarks>
     public ChannelListViewModel(
-        ICatalogueStore catalogue,
+        ILiveCatalogue liveCatalogue,
+        ISourceStore sources,
+        IGuideCatalogue guide,
         TimeProvider timeProvider,
         StatusLine status,
         ILogger<ChannelListViewModel> logger)
     {
-        _catalogue = catalogue;
+        _liveCatalogue = liveCatalogue;
+        _sources = sources;
+        _guide = guide;
         _timeProvider = timeProvider;
         _status = status;
         _logger = logger;
@@ -92,9 +105,9 @@ public sealed partial class ChannelListViewModel : ObservableObject
             return;
         }
 
-        var storedChannels = await _catalogue.GetLiveChannelsAsync(source.Id, cancellationToken)
+        var storedChannels = await _liveCatalogue.GetLiveChannelsAsync(source.Id, cancellationToken)
             .ConfigureAwait(true);
-        var storedCategories = await _catalogue
+        var storedCategories = await _sources
             .GetCategoriesAsync(source.Id, ContentKind.Live, cancellationToken)
             .ConfigureAwait(true);
 
@@ -125,7 +138,7 @@ public sealed partial class ChannelListViewModel : ObservableObject
         }
 
         var now = _timeProvider.GetUtcNow();
-        var slices = await _catalogue.GetNowAndNextAsync(_source.Id, now, cancellationToken)
+        var slices = await _guide.GetNowAndNextAsync(_source.Id, now, cancellationToken)
             .ConfigureAwait(true);
 
         // Indexed rather than searched: a source has thousands of rows and as many slices, and pairing
@@ -218,7 +231,7 @@ public sealed partial class ChannelListViewModel : ObservableObject
 
         channel.IsFavorite = !channel.IsFavorite;
 
-        await _catalogue.SetFavoriteAsync(channel.Id, channel.IsFavorite, cancellationToken)
+        await _liveCatalogue.SetFavoriteAsync(channel.Id, channel.IsFavorite, cancellationToken)
             .ConfigureAwait(true);
 
         // Only the filtered view needs rebuilding, and only when the change can move the row out of it.

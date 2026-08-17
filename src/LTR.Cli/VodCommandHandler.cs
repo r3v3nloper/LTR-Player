@@ -27,7 +27,9 @@ internal sealed class VodCommandHandler
     /// <summary>How many entries to print when no limit is given.</summary>
     private const int DefaultLimit = 40;
 
-    private readonly ICatalogueStore _catalogue;
+    private readonly ISourceStore _sources;
+    private readonly IVodCatalogue _catalogue;
+    private readonly IWatchProgressStore _watched;
     private readonly IVodDetailService _detail;
     private readonly IProviderRegistry _providers;
     private readonly IPlaybackSession _session;
@@ -40,7 +42,9 @@ internal sealed class VodCommandHandler
     /// watched" cannot come out differently here than on screen.
     /// </param>
     public VodCommandHandler(
-        ICatalogueStore catalogue,
+        ISourceStore sources,
+        IVodCatalogue catalogue,
+        IWatchProgressStore watched,
         IVodDetailService detail,
         IProviderRegistry providers,
         IPlaybackSession session,
@@ -48,7 +52,9 @@ internal sealed class VodCommandHandler
         ConnectionReleaseCheck releaseCheck,
         WatchProgressRecorder progress)
     {
+        _sources = sources;
         _catalogue = catalogue;
+        _watched = watched;
         _detail = detail;
         _providers = providers;
         _session = session;
@@ -225,7 +231,7 @@ internal sealed class VodCommandHandler
             return 1;
         }
 
-        var entries = await _catalogue
+        var entries = await _watched
             .GetContinueWatchingAsync(source.Id, DefaultLimit, cancellationToken)
             .ConfigureAwait(false);
 
@@ -278,7 +284,7 @@ internal sealed class VodCommandHandler
         // the item is not marked watched, because nobody watched it.
         if (movieId is { } film)
         {
-            await _catalogue
+            await _watched
                 .RecordMovieProgressAsync(film, WatchOutcome.Discard, TimeSpan.Zero, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -286,7 +292,7 @@ internal sealed class VodCommandHandler
         }
         else
         {
-            await _catalogue
+            await _watched
                 .RecordEpisodeProgressAsync(episodeId!.Value, WatchOutcome.Discard, TimeSpan.Zero, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -563,7 +569,7 @@ internal sealed class VodCommandHandler
 
     private async Task<PlaylistSource?> FindSourceAsync(int sourceId, CancellationToken cancellationToken)
     {
-        var sources = await _catalogue.GetSourcesAsync(cancellationToken).ConfigureAwait(false);
+        var sources = await _sources.GetSourcesAsync(cancellationToken).ConfigureAwait(false);
         var source = sources.FirstOrDefault(candidate => candidate.Id == sourceId);
 
         if (source is null)

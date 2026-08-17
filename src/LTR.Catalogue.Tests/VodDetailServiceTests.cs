@@ -220,7 +220,7 @@ public sealed class VodDetailServiceTests : IAsyncDisposable
         var import = await CreateServiceAsync(registry, cancellationToken);
         var result = await import.ImportAsync(source, progress: null, cancellationToken);
 
-        var store = _services!.GetRequiredService<ICatalogueStore>();
+        var store = _services!.GetRequiredService<CatalogueStore>();
         var stored = (await store.GetSeriesAsync(result.SourceId, cancellationToken)).Single();
 
         return (_services!.GetRequiredService<IVodDetailService>(), stored.Id);
@@ -237,7 +237,7 @@ public sealed class VodDetailServiceTests : IAsyncDisposable
         var import = await CreateServiceAsync(registry, cancellationToken);
         var result = await import.ImportAsync(source, progress: null, cancellationToken);
 
-        var store = _services!.GetRequiredService<ICatalogueStore>();
+        var store = _services!.GetRequiredService<CatalogueStore>();
         var stored = (await store.GetMoviesAsync(result.SourceId, cancellationToken)).Single();
 
         return (_services!.GetRequiredService<IVodDetailService>(), stored.Id);
@@ -256,7 +256,7 @@ public sealed class VodDetailServiceTests : IAsyncDisposable
         services.AddSingleton(registry);
         services.AddDbContext<LtrDbContext>(options => options.UseSqlite(_connection));
         services.AddSingleton<CatalogueUnitOfWork>();
-        services.AddSingleton<ICatalogueStore, CatalogueStore>();
+        services.AddSingleton<CatalogueStore>();
         services.AddSingleton<ISourceImportService, SourceImportService>();
         services.AddSingleton<IVodDetailService, VodDetailService>();
 

@@ -24,16 +24,22 @@ internal sealed class GuideCommandHandler
     /// <summary>How many unmatched channels to name, so the reason for a poor match rate is visible.</summary>
     private const int UnmatchedSampleSize = 10;
 
-    private readonly ICatalogueStore _catalogue;
+    private readonly ISourceStore _sources;
+    private readonly ILiveCatalogue _channels;
+    private readonly IGuideCatalogue _guideCatalogue;
     private readonly IGuideImportService _guide;
     private readonly TimeProvider _timeProvider;
 
     public GuideCommandHandler(
-        ICatalogueStore catalogue,
+        ISourceStore sources,
+        ILiveCatalogue channels,
+        IGuideCatalogue guideCatalogue,
         IGuideImportService guide,
         TimeProvider timeProvider)
     {
-        _catalogue = catalogue;
+        _sources = sources;
+        _channels = channels;
+        _guideCatalogue = guideCatalogue;
         _guide = guide;
         _timeProvider = timeProvider;
     }
@@ -94,7 +100,7 @@ internal sealed class GuideCommandHandler
             return 1;
         }
 
-        var summary = await _catalogue.GetGuideSummaryAsync(source.Id, cancellationToken).ConfigureAwait(false);
+        var summary = await _guideCatalogue.GetGuideSummaryAsync(source.Id, cancellationToken).ConfigureAwait(false);
 
         Console.WriteLine($"Source     {source.Name}");
         Console.WriteLine($"Imported   {ConsoleText.FormatUtc(source.LastGuideImportedUtc)}");
@@ -130,8 +136,8 @@ internal sealed class GuideCommandHandler
     private async Task ReportNowNextAsync(int sourceId, CancellationToken cancellationToken)
     {
         var now = _timeProvider.GetUtcNow();
-        var slices = await _catalogue.GetNowAndNextAsync(sourceId, now, cancellationToken).ConfigureAwait(false);
-        var channels = await _catalogue.GetLiveChannelsAsync(sourceId, cancellationToken).ConfigureAwait(false);
+        var slices = await _guideCatalogue.GetNowAndNextAsync(sourceId, now, cancellationToken).ConfigureAwait(false);
+        var channels = await _channels.GetLiveChannelsAsync(sourceId, cancellationToken).ConfigureAwait(false);
         var namesById = channels.ToDictionary(channel => channel.Id, channel => channel.Name);
 
         var running = slices.Where(slice => slice.Now is not null).Take(UnmatchedSampleSize).ToList();
@@ -160,7 +166,7 @@ internal sealed class GuideCommandHandler
 
     private async Task ReportUnmatchedAsync(int sourceId, CancellationToken cancellationToken)
     {
-        var channels = await _catalogue.GetLiveChannelsAsync(sourceId, cancellationToken).ConfigureAwait(false);
+        var channels = await _channels.GetLiveChannelsAsync(sourceId, cancellationToken).ConfigureAwait(false);
         var unmatched = channels.Where(channel => channel.GuideChannelId is null).ToList();
 
         if (unmatched.Count == 0)
@@ -180,7 +186,7 @@ internal sealed class GuideCommandHandler
 
     private async Task<PlaylistSource?> FindSourceAsync(int sourceId, CancellationToken cancellationToken)
     {
-        var sources = await _catalogue.GetSourcesAsync(cancellationToken).ConfigureAwait(false);
+        var sources = await _sources.GetSourcesAsync(cancellationToken).ConfigureAwait(false);
         var source = sources.FirstOrDefault(candidate => candidate.Id == sourceId);
 
         if (source is null)

@@ -37,7 +37,8 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
     /// </remarks>
     public const int ResultLimit = 200;
 
-    private readonly ICatalogueStore _catalogue;
+    private readonly ISourceStore _sources;
+    private readonly IVodCatalogue _catalogue;
 
     [ObservableProperty]
     private CategoryChoice _selectedCategory = CategoryChoice.All;
@@ -49,8 +50,13 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
     [ObservableProperty]
     private string _notice = string.Empty;
 
-    protected CatalogueSectionViewModel(ICatalogueStore catalogue)
+    /// <param name="sources">
+    /// Only for the category picker. Categories are numbered per section by the panel, so the question
+    /// carries its kind and belongs to the source rather than to either catalogue.
+    /// </param>
+    protected CatalogueSectionViewModel(ISourceStore sources, IVodCatalogue catalogue)
     {
+        _sources = sources;
         _catalogue = catalogue;
     }
 
@@ -64,7 +70,7 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
     /// <summary>The source being shown, or null while the section is detached.</summary>
     protected PlaylistSource? Source { get; private set; }
 
-    protected ICatalogueStore Catalogue => _catalogue;
+    protected IVodCatalogue Catalogue => _catalogue;
 
     /// <summary>
     /// Points the section at a source, loading its categories and a first page of results.
@@ -94,7 +100,7 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
 
         // Read through the parameter rather than the property, which is still null: the picker has to be
         // complete before anything selects in it.
-        var categories = await _catalogue
+        var categories = await _sources
             .GetCategoriesAsync(source.Id, CategoryKind, cancellationToken)
             .ConfigureAwait(true);
 

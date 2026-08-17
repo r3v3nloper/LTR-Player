@@ -22,16 +22,18 @@ public sealed partial class ContinueWatchingViewModel : ObservableObject
     /// </summary>
     public const int EntryLimit = 24;
 
-    private readonly ICatalogueStore _catalogue;
+    private readonly IVodCatalogue _catalogue;
+    private readonly IWatchProgressStore _progress;
 
     private PlaylistSource? _source;
 
     [ObservableProperty]
     private ContinueWatchingEntry? _selectedEntry;
 
-    public ContinueWatchingViewModel(ICatalogueStore catalogue)
+    public ContinueWatchingViewModel(IVodCatalogue catalogue, IWatchProgressStore progress)
     {
         _catalogue = catalogue;
+        _progress = progress;
     }
 
     public ObservableCollection<ContinueWatchingEntry> Entries { get; } = [];
@@ -85,13 +87,13 @@ public sealed partial class ContinueWatchingViewModel : ObservableObject
 
         if (entry.Kind == ContentKind.Movie)
         {
-            await _catalogue
+            await _progress
                 .RecordMovieProgressAsync(entry.ItemId, WatchOutcome.Discard, TimeSpan.Zero, cancellationToken)
                 .ConfigureAwait(true);
         }
         else
         {
-            await _catalogue
+            await _progress
                 .RecordEpisodeProgressAsync(entry.ItemId, WatchOutcome.Discard, TimeSpan.Zero, cancellationToken)
                 .ConfigureAwait(true);
         }
@@ -107,7 +109,7 @@ public sealed partial class ContinueWatchingViewModel : ObservableObject
 
         if (_source is not null)
         {
-            var entries = await _catalogue
+            var entries = await _progress
                 .GetContinueWatchingAsync(_source.Id, EntryLimit, cancellationToken)
                 .ConfigureAwait(true);
 
