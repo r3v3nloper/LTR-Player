@@ -25,15 +25,15 @@ exists and not what was considered finished.
 self-contained folder and a zip that runs on a machine with no .NET.
 
 M3's timeline scrolls its channel names out of view with the programme blocks, and draws at most 200 rows.
-Both are stated on screen and carried as ranks 5 and 9 in `Docs/refactoring-backlog.md`; neither is
+Both are stated on screen and carried as ranks 7 and 12 in `Docs/refactoring-backlog.md`; neither is
 considered a gap in the milestone.
 
 ### Where to pick up
 
 `Docs/refactoring-backlog.md` is the work list, **renumbered 1–12 in the review after the URL-sanitisation
 rank** — that rank is done, and the review it triggered added four items belonging in the middle of the
-ranking, which is what forced a renumber rather than a gap. **Ranks 1–3 are done too, and the nine that
-remain keep their numbers**, so the list starts at 4. None of them has an effect while the player is running.
+ranking, which is what forced a renumber rather than a gap. **Ranks 1–4 are done too, and the eight that
+remain keep their numbers**, so the list starts at 5. None of them has an effect while the player is running.
 **Ranks quoted in commit messages belong to whichever scheme was current when they were written**; that file
 carries both mappings. Its opening section says what to run before starting one.
 
@@ -194,6 +194,11 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   at once. Category reconciliation is therefore scoped to the *kinds* an import covers, not to the source —
   scoped to the source, a live refresh deletes every film category — and its lookup is keyed by
   `(ExternalId, Kind)`, because a dictionary keyed by the identifier alone throws on the duplicate.
+- **An empty answer from a provider is an answer; an unreachable provider is not.** `VodItem.HasDetail`
+  records that a detail arrived, `DetailAttemptedUtc` records that the panel was asked, and only the second
+  is written when the answer was nothing — for a day, after which it is asked again, because panels do fill
+  their detail in. `VodDetailService.TryFetchAsync` reports whether the provider answered at all for exactly
+  this reason; treating a failed request as an empty answer would suppress the retry over a momentary outage.
 - **Taking something off the continue-watching list is not a `WatchOutcome`.** Every outcome states a moment,
   so expressing "the viewer removed this" as `Discard` also wrote `LastWatchedUtc` and the entry came back as
   the most recently watched thing in the catalogue. `ForgetMovieProgressAsync` clears the position, leaves
@@ -304,7 +309,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **660 tests pass on `main`.** A refactor should not move that number.
+- **670 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.

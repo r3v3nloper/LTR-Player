@@ -45,13 +45,16 @@ internal sealed class VodDetailService : IVodDetailService
             return stored;
         }
 
-        var detail = await TryFetchAsync(
+        var attempt = await TryFetchAsync(
                 source,
                 provider => provider.FetchSeriesDetailAsync(stored.ExternalId, cancellationToken),
                 stored.Name)
             .ConfigureAwait(false);
 
-        if (detail is null)
+        // A series needs no equivalent of the film's "asked, and there is nothing": its re-fetch is decided
+        // by the provider's own last_modified rather than by a clock, so an unchanged series is never asked
+        // twice however empty the answer was.
+        if (attempt.Detail is not { } detail)
         {
             // The panel could not be reached, or it has nothing to say. Either way the stored copy is what
             // there is, and last week's episode list beats an error.
@@ -91,24 +94,37 @@ internal sealed class VodDetailService : IVodDetailService
             .RunAsync(context => context.GetMovieAsync(movieId, cancellationToken))
             .ConfigureAwait(false);
 
-        if (stored is null || stored.HasDetail)
+        var askedAt = _timeProvider.GetUtcNow();
+
+        if (stored is null || !stored.NeedsDetailFetch(askedAt))
         {
             return stored;
         }
 
-        var detail = await TryFetchAsync(
+        var attempt = await TryFetchAsync(
                 source,
                 provider => provider.FetchMovieDetailAsync(stored.ExternalId, cancellationToken),
                 stored.Name)
             .ConfigureAwait(false);
 
-        if (detail is null)
+        if (attempt.Detail is not { } detail)
         {
+            // An answer of "nothing" is recorded so the next viewing does not ask again; a provider that
+            // could not be reached gave no answer at all, and recording that as one would suppress the
+            // retry for a day over a momentary outage.
+            if (attempt.ProviderAnswered)
+            {
+                await _database
+                    .RunAsync(context =>
+                        context.RecordMovieDetailAbsentAsync(movieId, askedAt, cancellationToken))
+                    .ConfigureAwait(false);
+            }
+
             return stored;
         }
 
         await _database
-            .RunAsync(context => context.SaveMovieDetailAsync(movieId, detail, cancellationToken))
+            .RunAsync(context => context.SaveMovieDetailAsync(movieId, detail, askedAt, cancellationToken))
             .ConfigureAwait(false);
 
         return await _database
@@ -117,15 +133,17 @@ internal sealed class VodDetailService : IVodDetailService
     }
 
     /// <summary>
-    /// Asks the provider for a detail, treating a failure as "no detail".
+    /// Asks the provider for a detail, treating a failure as "no detail" for the caller's purposes.
     /// </summary>
     /// <remarks>
     /// The failure is logged and swallowed on purpose. This runs because the user opened a film or a
     /// series, and a panel that is briefly unreachable should leave them looking at what is stored rather
     /// than at a dialog. The exception is not carried outwards, because nothing above here could act on it
-    /// differently.
+    /// differently — but whether the provider answered at all *is* carried out, because a panel with nothing
+    /// to say and a panel that said nothing are the same <see langword="null"/> and must not be remembered
+    /// the same way.
     /// </remarks>
-    private async Task<TDetail?> TryFetchAsync<TDetail>(
+    private async Task<DetailAttempt<TDetail>> TryFetchAsync<TDetail>(
         PlaylistSource source,
         Func<IContentProvider, Task<TDetail?>> fetch,
         string itemName)
@@ -134,7 +152,9 @@ internal sealed class VodDetailService : IVodDetailService
         try
         {
             var provider = _providers.CreateProvider(source);
-            return await fetch(provider).ConfigureAwait(false);
+            var detail = await fetch(provider).ConfigureAwait(false);
+
+            return new DetailAttempt<TDetail>(detail, ProviderAnswered: true);
         }
         catch (OperationCanceledException)
         {
@@ -144,7 +164,14 @@ internal sealed class VodDetailService : IVodDetailService
         catch (Exception exception)
         {
             CatalogueLog.DetailFetchFailed(_logger, exception, itemName, source.Name);
-            return null;
+            return new DetailAttempt<TDetail>(Detail: null, ProviderAnswered: false);
         }
     }
+
+    /// <param name="ProviderAnswered">
+    /// Whether the provider was reached and replied, whatever it replied. A reply of "nothing" is an answer;
+    /// an unreachable host is not.
+    /// </param>
+    private readonly record struct DetailAttempt<TDetail>(TDetail? Detail, bool ProviderAnswered)
+        where TDetail : class;
 }

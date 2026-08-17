@@ -209,7 +209,7 @@ internal sealed class VodCommandHandler
         Console.WriteLine($"Provider   id {movie.ExternalId}, container {movie.ContainerExtension ?? "unstated"}");
         Console.WriteLine($"Year       {movie.Year?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-"}");
         Console.WriteLine($"Runtime    {DescribeDuration(movie.DurationSeconds)}");
-        Console.WriteLine($"Detail     {(movie.HasDetail ? "fetched" : "not available")}");
+        Console.WriteLine($"Detail     {DescribeDetailState(movie)}");
         Console.WriteLine($"Resume     {DescribeResume(movie.ResumePositionSeconds, movie.IsWatched)}");
 
         if (!string.IsNullOrWhiteSpace(movie.Plot))
@@ -512,6 +512,26 @@ internal sealed class VodCommandHandler
     private static string DescribeEntry(ContinueWatchingEntry entry)
     {
         return string.IsNullOrEmpty(entry.Subtitle) ? entry.Title : $"{entry.Title} · {entry.Subtitle}";
+    }
+
+    /// <summary>
+    /// Says whether a film's detail is stored and, when it is not, when the panel was last asked.
+    /// </summary>
+    /// <remarks>
+    /// The asking is worth printing because it is what decides whether opening the film costs a request:
+    /// a panel that answers with nothing is taken at its word for a day. Without this line, "not available"
+    /// looks identical whether it has been asked once or on every viewing since the catalogue was imported.
+    /// </remarks>
+    private static string DescribeDetailState(VodItem movie)
+    {
+        if (movie.HasDetail)
+        {
+            return "fetched";
+        }
+
+        return movie.DetailAttemptedUtc is { } attempted
+            ? $"not available (asked {ConsoleText.FormatUtc(attempted)})"
+            : "not available (never asked)";
     }
 
     private static string DescribeResume(int? resumePositionSeconds, bool isWatched)

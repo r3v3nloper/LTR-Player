@@ -197,6 +197,72 @@ public sealed class VodDetailServiceTests : IAsyncDisposable
         movie.HasDetail.ShouldBeFalse("nothing was stored, so a later attempt is still worth making");
     }
 
+    [Fact]
+    public async Task GetMovieAsync_WhenThePanelHasNoDetail_DoesNotAskAgainOnTheNextViewing()
+    {
+        // Arrange: the empty answer used to leave nothing behind, so every viewing asked again — for every
+        // film in a catalogue of tens of thousands, on a panel that has no detail for any of them.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var source = CreateSource();
+        var registry = new FakeProviderRegistry(source) { MovieDetail = null };
+        var (detailService, movieId) = await CreateWithMovieAsync(registry, source, cancellationToken);
+
+        await detailService.GetMovieAsync(source, movieId, cancellationToken);
+
+        // Act
+        var movie = await detailService.GetMovieAsync(source, movieId, cancellationToken);
+
+        // Assert
+        movie.ShouldNotBeNull();
+        registry.Calls.Count(call => call == "movie-detail:8412").ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task GetMovieAsync_WhenTheEmptyAnswerIsADayOld_AsksAgain()
+    {
+        // Arrange: an empty answer today is not proof of an empty answer next week. Panels do fill their
+        // detail in, and a film whose synopsis arrives eventually has to be able to pick it up.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var source = CreateSource();
+        var registry = new FakeProviderRegistry(source) { MovieDetail = null };
+        var (detailService, movieId) = await CreateWithMovieAsync(registry, source, cancellationToken);
+
+        await detailService.GetMovieAsync(source, movieId, cancellationToken);
+
+        _clock.Advance(VodItem.DetailRetryInterval);
+        registry.MovieDetail = new MovieDetail(Plot: "Linguist meets heptapods.");
+
+        // Act
+        var movie = await detailService.GetMovieAsync(source, movieId, cancellationToken);
+
+        // Assert
+        movie!.Plot.ShouldBe("Linguist meets heptapods.");
+        registry.Calls.Count(call => call == "movie-detail:8412").ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task GetMovieAsync_WhenThePanelCouldNotBeReached_AsksAgainOnTheNextViewing()
+    {
+        // Arrange: the distinction the attempt column has to make. A momentary outage is not an answer, and
+        // remembering it as one would suppress the retry for a day over nothing.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var source = CreateSource();
+        var registry = new FakeProviderRegistry(source) { DetailFetchFails = true };
+        var (detailService, movieId) = await CreateWithMovieAsync(registry, source, cancellationToken);
+
+        await detailService.GetMovieAsync(source, movieId, cancellationToken);
+
+        registry.DetailFetchFails = false;
+        registry.MovieDetail = new MovieDetail(Plot: "Linguist meets heptapods.");
+
+        // Act
+        var movie = await detailService.GetMovieAsync(source, movieId, cancellationToken);
+
+        // Assert
+        movie!.Plot.ShouldBe("Linguist meets heptapods.");
+        registry.Calls.Count(call => call == "movie-detail:8412").ShouldBe(2);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_services is not null)
