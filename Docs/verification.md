@@ -54,9 +54,10 @@ The same thing for a source already imported, and **the only way to reach a play
 address is composed from credentials, a playlist's arrives inside the playlist and exists only in the
 catalogue. `live list` prints the local channel ids `live resolve` takes.
 
-For a playlist whose credentials sit in the *path* rather than the query, the address comes back unmasked and
-says so — nothing on record distinguishes a secret segment from a route. That is rank 14 in
-`Docs/refactoring-backlog.md`.
+A playlist whose credentials sit in the *path* has them masked too, from the values in its own playlist or
+guide address — `http://host/live/***/***/101.ts`, with the route and the channel still readable. The one case
+that cannot be masked is a playlist held as a file that declares no `x-tvg-url`: nothing then reveals which
+segment is a secret, and the command says so instead of claiming otherwise.
 
 ## 4. Does playback work — and is the connection handed back?
 
