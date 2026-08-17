@@ -8,9 +8,8 @@ Renumbered then rather than appended, unlike the removal before it: a *removed* 
 less than a new scheme, but four items belonging in the middle of the ranking cannot be appended without the
 number ceasing to mean the rank, which is the only thing this list is for.
 
-**Ranks 1–6 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-16). **The rest keep their
-numbers**, so the list starts at 7, by that same rule — and rank 13, found while verifying rank 6, sits where
-it belongs by value rather than by number.
+**Ranks 1–6 and 13 are done** — see [Done](#in-the-same-session-as-the-renumbering--ranks-16-and-13). **The
+six that remain keep their numbers**, so the list runs 7–12 with no gaps left inside it, by that same rule.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
@@ -20,7 +19,7 @@ review and is worth re-checking rather than assuming next time.
 
 ## Before starting one of these
 
-- `dotnet test LTR-Player.slnx` — 687 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 691 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
@@ -66,23 +65,6 @@ Proposal: accept `--source-id` and go through the registry, as `vod play-test` d
 
 **Ranked by usefulness rather than by effort**, and therefore below items that cost more: this adds a
 capability rather than restructuring one, so it is the only entry here that is not a refactor.
-
-## Rank 13 — A short Xtream credential redacts the rest of the address
-
-**Project:** LTR.Providers.Xtream · **Area:** Security · **Criticality:** minor · **Effort:** low
-
-`XtreamUrlSanitizer` replaces its secrets wherever they occur, which is what covers the path form. With a
-short or common credential it also replaces them where they are not secrets: a username of `x` against
-`hd-max.org` logs `http://hd-ma***.org:8080/pla***er_api.php` — host and action both mangled, and those are
-the whole reason the address is logged. Seen while verifying rank 6 with dummy credentials, but panels do
-issue two-character trial usernames.
-
-Over-redaction is the safe direction, so this is diagnostics rather than a leak. Proposal: replace a
-credential where it is a whole query value or a whole path segment, which is where Xtream actually puts it,
-rather than as any substring.
-
-**Numbered 13 because it was found mid-session, not because it ranks there** — on value per effort it belongs
-between 9 and 10. It will move when this list is next renumbered; the number is a name until then.
 
 ## Rank 10 — Extract the reconciliation diff
 
@@ -131,9 +113,29 @@ older one.
 **Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
 else on that list is below.
 
-### In the same session as the renumbering — ranks 1–6
+### In the same session as the renumbering — ranks 1–6 and 13
 
-Six ranks, cleared in one sitting. What is worth carrying forward:
+Seven ranks, cleared in one sitting. What is worth carrying forward:
+
+- **Rank 13 · a credential is removed where the protocol puts it, not wherever it occurs.** A query value or
+  a path segment that *is* the credential goes; the host, the path and `action=…` stay. Found by running the
+  previous rank's verification with `--user x --pass y`, which logged
+  `http://hd-ma***.org:8080/pla***er_api.php` — both diagnosed things redacted, and the credentials no better
+  hidden for it.
+
+  **The interesting part is the fallback, because this change moves risk in the unsafe direction.** Replacing
+  by value can only over-redact; matching structurally can *under*-redact, if a panel spells a credential
+  somewhere the rule does not recognise. So when the structural pass finds a secret nowhere, the old wholesale
+  replacement runs for that secret instead — judged per credential, so a properly spelled username does not
+  exempt a password hidden elsewhere in the same address. Two tests cover the fallback and both fail without
+  it, which was checked by removing it.
+
+  What remains uncovered, and is written down rather than solved: one credential appearing *both* in its
+  proper place and buried in something else in the same address. The alternative was redacting every address
+  down to uselessness, which is what this replaced.
+
+  `SensitiveUrlSanitizer` gained the selective overload of `RedactQueryValues` and a `RedactPathSegments`, so
+  the query-splitting stayed in one place rather than being written a second time for one protocol.
 
 - **Rank 6 · the Xtream response is streamed, and the fiddly part was not the one the rank named.** The
   HTML-at-HTTP-200 guard moved to the first bytes as expected: a `PipeReader` peeks 512 bytes, nothing is
