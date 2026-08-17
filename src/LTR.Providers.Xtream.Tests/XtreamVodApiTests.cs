@@ -134,7 +134,10 @@ public sealed class XtreamVodApiTests
 
     private static (XtreamApiClient Client, Core.Sources.XtreamSource Source) CreateClient(FakePanel panel)
     {
-        var client = new XtreamApiClient(new HttpClient(), NullLogger<XtreamApiClient>.Instance);
+        var client = new XtreamApiClient(
+            new HttpClient(),
+            new XtreamUrlSanitizer(),
+            NullLogger<XtreamApiClient>.Instance);
 
         var source = new XtreamSourceBuilder()
             .WithBaseUrl(panel.BaseUrl.AbsoluteUri)

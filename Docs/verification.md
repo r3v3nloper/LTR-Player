@@ -77,7 +77,9 @@ their first seconds. The release that precedes an open is *not* in that figure, 
 by the connection limit and cannot be shortened.
 
 Add `--verbose` to any command to see the requests being made. Logged addresses always have their
-credentials stripped, because diagnostic output is what people paste into forums.
+credentials stripped, because diagnostic output is what people paste into forums. That holds for a playlist
+source as well as a panel: each protocol has a sanitiser of its own, and a playlist's address has every
+query value removed since nothing here can tell which of them is the credential.
 
 ## 5. Is the programme guide usable?
 

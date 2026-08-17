@@ -9,7 +9,7 @@ namespace LTR.Providers.Xtream;
 /// <remarks>
 /// Source-generated rather than written with the <c>ILogger</c> extension methods, which keeps the
 /// call sites allocation-free and puts every message this component can produce in one place. Every
-/// address passed in here has already been through <see cref="UrlSanitizer"/>.
+/// address passed in here has already been through <see cref="XtreamUrlSanitizer"/>.
 /// </remarks>
 internal static partial class XtreamLog
 {

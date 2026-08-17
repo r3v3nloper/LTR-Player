@@ -11,6 +11,7 @@ internal sealed class M3uContentProvider : IContentProvider
 {
     private readonly M3uSource _source;
     private readonly M3uPlaylistLoader _loader;
+    private readonly M3uUrlSanitizer _urlSanitizer;
     private readonly ILogger<M3uContentProvider> _logger;
 
     /// <summary>
@@ -23,10 +24,15 @@ internal sealed class M3uContentProvider : IContentProvider
     /// </remarks>
     private M3uPlaylist? _playlist;
 
-    public M3uContentProvider(M3uSource source, M3uPlaylistLoader loader, ILogger<M3uContentProvider> logger)
+    public M3uContentProvider(
+        M3uSource source,
+        M3uPlaylistLoader loader,
+        M3uUrlSanitizer urlSanitizer,
+        ILogger<M3uContentProvider> logger)
     {
         _source = source;
         _loader = loader;
+        _urlSanitizer = urlSanitizer;
         _logger = logger;
     }
 
@@ -48,7 +54,11 @@ internal sealed class M3uContentProvider : IContentProvider
         }
         catch (Exception exception) when (exception is HttpRequestException or IOException)
         {
-            M3uLog.PlaylistUnreachable(_logger, exception, _source.Name);
+            M3uLog.PlaylistUnreachable(
+                _logger,
+                exception,
+                _source.Name,
+                _urlSanitizer.Sanitize(_source.PlaylistUrl, _source));
             return ProviderAccount.Unauthenticated;
         }
 

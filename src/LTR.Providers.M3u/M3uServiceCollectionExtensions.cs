@@ -30,6 +30,13 @@ public static class M3uServiceCollectionExtensions
         // It holds parsed playlists only — no HttpClient — so it does not pin a message handler.
         services.TryAddSingleton<M3uPlaylistCache>();
 
+        // Stateless, and reached two ways: directly by the provider that logs a failed playlist fetch,
+        // and through the protocol-neutral contract by callers that hold only a PlaylistSource. A factory
+        // for the second, so both routes reach the same instance.
+        services.TryAddSingleton<M3uUrlSanitizer>();
+        services.AddSingleton<ISensitiveUrlSanitizer>(
+            provider => provider.GetRequiredService<M3uUrlSanitizer>());
+
         services
             .AddHttpClient<M3uPlaylistLoader>(client => client.Timeout = DownloadTimeout);
 

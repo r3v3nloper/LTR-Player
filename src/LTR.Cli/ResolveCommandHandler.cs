@@ -9,8 +9,6 @@ namespace LTR.Cli;
 /// </summary>
 internal sealed class ResolveCommandHandler
 {
-    private const string CredentialMask = "***";
-
     private readonly IProviderRegistry _providers;
 
     public ResolveCommandHandler(IProviderRegistry providers)
@@ -63,19 +61,14 @@ internal sealed class ResolveCommandHandler
     /// </summary>
     /// <remarks>
     /// The address is the point of this command, but it embeds a paid subscription's username and
-    /// password in its path — and console output ends up in scrollback, screenshots and bug reports.
+    /// password in its path — and console output ends up in scrollback, screenshots and bug reports. What
+    /// counts as a credential is the protocol's business, so the rule comes from the provider layer rather
+    /// than being spelled out a second time here.
     /// </remarks>
-    private static string Present(Uri url, XtreamSource source, bool revealCredentials)
+    private string Present(Uri url, PlaylistSource source, bool revealCredentials)
     {
-        if (revealCredentials)
-        {
-            return url.AbsoluteUri;
-        }
-
-        return url.AbsoluteUri
-            .Replace(Uri.EscapeDataString(source.Username), CredentialMask, StringComparison.Ordinal)
-            .Replace(Uri.EscapeDataString(source.Password), CredentialMask, StringComparison.Ordinal)
-            .Replace(source.Username, CredentialMask, StringComparison.Ordinal)
-            .Replace(source.Password, CredentialMask, StringComparison.Ordinal);
+        return revealCredentials
+            ? url.AbsoluteUri
+            : _providers.GetUrlSanitizer(source).Sanitize(url, source);
     }
 }

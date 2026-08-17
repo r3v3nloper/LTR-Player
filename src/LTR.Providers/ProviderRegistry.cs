@@ -11,17 +11,20 @@ public sealed class ProviderRegistry : IProviderRegistry
     private readonly IEnumerable<IProviderCapabilityProbe> _capabilityProbes;
     private readonly IEnumerable<IStreamUrlResolver> _streamUrlResolvers;
     private readonly IEnumerable<IGuideSource> _guideSources;
+    private readonly IEnumerable<ISensitiveUrlSanitizer> _urlSanitizers;
 
     public ProviderRegistry(
         IEnumerable<IContentProviderFactory> factories,
         IEnumerable<IProviderCapabilityProbe> capabilityProbes,
         IEnumerable<IStreamUrlResolver> streamUrlResolvers,
-        IEnumerable<IGuideSource> guideSources)
+        IEnumerable<IGuideSource> guideSources,
+        IEnumerable<ISensitiveUrlSanitizer> urlSanitizers)
     {
         _factories = factories;
         _capabilityProbes = capabilityProbes;
         _streamUrlResolvers = streamUrlResolvers;
         _guideSources = guideSources;
+        _urlSanitizers = urlSanitizers;
     }
 
     public IContentProvider CreateProvider(PlaylistSource source)
@@ -46,6 +49,12 @@ public sealed class ProviderRegistry : IProviderRegistry
     {
         ArgumentNullException.ThrowIfNull(source);
         return Select(_guideSources, source, guide => guide.Supports(source), "guide source");
+    }
+
+    public ISensitiveUrlSanitizer GetUrlSanitizer(PlaylistSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return Select(_urlSanitizers, source, sanitizer => sanitizer.Supports(source), "url sanitizer");
     }
 
     /// <summary>

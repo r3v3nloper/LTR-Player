@@ -15,11 +15,16 @@ namespace LTR.Providers.Xtream;
 internal sealed class XtreamGuideSource : IGuideSource
 {
     private readonly HttpClient _httpClient;
+    private readonly XtreamUrlSanitizer _urlSanitizer;
     private readonly ILogger<XtreamGuideSource> _logger;
 
-    public XtreamGuideSource(HttpClient httpClient, ILogger<XtreamGuideSource> logger)
+    public XtreamGuideSource(
+        HttpClient httpClient,
+        XtreamUrlSanitizer urlSanitizer,
+        ILogger<XtreamGuideSource> logger)
     {
         _httpClient = httpClient;
+        _urlSanitizer = urlSanitizer;
         _logger = logger;
     }
 
@@ -67,7 +72,7 @@ internal sealed class XtreamGuideSource : IGuideSource
         {
             throw new XtreamApiException($"The panel answered {(int)response.StatusCode} for its guide.")
             {
-                SanitizedUrl = UrlSanitizer.Sanitize(url, xtreamSource),
+                SanitizedUrl = _urlSanitizer.Sanitize(url, xtreamSource),
             };
         }
 

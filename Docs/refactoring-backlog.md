@@ -1,18 +1,22 @@
 # Refactoring backlog
 
-**Renumbered after M6.** All six milestones are done and merged; what follows is everything that remains,
-ranked 1–9 from scratch. Numbers quoted in commit messages up to and including the M6 merge belong to the
-older schemes — the mapping is at the bottom, under [Done](#done).
+**Renumbered in the review after the URL-sanitisation rank**, which finished the post-M6 list's rank 1 and
+found four items to add. Twelve remain, ranked 1–12. Numbers quoted in commit messages belong to whichever
+scheme was current when they were written — the mappings are at the bottom, under [Done](#done).
+
+Renumbered rather than appended, unlike this morning: a *removed* item leaves a gap that costs less than a
+new scheme, but four items belonging in the middle of the ranking cannot be appended without the number
+ceasing to mean the rank, which is the only thing this list is for.
 
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
-Everything left is structure, a missing guard, or a limit that is stated on screen. **Nothing left has an
-effect while the player is running**, which has been true since the post-M4 review and is worth re-checking
-rather than assuming next time.
+Everything left is structure, a missing guard, a diagnostic that says too little, or a limit that is stated
+on screen. **Nothing left has an effect while the player is running**, which has been true since the post-M4
+review and is worth re-checking rather than assuming next time.
 
 ## Before starting one of these
 
-- `dotnet test LTR-Player.slnx` — 628 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 648 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
@@ -23,17 +27,16 @@ rather than assuming next time.
 
 ---
 
-## Rank 1 — Protocol-neutral URL sanitisation
+## Rank 1 — An M3U guide download says which address failed
 
-**Project:** LTR.Providers.* · **Area:** Security · **Criticality:** moderate · **Effort:** medium
+**Project:** LTR.Providers.M3u · **Area:** Maintainability · **Criticality:** minor · **Effort:** low
 
-`UrlSanitizer` is internal to `LTR.Providers.Xtream` and only understands `XtreamSource`. M3U playlist and
-guide URLs also carry credentials in their query string and have no sanitiser. Nothing logs one today, so
-this is a missing guard rather than an active leak — and first in the list because it is the only item here
-with a security dimension, and because the guard wants to exist *before* something starts logging an address.
+`M3uGuideSource` reports a guide that answered 404 through `EnsureSuccessStatusCode()`, whose message names
+no address at all — while `XtreamGuideSource` throws an exception carrying a sanitised one. The address is
+the diagnosis here: a playlist's guide is either the one the user configured or the one the playlist
+declared in its header, and which of the two was tried is the question.
 
-Proposal: `ISensitiveUrlSanitizer` in `LTR.Providers.Abstractions`, one implementation per protocol,
-resolved through `IProviderRegistry`.
+Nothing was possible before the sanitiser existed. It exists now, and this is the caller that predates it.
 
 ## Rank 2 — Small duplications and loose ends
 
@@ -49,7 +52,23 @@ Individually not worth a rank; worth clearing in one pass:
 - Taking an entry off the continue-watching list stamps `LastWatchedUtc` with the moment it was removed.
   Only the CLI shows it.
 
-## Rank 3 — A film's detail is fetched again on every viewing when the panel has none
+## Rank 3 — The registry's test doubles grow with every interface member
+
+**Project:** LTR.Catalogue.Tests, LTR.Player.Wpf.Tests · **Area:** Maintainability · **Criticality:** minor
+· **Effort:** low
+
+`IProviderRegistry` gained a fifth member and both doubles — `FakeProviderRegistry` and
+`StubProviderRegistry` — had to gain a body for it that only throws. Each double answers one or two of the
+five and declares all of them; the next member costs the same two edits again.
+
+Proposal: a `NotSupportedProviderRegistry` base in `src/TestSupport`, linked into the test projects the way
+`TestClock` already is, throwing from every member with the message that names it. Each double then overrides
+only what it actually answers, and a new member costs nothing.
+
+Worth reading the post-M6 note on the interface splits first: **neither split shrank a test double**, and
+this is the same subject from the other end. The difference is that this one does not touch production code.
+
+## Rank 4 — A film's detail is fetched again on every viewing when the panel has none
 
 **Project:** LTR.Catalogue · **Area:** Performance · **Criticality:** minor · **Effort:** low
 
@@ -61,7 +80,24 @@ asked" from "asked, and there is nothing".
 Proposal: record when the detail was last attempted and do not retry within a day. `Series` already has
 `DetailFetchedUtc` for the same purpose.
 
-## Rank 4 — Stream the Xtream response instead of buffering it
+## Rank 5 — The shell's notification forwarding has grown past the size that named it
+
+**Project:** LTR.Player.Wpf · **Area:** Maintainability · **Criticality:** moderate · **Effort:** medium
+
+The review after M5 named this block as "the next real candidate" at **six handlers, about ninety lines**. It
+is now **eight handlers and about 138 lines** of `MainViewModel`'s 804 — `Settings` and the playback
+coordinator joined during M6 by the same mechanism as everything else that lands in this class.
+
+The handlers exist only to carry a notification across an object boundary, because
+`[NotifyCanExecuteChangedFor]` cannot: the command lives on the shell and the property its guard reads
+belongs to a section.
+
+**Left alone once already, deliberately, and the reason has not changed:** getting this wrong reproduces the
+defect class this repository has shipped three times, and `CanExecute` passes even with the bug. Whatever
+this becomes, the tests must keep asserting the *notification*. That is what makes it medium rather than low
+effort at eight handlers.
+
+## Rank 6 — Stream the Xtream response instead of buffering it
 
 **Project:** LTR.Providers.Xtream · **Area:** Performance · **Criticality:** moderate · **Effort:** medium
 
@@ -73,7 +109,7 @@ Proposal: `JsonDocument.ParseAsync` over the content stream. The HTML-detection 
 first bytes of the stream, which is the only fiddly part: panels answer with an HTML error page at HTTP 200
 and that must still be recognised.
 
-## Rank 5 — Pin the timeline's channel-name column
+## Rank 7 — Pin the timeline's channel-name column
 
 **Project:** LTR.Player.Wpf · **Area:** Usability · **Criticality:** moderate · **Effort:** medium
 
@@ -83,14 +119,33 @@ out of view with the programme blocks. Names staying put is most of what makes a
 Doing it properly means two vertically synchronised lists or a custom panel. It is mostly hidden today
 because the window is moved with the buttons rather than by scrolling. Stated on screen; not a gap in M3.
 
-## Rank 6 — Command classes in the CLI
+## Rank 8 — Command classes in the CLI, and the handler that outgrew one
 
-**Project:** LTR.Cli · **Area:** Maintainability · **Criticality:** minor · **Effort:** medium
+**Project:** LTR.Cli · **Area:** Maintainability · **Criticality:** moderate · **Effort:** medium
 
 `Program.cs` is 380 lines of `Build*` functions. Proposal: one class per command exposing `Command Build()`,
 leaving `Program` as composition only.
 
-## Rank 7 — Extract the reconciliation diff
+**Wider than this rank said when it was written.** The CLI's largest file is not `Program.cs` but
+`VodCommandHandler` at 412 code lines, and it takes **ten constructor dependencies** — because it does four
+jobs: listing, showing one item, forgetting a stored position, and play-testing. The dependencies already
+separate along those lines, which is what makes the split obvious rather than a judgement call. Raised from
+minor to moderate for it.
+
+## Rank 9 — `resolve` cannot address a stored playlist source
+
+**Project:** LTR.Cli · **Area:** Usability · **Criticality:** minor · **Effort:** low
+
+`resolve` takes `--url/--user/--pass`, so it only ever addresses an Xtream panel. A playlist source's channel
+address cannot be printed headlessly at all, which is also why the M3U sanitiser has no verification through
+this command — the one it does have came from provoking a failed playlist fetch.
+
+Proposal: accept `--source-id` and go through the registry, as `vod play-test` does.
+
+**Ranked by usefulness rather than by effort**, and therefore below items that cost more: this adds a
+capability rather than restructuring one, so it is the only entry here that is not a refactor.
+
+## Rank 10 — Extract the reconciliation diff
 
 **Project:** LTR.Persistence · **Area:** Maintainability · **Criticality:** moderate · **Effort:** high
 
@@ -98,7 +153,7 @@ leaving `Program` as composition only.
 no database concern — `ReconcileSeasons` alone is about 90. A `CatalogueReconciler` could compute it while
 the context performs the writes, which keeps §3.3.2 intact and makes the algorithm testable on its own.
 
-## Rank 8 — Do not materialise the whole channel list
+## Rank 11 — Do not materialise the whole channel list
 
 **Project:** LTR.Persistence, LTR.Player.Wpf · **Area:** Performance · **Criticality:** moderate · **Effort:** high
 
@@ -116,20 +171,53 @@ to find the current row's neighbour, so one zap key press walks up to 17,156 row
 because if the list stops being materialised at all it changes shape entirely. Noted so the cost is known
 rather than discovered.
 
-## Rank 9 — Page the timeline instead of capping it
+## Rank 12 — Page the timeline instead of capping it
 
 **Project:** LTR.Player.Wpf · **Area:** Performance · **Criticality:** minor · **Effort:** high
 
 `GuideViewModel.MaximumRows` draws at most 200 channels and says so on screen. The honest fix is to load rows
 as they are scrolled into view, which needs the store to page and the timeline to build rows lazily. Related
-to rank 8, and worth doing at the same time or not at all.
+to rank 11, and worth doing at the same time or not at all.
 
 ---
 
 ## Done
 
-Ranks quoted in older commit messages resolve here. **The mapping from the post-M4 scheme to the current
-one:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything else on that list is below.
+Ranks quoted in older commit messages resolve here, through two mappings.
+
+**Post-M6 scheme → current scheme:** 2→2, 3→4, 4→6, 5→7, 6→8, 7→10, 8→11, 9→12. Its rank 1 is done and is
+the first entry below. Ranks 1, 3, 5 and 9 of the current scheme are new in this review and appear in no
+older one.
+
+**Post-M4 scheme → post-M6 scheme:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything
+else on that list is below.
+
+### After M6 — protocol-neutral URL sanitisation
+
+**Post-M6 rank 1.** `ISensitiveUrlSanitizer` in LTR.Providers.Abstractions, one implementation per protocol,
+resolved through `IProviderRegistry` — the proposal as written, with three things settled by doing it:
+
+- **The two protocols need different *kinds* of rule, not the same rule with different inputs.** Xtream
+  knows its secrets by value, so it replaces them wherever they occur — including the path segments a stream
+  address puts them in — and leaves the rest of the query string readable, because `action=get_vod_info` is
+  what makes a logged address worth logging. A playlist source holds no credentials at all: whatever the
+  provider issued is already inside the address the user pasted, under a parameter name nothing here knows.
+  So that rule is structural — every query value goes, the names stay.
+- **A playlist's path is deliberately not redacted, and that is the known limit.** Providers exist that put
+  credentials in path segments, but with no credentials to compare against, nothing distinguishes such a
+  segment from a route; redacting the path wholesale would leave an address with no diagnostic value at all.
+  The userinfo component (`user:password@host`) *is* removed, for every protocol, by the base class — it is
+  the one form that is unambiguous without knowing the protocol.
+- **The guard did not stay dormant.** The rank said "nothing logs one today", and it was written so the guard
+  would exist first. Two callers arrived with it: `M3uContentProvider` now names the sanitised playlist
+  address when the document cannot be fetched — the source's own name says nothing about *why* — and the
+  CLI's `resolve` command dropped its own copy of the masking, which was the third.
+
+`LTR.Providers.Tests` is new, and is the first test project that composes the container the way the
+applications do. The registry's other four resolutions are still untested; what made this one worth a
+project is that the mistake it guards against — a component registered for one protocol and forgotten for
+the other — is the one the compiler cannot see, and the standing instruction for it was "start the app and
+read the log".
 
 ### After M6 — the two interface splits
 
