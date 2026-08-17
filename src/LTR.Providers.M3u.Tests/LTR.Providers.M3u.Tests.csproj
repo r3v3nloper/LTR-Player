@@ -11,6 +11,15 @@
     <PackageReference Include="Shouldly" />
   </ItemGroup>
 
+  <!--
+    The guide and playlist downloads are served by a real in-process Kestrel host rather than a stubbed
+    HttpMessageHandler, so status-code handling and request headers are exercised for real — the same
+    choice the Xtream test project made, and it costs no NuGet dependency.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\LTR.Providers.M3u\LTR.Providers.M3u.csproj" />
   </ItemGroup>

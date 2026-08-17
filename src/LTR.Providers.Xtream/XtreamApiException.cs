@@ -4,11 +4,11 @@ namespace LTR.Providers.Xtream;
 /// A panel responded in a way that cannot be interpreted as a player API result.
 /// </summary>
 /// <remarks>
-/// Distinct from <see cref="HttpRequestException"/> on purpose: a panel returning HTTP 200 with an
-/// HTML maintenance page is a different problem for the user than the host being unreachable, and
-/// the UI reports them differently.
+/// Kept as its own type over <see cref="ProviderRequestException"/> because a caller that knows it is
+/// talking to a panel can word the failure in those terms — the CLI says "Panel error" — while everything
+/// that only knows it is talking to a provider catches the base and still gets the sanitised address.
 /// </remarks>
-public sealed class XtreamApiException : Exception
+public sealed class XtreamApiException : ProviderRequestException
 {
     public XtreamApiException(string message)
         : base(message)
@@ -19,7 +19,4 @@ public sealed class XtreamApiException : Exception
         : base(message, innerException)
     {
     }
-
-    /// <summary>The address that produced the response, with credentials removed.</summary>
-    public string? SanitizedUrl { get; init; }
 }

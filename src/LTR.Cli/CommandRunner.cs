@@ -1,4 +1,5 @@
 using LTR.Playback;
+using LTR.Providers;
 using LTR.Providers.Xtream;
 
 namespace LTR.Cli;
@@ -21,9 +22,12 @@ internal static class CommandRunner
         {
             return await command().ConfigureAwait(false);
         }
-        catch (XtreamApiException exception)
+        catch (ProviderRequestException exception)
         {
-            Console.Error.WriteLine($"Panel error: {exception.Message}");
+            // A panel is named as one, because that is what the user configured; anything else is a
+            // provider, since a playlist has no better word for it.
+            var subject = exception is XtreamApiException ? "Panel" : "Provider";
+            Console.Error.WriteLine($"{subject} error: {exception.Message}");
 
             if (exception.SanitizedUrl is not null)
             {
