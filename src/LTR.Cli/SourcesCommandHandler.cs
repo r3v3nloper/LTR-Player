@@ -15,12 +15,17 @@ namespace LTR.Cli;
 /// </remarks>
 internal sealed class SourcesCommandHandler
 {
-    private readonly ICatalogueStore _catalogue;
+    private readonly ISourceStore _sources;
+    private readonly ILiveCatalogue _channels;
     private readonly ISourceImportService _import;
 
-    public SourcesCommandHandler(ICatalogueStore catalogue, ISourceImportService import)
+    public SourcesCommandHandler(
+        ISourceStore sources,
+        ILiveCatalogue channels,
+        ISourceImportService import)
     {
-        _catalogue = catalogue;
+        _sources = sources;
+        _channels = channels;
         _import = import;
     }
 
@@ -29,7 +34,7 @@ internal sealed class SourcesCommandHandler
         Console.WriteLine($"Database   {LtrDatabaseLocation.DatabaseFile}");
         Console.WriteLine();
 
-        var sources = await _catalogue.GetSourcesAsync(cancellationToken).ConfigureAwait(false);
+        var sources = await _sources.GetSourcesAsync(cancellationToken).ConfigureAwait(false);
 
         if (sources.Count == 0)
         {
@@ -41,7 +46,7 @@ internal sealed class SourcesCommandHandler
 
         foreach (var source in sources)
         {
-            var channels = await _catalogue.GetLiveChannelsAsync(source.Id, cancellationToken)
+            var channels = await _channels.GetLiveChannelsAsync(source.Id, cancellationToken)
                 .ConfigureAwait(false);
 
             Console.WriteLine(
@@ -104,7 +109,7 @@ internal sealed class SourcesCommandHandler
     /// </remarks>
     public async Task<int> RefreshAsync(int sourceId, CancellationToken cancellationToken)
     {
-        var sources = await _catalogue.GetSourcesAsync(cancellationToken).ConfigureAwait(false);
+        var sources = await _sources.GetSourcesAsync(cancellationToken).ConfigureAwait(false);
         var source = sources.FirstOrDefault(candidate => candidate.Id == sourceId);
 
         if (source is null)
@@ -141,7 +146,7 @@ internal sealed class SourcesCommandHandler
 
     public async Task<int> RemoveAsync(int sourceId, CancellationToken cancellationToken)
     {
-        await _catalogue.DeleteSourceAsync(sourceId, cancellationToken).ConfigureAwait(false);
+        await _sources.DeleteSourceAsync(sourceId, cancellationToken).ConfigureAwait(false);
 
         Console.WriteLine($"Removed source {sourceId} and its catalogue.");
         return 0;

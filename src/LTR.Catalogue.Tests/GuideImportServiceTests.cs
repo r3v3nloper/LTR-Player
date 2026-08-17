@@ -81,7 +81,7 @@ public sealed class GuideImportServiceTests : IAsyncDisposable
             .ImportAsync(source, progress: null, cancellationToken);
 
         // Act
-        var slices = await _services!.GetRequiredService<ICatalogueStore>()
+        var slices = await _services!.GetRequiredService<CatalogueStore>()
             .GetNowAndNextAsync(source.Id, SixPm, cancellationToken);
 
         // Assert
@@ -414,7 +414,7 @@ public sealed class GuideImportServiceTests : IAsyncDisposable
         services.AddLogging();
         services.AddDbContext<LtrDbContext>(options => options.UseSqlite(_connection));
         services.AddSingleton<CatalogueUnitOfWork>();
-        services.AddSingleton<ICatalogueStore, CatalogueStore>();
+        services.AddSingleton<CatalogueStore>();
         services.AddSingleton<IGuideImportService, GuideImportService>();
 
         _services = services.BuildServiceProvider();

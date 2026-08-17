@@ -38,7 +38,7 @@ public sealed partial class GuideViewModel : ObservableObject
 
     private static readonly TimeSpan Step = TimeSpan.FromMinutes(30);
 
-    private readonly ICatalogueStore _catalogue;
+    private readonly IGuideCatalogue _catalogue;
     private readonly TimeProvider _timeProvider;
 
     private PlaylistSource? _source;
@@ -63,7 +63,7 @@ public sealed partial class GuideViewModel : ObservableObject
     [ObservableProperty]
     private string _notice = string.Empty;
 
-    public GuideViewModel(ICatalogueStore catalogue, TimeProvider timeProvider)
+    public GuideViewModel(IGuideCatalogue catalogue, TimeProvider timeProvider)
     {
         _catalogue = catalogue;
         _timeProvider = timeProvider;

@@ -32,7 +32,7 @@ namespace LTR.Catalogue;
 /// </remarks>
 public sealed class WatchProgressRecorder
 {
-    private readonly ICatalogueStore _catalogue;
+    private readonly IWatchProgressStore _progress;
     private readonly ILogger<WatchProgressRecorder> _logger;
 
     private ContentKind? _kind;
@@ -40,9 +40,9 @@ public sealed class WatchProgressRecorder
     private TimeSpan _lastPosition;
     private TimeSpan _lastDuration;
 
-    public WatchProgressRecorder(ICatalogueStore catalogue, ILogger<WatchProgressRecorder> logger)
+    public WatchProgressRecorder(IWatchProgressStore progress, ILogger<WatchProgressRecorder> logger)
     {
-        _catalogue = catalogue;
+        _progress = progress;
         _logger = logger;
     }
 
@@ -125,12 +125,12 @@ public sealed class WatchProgressRecorder
         {
             if (kind == ContentKind.Movie)
             {
-                await _catalogue.RecordMovieProgressAsync(itemId, outcome, position, cancellationToken)
+                await _progress.RecordMovieProgressAsync(itemId, outcome, position, cancellationToken)
                     .ConfigureAwait(true);
             }
             else
             {
-                await _catalogue.RecordEpisodeProgressAsync(itemId, outcome, position, cancellationToken)
+                await _progress.RecordEpisodeProgressAsync(itemId, outcome, position, cancellationToken)
                     .ConfigureAwait(true);
             }
         }

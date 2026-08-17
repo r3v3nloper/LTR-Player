@@ -35,7 +35,18 @@ public static class CatalogueServiceCollectionExtensions
         // Singletons: each creates a scope per operation rather than holding a context, so none pins a
         // unit of work open.
         services.TryAddSingleton<CatalogueUnitOfWork>();
-        services.TryAddSingleton<ICatalogueStore, CatalogueStore>();
+
+        // One store behind five interfaces, resolved to the same instance. Consumers take the face they
+        // use — the progress recorder wants three members, not nineteen — while the implementation stays
+        // one class, because every one of these is the same two lines over the same unit of work and
+        // splitting it would buy nothing but five files.
+        services.TryAddSingleton<CatalogueStore>();
+        services.TryAddSingleton<ISourceStore>(Store);
+        services.TryAddSingleton<ILiveCatalogue>(Store);
+        services.TryAddSingleton<IGuideCatalogue>(Store);
+        services.TryAddSingleton<IVodCatalogue>(Store);
+        services.TryAddSingleton<IWatchProgressStore>(Store);
+
         services.TryAddSingleton<ISourceImportService, SourceImportService>();
         services.TryAddSingleton<IGuideImportService, GuideImportService>();
         services.TryAddSingleton<IVodDetailService, VodDetailService>();
@@ -46,6 +57,11 @@ public static class CatalogueServiceCollectionExtensions
         services.TryAddSingleton<WatchProgressRecorder>();
 
         return services;
+
+        static CatalogueStore Store(IServiceProvider provider)
+        {
+            return provider.GetRequiredService<CatalogueStore>();
+        }
     }
 
     /// <summary>

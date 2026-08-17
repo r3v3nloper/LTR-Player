@@ -13,7 +13,8 @@ namespace LTR.Catalogue;
 /// and discarded (CLAUDE.md §3.3.2), and keeping one alive behind a long-lived service would turn it into
 /// a cache with a stale change tracker. This way callers need neither a scope nor a context.
 /// </remarks>
-internal sealed class CatalogueStore : ICatalogueStore
+internal sealed class CatalogueStore
+    : ISourceStore, ILiveCatalogue, IGuideCatalogue, IVodCatalogue, IWatchProgressStore
 {
     private readonly CatalogueUnitOfWork _database;
     private readonly TimeProvider _timeProvider;

@@ -59,6 +59,11 @@ internal sealed class MainViewModelHarness
     /// <summary>What the shell saved, or null when it has not. Set by the way out of the window.</summary>
     public PlayerSettings? SavedSettings => _settingsStore.Saved;
 
+    /// <remarks>
+    /// <see cref="Store"/> appears several times over in the call below, because the store's five faces are
+    /// one object here exactly as they are one object in the container. The repetition is the point: it shows
+    /// which parts of the catalogue each view model actually reaches for.
+    /// </remarks>
     public MainViewModel Build()
     {
         // One status line for all of them, exactly as the container hands it out.
@@ -68,14 +73,19 @@ internal sealed class MainViewModelHarness
 
         return new MainViewModel(
             new SourceManagementViewModel(Store, Import, status, NullLogger<SourceManagementViewModel>.Instance),
-            new ChannelListViewModel(Store, Clock, status, NullLogger<ChannelListViewModel>.Instance),
+            new ChannelListViewModel(Store, Store, Store, Clock, status, NullLogger<ChannelListViewModel>.Instance),
             new GuideViewModel(Store, Clock),
-            new MovieListViewModel(Store, VodDetail, NullLogger<MovieListViewModel>.Instance),
-            new SeriesCatalogueViewModel(Store, VodDetail, NullLogger<SeriesCatalogueViewModel>.Instance),
-            new ContinueWatchingViewModel(Store),
+            new MovieListViewModel(Store, Store, VodDetail, NullLogger<MovieListViewModel>.Instance),
+            new SeriesCatalogueViewModel(
+                Store,
+                Store,
+                VodDetail,
+                NullLogger<SeriesCatalogueViewModel>.Instance),
+            new ContinueWatchingViewModel(Store, Store),
             status,
             new PlaybackCoordinator(
                 new StubProviderRegistry(),
+                Session,
                 Session,
                 Progress,
                 Failures,

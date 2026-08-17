@@ -35,7 +35,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     internal const int MaximumCaching = 10_000;
 
     private readonly IPlayerSettingsStore _store;
-    private readonly ICatalogueStore _catalogue;
+    private readonly ISourceStore _sources;
     private readonly StatusLine _status;
     private readonly ILogger<SettingsViewModel> _logger;
 
@@ -72,12 +72,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(
         IPlayerSettingsStore store,
         PlayerSettings settings,
-        ICatalogueStore catalogue,
+        ISourceStore sources,
         StatusLine status,
         ILogger<SettingsViewModel> logger)
     {
         _store = store;
-        _catalogue = catalogue;
+        _sources = sources;
         _status = status;
         _logger = logger;
 
@@ -182,7 +182,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
         try
         {
-            await _catalogue
+            await _sources
                 .UpdateSourceSettingsAsync(source.Id, agent, PreferredStreamFormat.Value, cancellationToken)
                 .ConfigureAwait(true);
 

@@ -34,10 +34,11 @@ public sealed partial class MovieListViewModel : CatalogueSectionViewModel<Movie
     private MovieItemViewModel? _detailedMovie;
 
     public MovieListViewModel(
-        ICatalogueStore catalogue,
+        ISourceStore sources,
+        IVodCatalogue catalogue,
         IVodDetailService detail,
         ILogger<MovieListViewModel> logger)
-        : base(catalogue)
+        : base(sources, catalogue)
     {
         _detail = detail;
         _logger = logger;

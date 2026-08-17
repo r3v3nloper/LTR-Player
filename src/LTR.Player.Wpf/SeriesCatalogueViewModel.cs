@@ -48,10 +48,11 @@ public sealed partial class SeriesCatalogueViewModel : CatalogueSectionViewModel
     private bool _isLoadingEpisodes;
 
     public SeriesCatalogueViewModel(
-        ICatalogueStore catalogue,
+        ISourceStore sources,
+        IVodCatalogue catalogue,
         IVodDetailService detail,
         ILogger<SeriesCatalogueViewModel> logger)
-        : base(catalogue)
+        : base(sources, catalogue)
     {
         _detail = detail;
         _logger = logger;

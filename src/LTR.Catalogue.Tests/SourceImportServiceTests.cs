@@ -58,7 +58,7 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
         result.SourceId.ShouldBe(0);
         registry.Calls.ShouldBe(["authenticate"], "nothing is fetched for an account that cannot be used");
 
-        var store = _services!.GetRequiredService<ICatalogueStore>();
+        var store = _services!.GetRequiredService<CatalogueStore>();
         (await store.GetSourcesAsync(cancellationToken)).ShouldBeEmpty();
     }
 
@@ -88,7 +88,7 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
         result.ChannelCount.ShouldBe(2);
         result.CategoryCount.ShouldBe(1);
 
-        var store = _services!.GetRequiredService<ICatalogueStore>();
+        var store = _services!.GetRequiredService<CatalogueStore>();
         var stored = (await store.GetSourcesAsync(cancellationToken)).ShouldHaveSingleItem();
 
         stored.Capabilities.SupportsXmltvEpg.ShouldBeTrue("the probe result is persisted with the source");
@@ -131,7 +131,7 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
         registry.Channels.Add(CreateChannel("101", "Erste"));
 
         var import = await CreateServiceAsync(registry, cancellationToken);
-        var store = _services!.GetRequiredService<ICatalogueStore>();
+        var store = _services!.GetRequiredService<CatalogueStore>();
 
         var imported = await import.ImportAsync(source, progress: null, cancellationToken);
         var channel = (await store.GetLiveChannelsAsync(imported.SourceId, cancellationToken)).Single();
@@ -163,7 +163,7 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
         await import.RefreshAsync(source, progress: null, cancellationToken);
 
         // Assert
-        var store = _services!.GetRequiredService<ICatalogueStore>();
+        var store = _services!.GetRequiredService<CatalogueStore>();
         (await store.GetSourcesAsync(cancellationToken)).Count.ShouldBe(1);
     }
 
@@ -213,7 +213,7 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
             "series",
         ]);
 
-        var store = _services!.GetRequiredService<ICatalogueStore>();
+        var store = _services!.GetRequiredService<CatalogueStore>();
         (await store.GetMoviesAsync(result.SourceId, cancellationToken))
             .ShouldHaveSingleItem()
             .Name.ShouldBe("Arrival");
@@ -299,7 +299,7 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
         await import.RefreshAsync(source, progress: null, cancellationToken);
 
         // Assert
-        var store = _services!.GetRequiredService<ICatalogueStore>();
+        var store = _services!.GetRequiredService<CatalogueStore>();
         (await store.GetMoviesAsync(imported.SourceId, cancellationToken)).ShouldBeEmpty();
     }
 
@@ -376,7 +376,7 @@ public sealed class SourceImportServiceTests : IAsyncDisposable
         services.AddSingleton(registry);
         services.AddDbContext<LtrDbContext>(options => options.UseSqlite(_connection));
         services.AddSingleton<CatalogueUnitOfWork>();
-        services.AddSingleton<ICatalogueStore, CatalogueStore>();
+        services.AddSingleton<CatalogueStore>();
         services.AddSingleton<ISourceImportService, SourceImportService>();
 
         _services = services.BuildServiceProvider();

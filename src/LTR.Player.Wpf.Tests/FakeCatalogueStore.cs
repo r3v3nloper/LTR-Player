@@ -8,7 +8,8 @@ namespace LTR.Player.Wpf;
 /// <summary>
 /// An in-memory catalogue, so the view model can be exercised without a database.
 /// </summary>
-internal sealed class FakeCatalogueStore : ICatalogueStore
+internal sealed class FakeCatalogueStore
+    : ISourceStore, ILiveCatalogue, IGuideCatalogue, IVodCatalogue, IWatchProgressStore
 {
     public List<PlaylistSource> Sources { get; } = [];
 

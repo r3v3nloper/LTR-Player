@@ -12,7 +12,7 @@ namespace LTR.Player.Wpf;
 /// </summary>
 public sealed partial class SourceManagementViewModel : ObservableObject
 {
-    private readonly ICatalogueStore _catalogue;
+    private readonly ISourceStore _catalogue;
     private readonly ISourceImportService _import;
     private readonly StatusLine _status;
     private readonly ILogger<SourceManagementViewModel> _logger;
@@ -53,7 +53,7 @@ public sealed partial class SourceManagementViewModel : ObservableObject
     private PlaylistSource? _selectedSource;
 
     public SourceManagementViewModel(
-        ICatalogueStore catalogue,
+        ISourceStore catalogue,
         ISourceImportService import,
         StatusLine status,
         ILogger<SourceManagementViewModel> logger)
