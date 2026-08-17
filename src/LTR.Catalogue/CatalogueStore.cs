@@ -189,4 +189,18 @@ internal sealed class CatalogueStore
             _timeProvider.GetUtcNow(),
             cancellationToken));
     }
+
+    /// <remarks>
+    /// Takes no instant, unlike the two above, which is the difference the method exists for: nothing was
+    /// watched, so there is no moment to record.
+    /// </remarks>
+    public Task ForgetMovieProgressAsync(int movieId, CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.ForgetMovieProgressAsync(movieId, cancellationToken));
+    }
+
+    public Task ForgetEpisodeProgressAsync(int episodeId, CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.ForgetEpisodeProgressAsync(episodeId, cancellationToken));
+    }
 }

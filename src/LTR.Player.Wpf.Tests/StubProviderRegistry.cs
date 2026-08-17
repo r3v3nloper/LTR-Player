@@ -2,6 +2,7 @@ using LTR.Core.Content;
 using LTR.Core.Playback;
 using LTR.Core.Sources;
 using LTR.Providers;
+using LTR.TestSupport;
 
 namespace LTR.Player.Wpf;
 
@@ -9,31 +10,17 @@ namespace LTR.Player.Wpf;
 /// Resolves stream addresses without a provider, since the view model only needs an address to hand to
 /// playback.
 /// </summary>
-internal sealed class StubProviderRegistry : IProviderRegistry, IStreamUrlResolver
+/// <remarks>
+/// The only member it answers, and deliberately so: the window imports through the import service rather
+/// than through the registry, and nothing in it logs or prints an address. Reaching any other member from a
+/// view model would be a change of design, and the base class turns that into a failing test that says which
+/// member was asked for.
+/// </remarks>
+internal sealed class StubProviderRegistry : NotSupportedProviderRegistry, IStreamUrlResolver
 {
-    public IContentProvider CreateProvider(PlaylistSource source)
-    {
-        throw new NotSupportedException("The view model imports through the import service, not directly.");
-    }
-
-    public IProviderCapabilityProbe GetCapabilityProbe(PlaylistSource source)
-    {
-        throw new NotSupportedException("Capabilities are probed by the import service.");
-    }
-
-    public IStreamUrlResolver GetStreamUrlResolver(PlaylistSource source)
+    public override IStreamUrlResolver GetStreamUrlResolver(PlaylistSource source)
     {
         return this;
-    }
-
-    public IGuideSource GetGuideSource(PlaylistSource source)
-    {
-        throw new NotSupportedException("The view model imports the guide through the import service.");
-    }
-
-    public ISensitiveUrlSanitizer GetUrlSanitizer(PlaylistSource source)
-    {
-        throw new NotSupportedException("Nothing in the window logs or prints an address.");
     }
 
     public bool Supports(PlaylistSource source)

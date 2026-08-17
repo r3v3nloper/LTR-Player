@@ -38,4 +38,19 @@ public interface IWatchProgressStore
         WatchOutcome outcome,
         TimeSpan position,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Takes a film off the continue-watching list at the viewer's request.
+    /// </summary>
+    /// <remarks>
+    /// Not a <see cref="WatchOutcome"/>, and that is the whole point of it existing. Both front ends used
+    /// to express this as <see cref="WatchOutcome.Discard"/>, which fits mechanically — the position goes
+    /// and nothing is marked watched — but it also stamps the row as watched *now*, so an entry the viewer
+    /// removed came back as the most recently watched thing they own. Forgetting where you got to is not
+    /// watching, so it clears the position and states nothing about when.
+    /// </remarks>
+    Task ForgetMovieProgressAsync(int movieId, CancellationToken cancellationToken);
+
+    /// <summary>Takes an episode off the continue-watching list at the viewer's request.</summary>
+    Task ForgetEpisodeProgressAsync(int episodeId, CancellationToken cancellationToken);
 }

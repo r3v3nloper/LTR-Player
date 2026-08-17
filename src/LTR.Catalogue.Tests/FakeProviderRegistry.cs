@@ -4,6 +4,7 @@ using LTR.Core.Content;
 using LTR.Core.Playback;
 using LTR.Core.Sources;
 using LTR.Providers;
+using LTR.TestSupport;
 
 namespace LTR.Catalogue;
 
@@ -15,7 +16,7 @@ namespace LTR.Catalogue;
 /// import sequence and what it stores, and both are only meaningful against a real store.
 /// </remarks>
 internal sealed class FakeProviderRegistry
-    : IProviderRegistry, IContentProvider, IProviderCapabilityProbe, IGuideSource
+    : NotSupportedProviderRegistry, IContentProvider, IProviderCapabilityProbe, IGuideSource
 {
     private readonly List<string> _calls = [];
 
@@ -52,24 +53,14 @@ internal sealed class FakeProviderRegistry
 
     public ProviderCapabilities Capabilities { get; set; } = new() { SupportsLive = true };
 
-    public IContentProvider CreateProvider(PlaylistSource source)
+    public override IContentProvider CreateProvider(PlaylistSource source)
     {
         return this;
     }
 
-    public IProviderCapabilityProbe GetCapabilityProbe(PlaylistSource source)
+    public override IProviderCapabilityProbe GetCapabilityProbe(PlaylistSource source)
     {
         return this;
-    }
-
-    public IStreamUrlResolver GetStreamUrlResolver(PlaylistSource source)
-    {
-        throw new NotSupportedException("Importing never resolves a stream address.");
-    }
-
-    public ISensitiveUrlSanitizer GetUrlSanitizer(PlaylistSource source)
-    {
-        throw new NotSupportedException("Importing logs no addresses of its own.");
     }
 
     /// <summary>
@@ -77,7 +68,7 @@ internal sealed class FakeProviderRegistry
     /// </summary>
     public string? GuideDocument { get; set; }
 
-    public IGuideSource GetGuideSource(PlaylistSource source)
+    public override IGuideSource GetGuideSource(PlaylistSource source)
     {
         return this;
     }

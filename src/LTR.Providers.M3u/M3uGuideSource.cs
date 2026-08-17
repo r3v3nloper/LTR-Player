@@ -16,12 +16,18 @@ internal sealed class M3uGuideSource : IGuideSource
 {
     private readonly HttpClient _httpClient;
     private readonly M3uPlaylistLoader _loader;
+    private readonly M3uUrlSanitizer _urlSanitizer;
     private readonly ILogger<M3uGuideSource> _logger;
 
-    public M3uGuideSource(HttpClient httpClient, M3uPlaylistLoader loader, ILogger<M3uGuideSource> logger)
+    public M3uGuideSource(
+        HttpClient httpClient,
+        M3uPlaylistLoader loader,
+        M3uUrlSanitizer urlSanitizer,
+        ILogger<M3uGuideSource> logger)
     {
         _httpClient = httpClient;
         _loader = loader;
+        _urlSanitizer = urlSanitizer;
         _logger = logger;
     }
 
@@ -72,7 +78,17 @@ internal sealed class M3uGuideSource : IGuideSource
             .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
 
-        response.EnsureSuccessStatusCode();
+        // Not EnsureSuccessStatusCode: its message names no address, and which address was tried is the
+        // question here — a guide comes either from what the user configured or from what the playlist
+        // declared in its header, and the two fail for different reasons.
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ProviderRequestException(
+                $"The guide address answered {(int)response.StatusCode} {response.ReasonPhrase}.")
+            {
+                SanitizedUrl = _urlSanitizer.Sanitize(guideUrl, m3uSource),
+            };
+        }
 
         var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         await using (stream.ConfigureAwait(false))

@@ -32,9 +32,10 @@ considered a gap in the milestone.
 
 `Docs/refactoring-backlog.md` is the work list, **renumbered 1–12 in the review after the URL-sanitisation
 rank** — that rank is done, and the review it triggered added four items belonging in the middle of the
-ranking, which is what forced a renumber rather than a gap. None of the twelve has an effect while the player
-is running. **Ranks quoted in commit messages belong to whichever scheme was current when they were written**;
-that file carries both mappings. Its opening section says what to run before starting one.
+ranking, which is what forced a renumber rather than a gap. **Ranks 1–3 are done too, and the nine that
+remain keep their numbers**, so the list starts at 4. None of them has an effect while the player is running.
+**Ranks quoted in commit messages belong to whichever scheme was current when they were written**; that file
+carries both mappings. Its opening section says what to run before starting one.
 
 Two things are outstanding that are *not* refactors, because only the person with the subscription can do
 them:
@@ -151,7 +152,10 @@ playlist source holds no credentials at all — whatever the provider issued is 
 parameter name nothing here knows — so *every* query value goes and only the names stay. A playlist's **path**
 is left alone on purpose: with nothing to compare against, a credential segment and a route segment are
 indistinguishable. `user:password@host` is removed for every protocol by `SensitiveUrlSanitizer<TSource>`,
-which is the only form that needs no protocol knowledge.
+which is the only form that needs no protocol knowledge. A failure that wants to carry an address throws
+`ProviderRequestException` (`XtreamApiException` derives from it) and puts the *sanitised* address on
+`SanitizedUrl` — the CLI prints it, and catching a protocol's own type there is what left playlist failures
+with no address for as long as it did.
 
 **Stream URLs are never probed.** Opening one occupies a connection slot. A probe that locks the user
 out of their own subscription is worse than defaulting to the prefixed `/live/` form and correcting on
@@ -190,6 +194,11 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   at once. Category reconciliation is therefore scoped to the *kinds* an import covers, not to the source —
   scoped to the source, a live refresh deletes every film category — and its lookup is keyed by
   `(ExternalId, Kind)`, because a dictionary keyed by the identifier alone throws on the duplicate.
+- **Taking something off the continue-watching list is not a `WatchOutcome`.** Every outcome states a moment,
+  so expressing "the viewer removed this" as `Discard` also wrote `LastWatchedUtc` and the entry came back as
+  the most recently watched thing in the catalogue. `ForgetMovieProgressAsync` clears the position, leaves
+  `IsWatched` alone and records no instant at all. Anything new that means "undo" rather than "played" needs
+  the same treatment.
 - **A listing may overwrite what a listing owns, and must never blank out what a detail call supplied.**
   Panels state a synopsis in `get_vod_info` and not in `get_vod_streams`, so a refresh that assigned the
   listing's fields unconditionally would erase every synopsis the player had fetched.
@@ -295,7 +304,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **648 tests pass on `main`.** A refactor should not move that number.
+- **660 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.

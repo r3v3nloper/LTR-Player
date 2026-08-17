@@ -550,6 +550,73 @@ public sealed class LtrDbContextVodTests
     }
 
     [Fact]
+    public async Task ForgetMovieProgressAsync_ClearsThePositionWithoutTouchingWhenItWasWatched()
+    {
+        // Arrange: a film watched to 40 minutes at six, then taken off the list by the viewer. Expressed as
+        // a discarding outcome — which is how both front ends used to do it — this stamped LastWatchedUtc
+        // with the moment of removal, so the entry came back as the most recently watched thing they own.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTestDatabase.CreateAsync(cancellationToken: cancellationToken);
+        var sourceId = await AddSourceAsync(database, cancellationToken);
+        var movieId = await StoreOneMovieAsync(database, sourceId, cancellationToken);
+
+        await using (var context = database.CreateContext())
+        {
+            await context.RecordMovieProgressAsync(
+                movieId,
+                WatchOutcome.Resumable,
+                TimeSpan.FromMinutes(40),
+                SixPm,
+                cancellationToken);
+        }
+
+        // Act
+        await using (var context = database.CreateContext())
+        {
+            await context.ForgetMovieProgressAsync(movieId, cancellationToken);
+        }
+
+        // Assert
+        await using var verifyContext = database.CreateContext();
+        var movie = await verifyContext.GetMovieAsync(movieId, cancellationToken);
+        movie.ShouldNotBeNull();
+        movie.ResumePositionSeconds.ShouldBeNull("the position is what the viewer asked to forget");
+        movie.LastWatchedUtc.ShouldBe(SixPm, "removing an entry is not watching it");
+    }
+
+    [Fact]
+    public async Task ForgetMovieProgressAsync_DoesNotUnwatchAFilmAlreadyFinished()
+    {
+        // Arrange: forgetting where you got to in a film you had already finished does not unfinish it.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTestDatabase.CreateAsync(cancellationToken: cancellationToken);
+        var sourceId = await AddSourceAsync(database, cancellationToken);
+        var movieId = await StoreOneMovieAsync(database, sourceId, cancellationToken);
+
+        await using (var context = database.CreateContext())
+        {
+            await context.RecordMovieProgressAsync(
+                movieId,
+                WatchOutcome.Finished,
+                TimeSpan.FromMinutes(99),
+                SixPm,
+                cancellationToken);
+        }
+
+        // Act
+        await using (var context = database.CreateContext())
+        {
+            await context.ForgetMovieProgressAsync(movieId, cancellationToken);
+        }
+
+        // Assert
+        await using var verifyContext = database.CreateContext();
+        var movie = await verifyContext.GetMovieAsync(movieId, cancellationToken);
+        movie.ShouldNotBeNull();
+        movie.IsWatched.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task RecordMovieProgressAsync_WhenDiscarded_DoesNotUnwatchAFilmAlreadyFinished()
     {
         // Arrange: opening a film that was watched through and closing it again is not un-watching it.

@@ -567,10 +567,11 @@ public sealed class VodSectionTests
         await viewModel.ForgetEntryCommand.ExecuteAsync(entry);
 
         // Assert
-        var write = context.Store.ProgressWrites.ShouldHaveSingleItem();
-        write.Kind.ShouldBe(ContentKind.Movie);
-        write.ItemId.ShouldBe(1);
-        write.Outcome.ShouldBe(WatchOutcome.Discard, "the position goes; the film is not marked watched");
+        var forgotten = context.Store.ForgottenEntries.ShouldHaveSingleItem();
+        forgotten.Kind.ShouldBe(ContentKind.Movie);
+        forgotten.ItemId.ShouldBe(1);
+        context.Store.ProgressWrites.ShouldBeEmpty(
+            "removing an entry records no viewing, so it must not stamp the row as watched now");
         context.Session.Started.ShouldBeEmpty("removing something is not playing it");
     }
 
@@ -600,9 +601,10 @@ public sealed class VodSectionTests
         await viewModel.ForgetEntryCommand.ExecuteAsync(entry);
 
         // Assert
-        var write = context.Store.ProgressWrites.ShouldHaveSingleItem();
-        write.Kind.ShouldBe(ContentKind.Series);
-        write.ItemId.ShouldBe(7);
+        var forgotten = context.Store.ForgottenEntries.ShouldHaveSingleItem();
+        forgotten.Kind.ShouldBe(ContentKind.Series);
+        forgotten.ItemId.ShouldBe(7);
+        context.Store.ProgressWrites.ShouldBeEmpty("removing an entry records no viewing");
     }
 
     /// <summary>
@@ -638,8 +640,11 @@ public sealed class VodSectionTests
         await viewModel.ForgetEntryCommand.ExecuteAsync(entry);
         await viewModel.StopCommand.ExecuteAsync(null);
 
-        // Assert
-        context.Store.ProgressWrites.ShouldHaveSingleItem().Outcome.ShouldBe(WatchOutcome.Discard);
+        // Assert: sharper than it could be before forgetting became its own operation. The write-back this
+        // guards against would now appear as a progress write of its own rather than as a second one that
+        // looked like the forget.
+        context.Store.ForgottenEntries.ShouldHaveSingleItem().ItemId.ShouldBe(1);
+        context.Store.ProgressWrites.ShouldBeEmpty("stopping must not write the position back");
     }
 
     [Fact]
