@@ -43,28 +43,35 @@
                Visibility="{Binding Notice, Converter={StaticResource NonEmptyStringToVisibility}}" />
 
     <!--
-      One horizontal scroller around the header and the rows together, so a column heading cannot
-      drift out of line with the blocks beneath it. Vertical scrolling is disabled here and left
-      to the row list, which virtualises.
+      The channel names are outside the horizontal scroller and the timeline is inside it, which is what
+      keeps a name in view while its programmes are scrolled. Only the *header* is scrolled directly; every
+      row's blocks and the now-marker follow the same offset through a translation, because the rows live in
+      a virtualising list that has to keep its own vertical scrolling.
+
+      That single shared offset is also what stops a column heading drifting out of line with the blocks
+      beneath it — the property the previous one-scroller-around-everything layout was protecting.
     -->
-    <ScrollViewer Grid.Row="2"
-                  Margin="0,10,0,0"
-                  HorizontalScrollBarVisibility="Auto"
-                  VerticalScrollBarVisibility="Disabled">
-      <Grid>
-        <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
-          <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="180" />
-          <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
+    <Grid Grid.Row="2" Margin="0,10,0,0">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="180" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
 
-        <TextBlock Grid.Row="0" Grid.Column="0" Text="Channel" Style="{StaticResource MutedText}" />
+      <TextBlock Grid.Row="0" Grid.Column="0" Text="Channel" Style="{StaticResource MutedText}" />
 
-        <ItemsControl Grid.Row="0" Grid.Column="1"
-                      ItemsSource="{Binding TimeMarkers}"
+      <!--
+        The only real scroller, and it owns the offset the rest of the timeline reads. Its extent is the
+        marker strip's width, so the scrollbar appears exactly when four hours do not fit and not otherwise.
+      -->
+      <ScrollViewer x:Name="TimelineScroller"
+                    Grid.Row="0" Grid.Column="1"
+                    HorizontalScrollBarVisibility="Auto"
+                    VerticalScrollBarVisibility="Disabled">
+        <ItemsControl ItemsSource="{Binding TimeMarkers}"
                       Width="{Binding Timeline.Width}">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
@@ -82,8 +89,9 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
+      </ScrollViewer>
 
-        <ListBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+      <ListBox Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
                  ItemsSource="{Binding Rows}"
                  Background="Transparent"
                  BorderThickness="0"
@@ -109,7 +117,7 @@
               <Grid>
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="180" />
-                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0"
@@ -118,9 +126,19 @@
                            Margin="0,0,8,0"
                            TextTrimming="CharacterEllipsis" />
 
-                <ItemsControl Grid.Column="1"
-                              ItemsSource="{Binding Programmes}"
-                              Width="{Binding DataContext.Timeline.Width, ElementName=GuideRoot}">
+                <!--
+                  Clipped, because the strip inside is four hours wide whatever the cell is and would
+                  otherwise be drawn straight over the channel name to its left.
+                -->
+                <Border Grid.Column="1" ClipToBounds="True">
+                  <ItemsControl ItemsSource="{Binding Programmes}"
+                                HorizontalAlignment="Left"
+                                Width="{Binding DataContext.Timeline.Width, ElementName=GuideRoot}">
+                    <ItemsControl.RenderTransform>
+                      <TranslateTransform
+                        X="{Binding HorizontalOffset, ElementName=TimelineScroller,
+                                    Converter={StaticResource Negated}}" />
+                    </ItemsControl.RenderTransform>
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                       <Canvas Height="34" Background="#141720" />
@@ -149,28 +167,36 @@
                       </Button>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                  </ItemsControl>
+                </Border>
               </Grid>
             </DataTemplate>
           </ListBox.ItemTemplate>
-        </ListBox>
+      </ListBox>
 
-        <!--
-          The current moment, drawn over the rows. Declared after the row list so it lands on top,
-          and not hit-testable so it does not swallow clicks on the programme underneath it.
-        -->
-        <Canvas x:Name="NowMarkerLayer"
-                Grid.Row="1" Grid.Column="1"
-                IsHitTestVisible="False"
-                Visibility="{Binding IsNowVisible, Converter={StaticResource BooleanToVisibility}}">
+      <!--
+        The current moment, drawn over the rows. Declared after the row list so it lands on top, not
+        hit-testable so it does not swallow clicks on the programme underneath it, and clipped and
+        translated exactly as a row's blocks are so the line stays on the time it marks.
+      -->
+      <Border Grid.Row="1" Grid.Column="1"
+              ClipToBounds="True"
+              IsHitTestVisible="False"
+              Visibility="{Binding IsNowVisible, Converter={StaticResource BooleanToVisibility}}">
+        <Canvas x:Name="NowMarkerLayer">
+          <Canvas.RenderTransform>
+            <TranslateTransform
+              X="{Binding HorizontalOffset, ElementName=TimelineScroller,
+                          Converter={StaticResource Negated}}" />
+          </Canvas.RenderTransform>
           <Rectangle Canvas.Left="{Binding NowPosition}"
                      Canvas.Top="0"
                      Width="2"
                      Height="{Binding ActualHeight, ElementName=NowMarkerLayer}"
                      Fill="{StaticResource AccentBrush}" />
         </Canvas>
-      </Grid>
-    </ScrollViewer>
+      </Border>
+    </Grid>
 
     <!-- Detail of the selected programme, which is where a description is long enough to read. -->
     <Border Grid.Row="3"

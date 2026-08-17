@@ -24,16 +24,16 @@ exists and not what was considered finished.
 **All six are merged into `main` and pushed.** Version 0.6.0; `pwsh build/publish.ps1` produces a
 self-contained folder and a zip that runs on a machine with no .NET.
 
-M3's timeline scrolls its channel names out of view with the programme blocks, and draws at most 200 rows.
-Both are stated on screen and carried as ranks 7 and 12 in `Docs/refactoring-backlog.md`; neither is
-considered a gap in the milestone.
+M3's timeline draws at most 200 rows, which is stated on screen and carried as rank 12 in
+`Docs/refactoring-backlog.md`; it is not considered a gap in the milestone. Its channel names used to scroll
+away with the programme blocks and no longer do — see rank 7 under Done there.
 
 ### Where to pick up
 
 `Docs/refactoring-backlog.md` is the work list, **renumbered 1–12 in the review after the URL-sanitisation
 rank** — that rank is done, and the review it triggered added four items belonging in the middle of the
-ranking, which is what forced a renumber rather than a gap. **Ranks 1–6 are done, and so is a rank 13 that was
-found while verifying rank 6**; the six that remain keep their numbers, so the list runs 7–12. None of them has
+ranking, which is what forced a renumber rather than a gap. **Ranks 1–7 are done, and so is a rank 13 that was
+found while verifying rank 6**; the five that remain keep their numbers, so the list runs 8–12. None of them has
 an effect while the player is running.
 **Ranks quoted in commit messages belong to whichever scheme was current when they were written**; that file
 carries both mappings. Its opening section says what to run before starting one.
@@ -258,6 +258,12 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   that is the one where nothing samples between playing and stopping.
 - **`Progress<T>` delivers through a synchronisation context.** In a test with none, a stage message can land
   after the result message an assertion is reading. The guide-import fake reports progress only when asked.
+- **The guide's markup is measured, so a layout property can be stated.** `GuideOverlayViewTests` builds the
+  real view on an STA thread of its own, loads `Theme.xaml` and asserts that scrolling the timeline leaves the
+  channel names where they are while the blocks and the now-marker move by exactly as much. It is the only test
+  here that touches a visual tree, and it exists because every WPF defect this repository shipped was in the
+  part nothing measured. It also proves an `ElementName` binding resolves out of a `DataTemplate` into the
+  file's outer namescope, which three bindings in that file rely on.
 - **A retemplated `Slider` needs its grid explicitly hit-testable.** Without a background on the template's
   root the bar can only be grabbed on the four pixels of the track itself. Both sliders are also
   `Focusable="False"`, because a focused one answers the arrow keys and those are the skip keys.
@@ -324,7 +330,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **691 tests pass on `main`.** A refactor should not move that number.
+- **694 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.
