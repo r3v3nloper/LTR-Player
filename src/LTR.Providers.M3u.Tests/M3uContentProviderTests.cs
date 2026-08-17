@@ -254,7 +254,7 @@ public sealed class M3uContentProviderTests
     private static M3uContentProviderFactory CreateFactory()
     {
         var loader = new M3uPlaylistLoader(new HttpClient(), new M3uPlaylistCache(TimeProvider.System));
-        return new M3uContentProviderFactory(loader, NullLoggerFactory.Instance);
+        return new M3uContentProviderFactory(loader, new M3uUrlSanitizer(), NullLoggerFactory.Instance);
     }
 
     /// <summary>

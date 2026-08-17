@@ -272,7 +272,10 @@ public sealed class XtreamApiClientTests
         FakePanel panel,
         string userAgent = "TestAgent/1.0")
     {
-        var client = new XtreamApiClient(new HttpClient(), NullLogger<XtreamApiClient>.Instance);
+        var client = new XtreamApiClient(
+            new HttpClient(),
+            new XtreamUrlSanitizer(),
+            NullLogger<XtreamApiClient>.Instance);
 
         var source = new XtreamSourceBuilder()
             .WithBaseUrl(panel.BaseUrl.AbsoluteUri)

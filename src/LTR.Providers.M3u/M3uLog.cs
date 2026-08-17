@@ -4,11 +4,20 @@ namespace LTR.Providers.M3u;
 
 internal static partial class M3uLog
 {
+    /// <remarks>
+    /// The address is included because the source's own name says nothing about why it failed — the host,
+    /// the path and whether the address carries any parameters at all are the diagnosis. It arrives here
+    /// already sanitised, as every logged address in this package must.
+    /// </remarks>
     [LoggerMessage(
         EventId = 1200,
         Level = LogLevel.Warning,
-        Message = "The playlist for {Source} could not be retrieved.")]
-    public static partial void PlaylistUnreachable(ILogger logger, Exception exception, string source);
+        Message = "The playlist for {Source} could not be retrieved from {Url}.")]
+    public static partial void PlaylistUnreachable(
+        ILogger logger,
+        Exception exception,
+        string source,
+        string url);
 
     [LoggerMessage(
         EventId = 1201,

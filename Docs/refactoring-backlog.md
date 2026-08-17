@@ -4,6 +4,11 @@
 ranked 1–9 from scratch. Numbers quoted in commit messages up to and including the M6 merge belong to the
 older schemes — the mapping is at the bottom, under [Done](#done).
 
+**Rank 1 is done** (see [Done](#after-m6--protocol-neutral-url-sanitisation)); the eight that remain **keep
+the numbers this list gave them**, so it now starts at 2. Deliberately not closed up: a third numbering
+scheme would cost more than a gap in the sequence, and every rank quoted anywhere still resolves to the item
+it named.
+
 Ranking rule: criticality against effort, most valuable per unit of effort first.
 
 Everything left is structure, a missing guard, or a limit that is stated on screen. **Nothing left has an
@@ -12,7 +17,7 @@ rather than assuming next time.
 
 ## Before starting one of these
 
-- `dotnet test LTR-Player.slnx` — 628 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 648 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
@@ -22,18 +27,6 @@ rather than assuming next time.
   survives, suspect the fake before the assertion.
 
 ---
-
-## Rank 1 — Protocol-neutral URL sanitisation
-
-**Project:** LTR.Providers.* · **Area:** Security · **Criticality:** moderate · **Effort:** medium
-
-`UrlSanitizer` is internal to `LTR.Providers.Xtream` and only understands `XtreamSource`. M3U playlist and
-guide URLs also carry credentials in their query string and have no sanitiser. Nothing logs one today, so
-this is a missing guard rather than an active leak — and first in the list because it is the only item here
-with a security dimension, and because the guard wants to exist *before* something starts logging an address.
-
-Proposal: `ISensitiveUrlSanitizer` in `LTR.Providers.Abstractions`, one implementation per protocol,
-resolved through `IProviderRegistry`.
 
 ## Rank 2 — Small duplications and loose ends
 
@@ -130,6 +123,33 @@ to rank 8, and worth doing at the same time or not at all.
 
 Ranks quoted in older commit messages resolve here. **The mapping from the post-M4 scheme to the current
 one:** 8→1, 13→2, 14→3, 9→4, 11→5, 16→6, 12→7, 17 and 20→8, 18→9. Everything else on that list is below.
+
+### After M6 — protocol-neutral URL sanitisation
+
+**Rank 1.** `ISensitiveUrlSanitizer` in LTR.Providers.Abstractions, one implementation per protocol,
+resolved through `IProviderRegistry` — the proposal as written, with three things settled by doing it:
+
+- **The two protocols need different *kinds* of rule, not the same rule with different inputs.** Xtream
+  knows its secrets by value, so it replaces them wherever they occur — including the path segments a stream
+  address puts them in — and leaves the rest of the query string readable, because `action=get_vod_info` is
+  what makes a logged address worth logging. A playlist source holds no credentials at all: whatever the
+  provider issued is already inside the address the user pasted, under a parameter name nothing here knows.
+  So that rule is structural — every query value goes, the names stay.
+- **A playlist's path is deliberately not redacted, and that is the known limit.** Providers exist that put
+  credentials in path segments, but with no credentials to compare against, nothing distinguishes such a
+  segment from a route; redacting the path wholesale would leave an address with no diagnostic value at all.
+  The userinfo component (`user:password@host`) *is* removed, for every protocol, by the base class — it is
+  the one form that is unambiguous without knowing the protocol.
+- **The guard did not stay dormant.** The rank said "nothing logs one today", and it was written so the guard
+  would exist first. Two callers arrived with it: `M3uContentProvider` now names the sanitised playlist
+  address when the document cannot be fetched — the source's own name says nothing about *why* — and the
+  CLI's `resolve` command dropped its own copy of the masking, which was the third.
+
+`LTR.Providers.Tests` is new, and is the first test project that composes the container the way the
+applications do. The registry's other four resolutions are still untested; what made this one worth a
+project is that the mistake it guards against — a component registered for one protocol and forgotten for
+the other — is the one the compiler cannot see, and the standing instruction for it was "start the app and
+read the log".
 
 ### After M6 — the two interface splits
 

@@ -25,11 +25,16 @@ internal sealed class XtreamApiClient
     private static readonly string[] HtmlMarkers = ["<!doctype", "<html", "<br", "<b>", "<?php"];
 
     private readonly HttpClient _httpClient;
+    private readonly XtreamUrlSanitizer _urlSanitizer;
     private readonly ILogger<XtreamApiClient> _logger;
 
-    public XtreamApiClient(HttpClient httpClient, ILogger<XtreamApiClient> logger)
+    public XtreamApiClient(
+        HttpClient httpClient,
+        XtreamUrlSanitizer urlSanitizer,
+        ILogger<XtreamApiClient> logger)
     {
         _httpClient = httpClient;
+        _urlSanitizer = urlSanitizer;
         _logger = logger;
     }
 
@@ -50,7 +55,7 @@ internal sealed class XtreamApiClient
         {
             XtreamLog.AuthenticationReturnedUnexpectedShape(
                 _logger,
-                UrlSanitizer.Sanitize(url, source),
+                _urlSanitizer.Sanitize(url, source),
                 document.RootElement.ValueKind);
 
             return new XtreamAuthResponseDto();
@@ -145,7 +150,7 @@ internal sealed class XtreamApiClient
         {
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                XtreamLog.ActionUnavailable(_logger, exception, action, UrlSanitizer.Sanitize(url, source));
+                XtreamLog.ActionUnavailable(_logger, exception, action, _urlSanitizer.Sanitize(url, source));
             }
 
             return null;
@@ -182,7 +187,7 @@ internal sealed class XtreamApiClient
         {
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                XtreamLog.ProbeRequestFailed(_logger, exception, UrlSanitizer.Sanitize(url, source));
+                XtreamLog.ProbeRequestFailed(_logger, exception, _urlSanitizer.Sanitize(url, source));
             }
 
             return false;
@@ -221,7 +226,7 @@ internal sealed class XtreamApiClient
             {
                 XtreamLog.ListReturnedUnexpectedShape(
                     _logger,
-                    UrlSanitizer.Sanitize(url, source),
+                    _urlSanitizer.Sanitize(url, source),
                     document.RootElement.ValueKind);
             }
 
@@ -251,7 +256,7 @@ internal sealed class XtreamApiClient
             {
                 XtreamLog.DetailReturnedUnexpectedShape(
                     _logger,
-                    UrlSanitizer.Sanitize(url, source),
+                    _urlSanitizer.Sanitize(url, source),
                     document.RootElement.ValueKind);
             }
 
@@ -267,7 +272,7 @@ internal sealed class XtreamApiClient
             // A shape the tolerant converters do not cover. For a detail call the graceful reading is
             // "no detail": the film or series still plays, it simply has no synopsis. Failing here would
             // instead make opening its page an error.
-            XtreamLog.DetailUnreadable(_logger, exception, UrlSanitizer.Sanitize(url, source));
+            XtreamLog.DetailUnreadable(_logger, exception, _urlSanitizer.Sanitize(url, source));
             return null;
         }
     }
@@ -288,7 +293,7 @@ internal sealed class XtreamApiClient
                 $"Could not reach the panel: {exception.Message}",
                 exception)
             {
-                SanitizedUrl = UrlSanitizer.Sanitize(url, source),
+                SanitizedUrl = _urlSanitizer.Sanitize(url, source),
             };
         }
 
@@ -301,7 +306,7 @@ internal sealed class XtreamApiClient
                 throw new XtreamApiException(
                     $"The panel answered {(int)response.StatusCode} {response.ReasonPhrase}.")
                 {
-                    SanitizedUrl = UrlSanitizer.Sanitize(url, source),
+                    SanitizedUrl = _urlSanitizer.Sanitize(url, source),
                 };
             }
 
@@ -321,13 +326,13 @@ internal sealed class XtreamApiClient
         request.Headers.Accept.TryParseAdd("application/json, text/plain, */*");
     }
 
-    private static JsonDocument ParseJson(string body, Uri url, XtreamSource source)
+    private JsonDocument ParseJson(string body, Uri url, XtreamSource source)
     {
         if (string.IsNullOrWhiteSpace(body))
         {
             throw new XtreamApiException("The panel returned an empty response.")
             {
-                SanitizedUrl = UrlSanitizer.Sanitize(url, source),
+                SanitizedUrl = _urlSanitizer.Sanitize(url, source),
             };
         }
 
@@ -337,7 +342,7 @@ internal sealed class XtreamApiClient
                 "The panel returned an HTML page instead of API data. The address may be wrong, or "
                 + "the panel may be blocking this client.")
             {
-                SanitizedUrl = UrlSanitizer.Sanitize(url, source),
+                SanitizedUrl = _urlSanitizer.Sanitize(url, source),
             };
         }
 
@@ -349,7 +354,7 @@ internal sealed class XtreamApiClient
         {
             throw new XtreamApiException($"The panel returned malformed JSON: {exception.Message}", exception)
             {
-                SanitizedUrl = UrlSanitizer.Sanitize(url, source),
+                SanitizedUrl = _urlSanitizer.Sanitize(url, source),
             };
         }
     }

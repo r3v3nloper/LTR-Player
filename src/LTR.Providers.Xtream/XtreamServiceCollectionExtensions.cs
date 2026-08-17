@@ -34,6 +34,13 @@ public static class XtreamServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
 
+        // Stateless, and needed both as the protocol-neutral contract and by the components inside this
+        // package that already hold an XtreamSource. Registered concretely and then handed to the
+        // interface through a factory, so both routes reach the same instance.
+        services.TryAddSingleton<XtreamUrlSanitizer>();
+        services.AddSingleton<ISensitiveUrlSanitizer>(
+            provider => provider.GetRequiredService<XtreamUrlSanitizer>());
+
         services
             .AddHttpClient<XtreamApiClient>()
             .AddStandardResilienceHandler(options =>

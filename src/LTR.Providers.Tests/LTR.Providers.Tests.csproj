@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Shouldly" />
+  </ItemGroup>
+
+  <!--
+    Unlike the system under test, this project references both protocol packages on purpose: what the
+    registry promises is that it picks the right one per source, and that cannot be shown against a
+    single protocol or against fakes that were written to be picked. The service-collection extensions
+    are exercised as the applications call them, so a component registered for one protocol and
+    forgotten for the other fails here rather than at runtime — a missing registration being the one
+    provider defect the compiler cannot see.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\LTR.Providers\LTR.Providers.csproj" />
+    <ProjectReference Include="..\LTR.Providers.M3u\LTR.Providers.M3u.csproj" />
+    <ProjectReference Include="..\LTR.Providers.Xtream\LTR.Providers.Xtream.csproj" />
+  </ItemGroup>
+
+</Project>

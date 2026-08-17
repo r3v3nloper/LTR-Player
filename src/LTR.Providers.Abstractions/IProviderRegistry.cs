@@ -27,4 +27,10 @@ public interface IProviderRegistry
 
     /// <exception cref="NotSupportedException">No registered guide source handles this source's protocol.</exception>
     IGuideSource GetGuideSource(PlaylistSource source);
+
+    /// <summary>
+    /// Returns the sanitiser for this source's protocol, for a caller about to log or print an address.
+    /// </summary>
+    /// <exception cref="NotSupportedException">No registered sanitiser handles this source's protocol.</exception>
+    ISensitiveUrlSanitizer GetUrlSanitizer(PlaylistSource source);
 }

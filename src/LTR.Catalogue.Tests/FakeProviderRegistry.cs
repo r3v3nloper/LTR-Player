@@ -67,6 +67,11 @@ internal sealed class FakeProviderRegistry
         throw new NotSupportedException("Importing never resolves a stream address.");
     }
 
+    public ISensitiveUrlSanitizer GetUrlSanitizer(PlaylistSource source)
+    {
+        throw new NotSupportedException("Importing logs no addresses of its own.");
+    }
+
     /// <summary>
     /// The XMLTV document this source serves, or <see langword="null"/> for a source that has no guide.
     /// </summary>

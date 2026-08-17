@@ -30,9 +30,11 @@ considered a gap in the milestone.
 
 ### Where to pick up
 
-`Docs/refactoring-backlog.md` is the work list, **renumbered 1–9 after M6** — nine items remain, none of
-which has an effect while the player is running. Ranks quoted in commit messages up to the M6 merge belong to
-older schemes; that file carries the mapping. Its opening section says what to run before starting one.
+`Docs/refactoring-backlog.md` is the work list, **renumbered 1–9 after M6**. Rank 1 (protocol-neutral URL
+sanitisation) is done; **eight remain, and they keep their numbers**, so the list starts at 2 — a gap in the
+sequence costs less than a third numbering scheme. None of them has an effect while the player is running.
+Ranks quoted in commit messages up to the M6 merge belong to older schemes; that file carries the mapping.
+Its opening section says what to run before starting one.
 
 Two things are outstanding that are *not* refactors, because only the person with the subscription can do
 them:
@@ -101,7 +103,9 @@ them:
 ```
 LTR.Core[.Abstractions]        Domain. Platform-neutral, no dependencies. Keep it that way —
                               a web frontend is planned and would reuse it.
-LTR.Providers[.Abstractions]   IContentProvider, probes, resolvers + the registry that selects them
+LTR.Providers[.Abstractions]   IContentProvider, probes, resolvers, URL sanitisers + the registry that
+                              selects them. One implementation of each per protocol; ask the registry,
+                              never inject one singly
 LTR.Providers.Xtream           player_api.php client
 LTR.Providers.M3u              M3U-Plus parser and provider
 LTR.Catalogue[.Abstractions]   Application layer: import orchestration and catalogue access. The store
@@ -137,6 +141,17 @@ file in the repository; its fake engine throws if two streams are ever open at o
 assume an endpoint exists. The same scalar arrives as `5`, `"5"`, `""` or `null` depending on the
 panel, which is why `LTR.Providers.Xtream/Json` exists. Panels also serve HTML error pages at HTTP 200,
 reject unfamiliar user agents, and redirect to streaming nodes.
+
+**Credentials travel inside the address, on both protocols, so nothing prints one unsanitised.** Anything
+about to log, print or store an address asks `IProviderRegistry.GetUrlSanitizer` — there were three
+hand-rolled copies of the masking before this existed, one of them typed to `XtreamSource` in the CLI. The
+rules differ by kind and not just by input: Xtream knows its secrets by value and replaces them wherever they
+occur, keeping the rest of the query readable because `action=…` is why the address is being logged, while a
+playlist source holds no credentials at all — whatever the provider issued is already in the address under a
+parameter name nothing here knows — so *every* query value goes and only the names stay. A playlist's **path**
+is left alone on purpose: with nothing to compare against, a credential segment and a route segment are
+indistinguishable. `user:password@host` is removed for every protocol by `SensitiveUrlSanitizer<TSource>`,
+which is the only form that needs no protocol knowledge.
 
 **Stream URLs are never probed.** Opening one occupies a connection slot. A probe that locks the user
 out of their own subscription is worse than defaulting to the prefixed `/live/` form and correcting on
@@ -280,6 +295,9 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **628 tests pass on `main`.** A refactor should not move that number.
+- **648 tests pass on `main`.** A refactor should not move that number.
+- **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
+  and is the only test that would catch a component registered for one protocol and forgotten for the other.
+  Add a case there when a new per-protocol component appears.
 
 `Docs/refactoring-backlog.md` holds the reviewed, ranked work that remains.

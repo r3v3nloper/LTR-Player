@@ -31,6 +31,11 @@ internal sealed class StubProviderRegistry : IProviderRegistry, IStreamUrlResolv
         throw new NotSupportedException("The view model imports the guide through the import service.");
     }
 
+    public ISensitiveUrlSanitizer GetUrlSanitizer(PlaylistSource source)
+    {
+        throw new NotSupportedException("Nothing in the window logs or prints an address.");
+    }
+
     public bool Supports(PlaylistSource source)
     {
         return true;
