@@ -130,4 +130,37 @@ public sealed class VodItem
 
         return DetailAttemptedUtc is not { } attempted || asOf - attempted >= DetailRetryInterval;
     }
+
+    /// <summary>
+    /// Takes on what a film *listing* owns from a freshly fetched copy of this film.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two kinds of field, and the difference is the point. The first group is the listing's to state and is
+    /// assigned outright. The second is stated by <c>get_vod_info</c> on most panels and by the listing on
+    /// some, so it is taken only where the listing has something to say — assigning it unconditionally would
+    /// erase every synopsis the player had fetched, one refresh at a time.
+    /// </para>
+    /// <para>
+    /// The viewer's own data — the resume position, whether it was watched, when — is not here at all, and
+    /// neither is <see cref="HasDetail"/>: a refresh must not make the player forget it has the detail.
+    /// </para>
+    /// </remarks>
+    public void AdoptListingFields(VodItem fetched)
+    {
+        ArgumentNullException.ThrowIfNull(fetched);
+
+        Name = fetched.Name;
+        CoverUrl = fetched.CoverUrl;
+        CategoryExternalId = fetched.CategoryExternalId;
+        CategoryId = fetched.CategoryId;
+        AddedUtc = fetched.AddedUtc;
+        SortOrder = fetched.SortOrder;
+
+        ContainerExtension = fetched.ContainerExtension ?? ContainerExtension;
+        Plot = fetched.Plot ?? Plot;
+        Genre = fetched.Genre ?? Genre;
+        Rating = fetched.Rating ?? Rating;
+        Year = fetched.Year ?? Year;
+    }
 }

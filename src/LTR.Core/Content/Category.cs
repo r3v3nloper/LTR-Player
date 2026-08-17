@@ -26,4 +26,19 @@ public sealed class Category
     public int SortOrder { get; set; }
 
     public ICollection<Channel> Channels { get; set; } = [];
+
+    /// <summary>
+    /// Takes on everything the provider owns from a freshly fetched copy of this category.
+    /// </summary>
+    /// <remarks>
+    /// Neither the identifier nor the kind is copied: together they are what matched the two in the first
+    /// place, and a panel numbers its identifiers per section, so the kind is part of the identity.
+    /// </remarks>
+    public void AdoptProviderFields(Category fetched)
+    {
+        ArgumentNullException.ThrowIfNull(fetched);
+
+        Name = fetched.Name;
+        SortOrder = fetched.SortOrder;
+    }
 }

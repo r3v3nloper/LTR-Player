@@ -523,26 +523,23 @@ public sealed partial class LtrDbContext : DbContext
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var existingByKey = existing.ToDictionary(category => (category.ExternalId, category.Kind));
-        var seen = new HashSet<(string ExternalId, ContentKind Kind)>();
+        var reconciliation = CatalogueReconciler.Match(
+            existing,
+            incoming,
+            category => (category.ExternalId, category.Kind));
 
-        foreach (var category in incoming)
+        foreach (var (stored, fetched) in reconciliation.Matched)
         {
-            seen.Add((category.ExternalId, category.Kind));
+            stored.AdoptProviderFields(fetched);
+        }
 
-            if (existingByKey.TryGetValue((category.ExternalId, category.Kind), out var stored))
-            {
-                stored.Name = category.Name;
-                stored.SortOrder = category.SortOrder;
-                continue;
-            }
-
+        foreach (var category in reconciliation.Added)
+        {
             category.SourceId = sourceId;
             Categories.Add(category);
         }
 
-        Categories.RemoveRange(
-            existing.Where(category => !seen.Contains((category.ExternalId, category.Kind))));
+        Categories.RemoveRange(reconciliation.Removed);
 
         // Saved before the entries are reconciled, because they need the generated category keys.
         await SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -570,39 +567,31 @@ public sealed partial class LtrDbContext : DbContext
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var existingByExternalId = existing.ToDictionary(
+        // Resolved before matching, because a channel carries the provider's category identifier and the
+        // rows carry a local key. Nothing else about a fetched channel is this layer's business.
+        foreach (var channel in incoming)
+        {
+            channel.CategoryId = ResolveCategoryId(channel.CategoryExternalId, ContentKind.Live, categoryIds);
+        }
+
+        var reconciliation = CatalogueReconciler.Match(
+            existing,
+            incoming,
             channel => channel.ExternalId,
             StringComparer.Ordinal);
 
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var channel in incoming)
+        foreach (var (stored, fetched) in reconciliation.Matched)
         {
-            seen.Add(channel.ExternalId);
-            channel.CategoryId = ResolveCategoryId(channel.CategoryExternalId, ContentKind.Live, categoryIds);
+            stored.AdoptProviderFields(fetched);
+        }
 
-            if (existingByExternalId.TryGetValue(channel.ExternalId, out var stored))
-            {
-                // Everything the provider owns is overwritten; IsFavorite is the user's and is not
-                // touched here.
-                stored.Name = channel.Name;
-                stored.StreamUrl = channel.StreamUrl;
-                stored.LogoUrl = channel.LogoUrl;
-                stored.EpgChannelId = channel.EpgChannelId;
-                stored.CategoryExternalId = channel.CategoryExternalId;
-                stored.CategoryId = channel.CategoryId;
-                stored.Number = channel.Number;
-                stored.HasArchive = channel.HasArchive;
-                stored.ArchiveDurationDays = channel.ArchiveDurationDays;
-                stored.SortOrder = channel.SortOrder;
-                continue;
-            }
-
+        foreach (var channel in reconciliation.Added)
+        {
             channel.SourceId = sourceId;
             Channels.Add(channel);
         }
 
-        Channels.RemoveRange(existing.Where(channel => !seen.Contains(channel.ExternalId)));
+        Channels.RemoveRange(reconciliation.Removed);
     }
 
     private static int? ResolveCategoryId(
