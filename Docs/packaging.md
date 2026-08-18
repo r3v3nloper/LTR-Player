@@ -78,7 +78,9 @@ that distinguishes a real copy from someone else's.
 ## LibVLC and the LGPL
 
 LibVLC is LGPL-2.1-or-later. It is used **unmodified and dynamically linked**, which is what keeps its terms
-off this application's own code — the `Copyright` in `Directory.Build.props` covers only what is written here.
+off this application's own code — that code is MIT, and `LICENSE` at the repository root is the only place
+its text is written. `Directory.Build.props` states the matching `Copyright`, which becomes the executable's
+file property.
 
 Two obligations come with shipping it, and neither is met by accident:
 
@@ -89,3 +91,10 @@ Two obligations come with shipping it, and neither is met by accident:
   the upstream source and where to get it. The NuGet package carries no licence file of its own, so this file
   is written here rather than copied from anywhere — and `publish.ps1` refuses to zip without it, because a
   notice that quietly stopped being copied is exactly the kind of omission nobody notices.
+
+**`LICENSE` ships beside it, and for the same reason the notice does.** The notice states that the
+application's own terms are in that file, and somebody who has only the unpacked zip has no repository to
+read instead — so the claim has to be true from the folder alone. It is a linked `Content` item in
+`LTR.Player.Wpf.csproj`, not a second copy of the text, and `publish.ps1` checks for it exactly as it checks
+for the notice. A published folder therefore carries both licences: MIT for what is written here, and the
+LGPL notice for what it is built on.

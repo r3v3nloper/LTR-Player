@@ -76,6 +76,13 @@ if (-not (Test-Path $notices)) {
     throw 'THIRD-PARTY-NOTICES.txt is missing; LibVLC is LGPL and its notice has to ship with it.'
 }
 
+# Checked for the same reason as the notice above: that notice states the MIT terms are in this file, and a
+# claim about a file nobody received is worse than no claim.
+$licence = Join-Path $publishDirectory 'LICENSE'
+if (-not (Test-Path $licence)) {
+    throw 'LICENSE is missing; THIRD-PARTY-NOTICES.txt points at it for the application''s own terms.'
+}
+
 foreach ($architecture in 'win-x86', 'win-arm64') {
     $unwanted = Join-Path $publishDirectory "libvlc\$architecture"
     if (Test-Path $unwanted) {

@@ -35,6 +35,13 @@
       this is where it comes from.
     -->
     <Content Include="THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" />
+
+    <!--
+      The repository's own licence, linked rather than copied so there is one MIT text and not two. The
+      notice beside it says the terms are in this file, and somebody who has only the unpacked zip has no
+      repository to read instead.
+    -->
+    <Content Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

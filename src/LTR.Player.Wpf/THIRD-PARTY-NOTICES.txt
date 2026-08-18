@@ -4,6 +4,9 @@ LTR-Player — third-party notices
 This application is a neutral playback tool. It ships no playlists, no subscriptions and no provider
 lists; the user supplies their own, as with VLC.
 
+LTR-Player's own code is MIT-licensed — Copyright (c) 2026 r3v3nloper — and the full text ships as
+LICENSE beside this file. Everything below covers the components it is built on, whose terms differ.
+
 
 LibVLC / VLC media player
 -------------------------
