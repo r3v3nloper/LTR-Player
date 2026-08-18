@@ -337,14 +337,7 @@ public sealed class VodDetailServiceTests : IAsyncDisposable
 
     private static XtreamSource CreateSource()
     {
-        return new XtreamSource
-        {
-            Name = "Test source",
-            BaseUrl = new Uri("http://panel.example:8080", UriKind.Absolute),
-            Username = "alice",
-            Password = "s3cret",
-            CreatedUtc = DateTimeOffset.UnixEpoch,
-        };
+        return new XtreamSourceBuilder().WithCredentials("alice", "s3cret").Build();
     }
 
     private static Season Season(int number, params Episode[] episodes)

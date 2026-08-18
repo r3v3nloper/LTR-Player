@@ -32,11 +32,15 @@ See ranks 7 and 12 under Done in `Docs/refactoring-backlog.md`.
 
 ### Where to pick up
 
-**`Docs/refactoring-backlog.md` is empty.** All fourteen ranked items are done — twelve from the review after
-the URL-sanitisation rank, plus two found while verifying others — and that file is now the record of how,
-newest first. **One was dropped rather than built:** rank 11's store-side paging of the channel list, on a
-measurement that is written down there so it is not re-derived. **Ranks quoted in commit messages belong to
-whichever scheme was current when they were written**; that file carries both mappings.
+**`Docs/refactoring-backlog.md` holds five open items** from the review of 18 August 2026, made after pinned
+categories shipped. Three of that review's eight were done in the same sitting. The fourteen ranks before it
+are done and kept there as the record of how — **one was dropped rather than built:** rank 11's store-side
+paging of the channel list, on a measurement that is written down there so it is not re-derived. **Ranks
+quoted in commit messages belong to whichever scheme was current when they were written**; that file carries
+all three mappings.
+
+Of what is open, rank 3 (a `CategoryPickerViewModel` both sections hold) supersedes the interface that rank 1
+put in, and rank 4 is `MainViewModel` growing again — the one to look at when a milestone starts.
 
 Read it before proposing a refactor here. Several entries record a *considered and rejected* design, and three
 record a rank whose own premise turned out to be half wrong once the code was read.
@@ -367,7 +371,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **738 tests pass on `main`.** A refactor should not move that number.
+- **739 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.

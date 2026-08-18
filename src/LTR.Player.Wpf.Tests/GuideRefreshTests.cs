@@ -1,5 +1,6 @@
 using LTR.Core.Content;
 using LTR.Core.Sources;
+using LTR.TestSupport;
 
 namespace LTR.Player.Wpf;
 
@@ -95,14 +96,11 @@ public sealed class GuideRefreshTests
 
     private static XtreamSource CreateSource()
     {
-        return new XtreamSource
-        {
-            Id = 1,
-            Name = "Source",
-            BaseUrl = new Uri("http://panel.example:8080", UriKind.Absolute),
-            Username = "alice",
-            Password = "s3cret",
-        };
+        return new XtreamSourceBuilder()
+            .WithId(1)
+            .WithName("Source")
+            .WithCredentials("alice", "s3cret")
+            .Build();
     }
 
     private static Channel Channel(int id, string name)

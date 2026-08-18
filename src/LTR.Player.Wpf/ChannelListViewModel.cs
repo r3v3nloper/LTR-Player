@@ -14,7 +14,7 @@ namespace LTR.Player.Wpf;
 /// <summary>
 /// Presents one source's channels: the filtered list, the category picker and the favourite marker.
 /// </summary>
-public sealed partial class ChannelListViewModel : ObservableObject
+public sealed partial class ChannelListViewModel : ObservableObject, ICategoryPickerSection
 {
     private readonly ILiveCatalogue _liveCatalogue;
     private readonly ISourceStore _sources;

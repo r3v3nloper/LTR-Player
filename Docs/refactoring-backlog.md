@@ -1,18 +1,49 @@
 # Refactoring backlog
 
-# **Empty.** Every ranked item is done, and this file is now the record of how.
+**Five items open, from the review of 18 August 2026.** The fourteen ranks before them are done and are kept
+below as the record of how — including one that was dropped rather than built, with the measurement that
+decided it.
 
-The list was renumbered 1–12 in the review after the URL-sanitisation rank; two more (13 and 14) were found
-while verifying others. All fourteen are below, newest first. **One of them was dropped rather than built** —
-rank 11's store-side paging, on a measurement — and that entry keeps the numbers so the decision is not
-re-derived from scratch.
+Numbers quoted in commit messages belong to whichever scheme was current when they were written; the two
+older mappings are under [Done](#done), and the review below numbers from 1 again.
 
-Numbers quoted in commit messages belong to whichever scheme was current when they were written; both
-mappings are under [Done](#done).
+## Review of 18 August 2026
 
-## What replaces this list
+Made after pinned categories shipped, over the whole tree rather than over that change. Ranked by
+criticality first and effort second, so rank 1 is the one worth doing on any afternoon.
 
-Nothing yet, and that is the honest state. What is left in the project is not refactoring:
+| Rank | Project | Area | Issue | Proposed refactor | Criticality | Effort | Status |
+|---|---|---|---|---|---|---|---|
+| 1 | LTR.Player.Wpf | Maintainability | `CategoryPickerView` binds `Categories`, `SelectedCategory` and `ToggleCategoryFavoriteCommand` against whatever data context it is given. That the two view models have that shape was known only to the markup, and a failed binding is reported to a trace listener rather than to the log or the compiler — so a rename would break one section silently. | State the shape as an interface both implement. | Moderate | Low | **Done** |
+| 2 | Test projects / TestSupport | Maintainability | Eleven test classes wrote an `XtreamSource` out by hand. A field added to a source meant eleven edits, and the forgotten one fails as a test that was never asking about the field. A builder existed, but only inside the Xtream test project. | Move the builder to `TestSupport` and use it everywhere. | Moderate | Low | **Done** |
+| 3 | LTR.Player.Wpf | Maintainability | Both view models hold the picker's collection, selection, guard and command in identical ~25 lines. `CategoryPicker.Fill` also requires the caller to set the selection *afterwards* — the unwritten protocol whose violation crashed the window on startup. | A `CategoryPickerViewModel` both sections hold, owning state and command together; the markup binds it directly. Supersedes rank 1. | Moderate | Medium | Open |
+| 4 | LTR.Player.Wpf | Maintainability | `MainViewModel` is 789 lines and 30 private methods — the recurring growth `CLAUDE.md` warns about. It holds four things: what plays, the guide import, the section switch, and the notification table. | Extract the "what plays" group (~150 lines, six commands) beside `PlaybackCoordinator`. | Moderate | High | Open |
+| 5 | LTR.Player.Wpf.Tests | Maintainability | `GuideOverlayViewTests` kept two methods that only forwarded to `VisualTreeHarness`, left behind when the harness was extracted. | Point the call sites at the harness; delete the wrappers. | Minor | Low | **Done** |
+| 6 | Docs | Maintainability | `CLAUDE.md` tracks `MainViewModel`'s size across milestones but does not say how the figure is counted. `wc -l` gives 789 where the note says 438, and both are defensible — which makes the rule "check it at the start of a milestone" unusable. | State the measure, or restate the series in `wc -l`. | Minor | Low | Open |
+| 7 | LTR.Player.Wpf | Maintainability | `PlayerOverlayView.xaml.cs` is 242 lines doing four things: attaching to the picture's window, recording what was pressed, timing the cursor, reporting a scrub. The first two are one subject. | A `PicturePointer` holding attachment and press bookkeeping; the code-behind forwards. | Minor | Medium | Open |
+| 8 | LTR.Player.Wpf.Tests, LTR.Persistence.Tests | Maintainability | `VodSectionTests` (825 lines) and `LtrDbContextVodTests` (987) each mix film and series cases, so the mirroring of SUT files (§3.5.2) no longer holds there. | Split each into a film file and a series file. | Minor | Medium | Open |
+
+**Nothing was found in the parts most likely to hurt.** URL sanitisation, `PlaybackSession` and the
+reconciliation rules were read and left alone: each carries its reasoning and its tests. No security finding.
+
+### What the three finished ones changed
+
+- **Rank 1** — `ICategoryPickerSection`, implemented by `ChannelListViewModel` and
+  `CatalogueSectionViewModel<TRow>`. The interface binds the code; the markup still resolves by name, so
+  `CategoryPickerViewTests` builds the real picker over each of the three sections and asserts that its
+  bindings found anything at all. That test is the half an interface cannot cover.
+- **Rank 2** — `TestSupport/XtreamSourceBuilder.cs`, gaining `WithId`, `WithName` and `WithCreatedUtc`, is
+  now linked into the Xtream, Catalogue and WPF test projects. Each test class keeps its own factory *method*
+  where its fixture differs — a name, a set of capabilities — but the object is written once. Those are not
+  the pass-throughs rank 5 removed: they carry a value, not a call.
+- **Rank 5** — the two forwarding methods are gone. Note that the estimate for rank 2 was wrong in the
+  direction that matters: "low" assumed the copies were interchangeable, and they are not — they differ in
+  name and capabilities, and 70 call sites depend on those differences. Replacing the object while keeping
+  each factory's signature is what kept the change honest.
+
+## What else is outstanding
+
+Not refactoring, and unchanged by this review:
 
 - **Two checks that need the subscription or a window**, carried in `Docs/verification.md`: the
   `LiveNetworkCachingMilliseconds` figure has never been measured against a real panel, and §§7–9 (the player
@@ -23,7 +54,7 @@ Nothing yet, and that is the honest state. What is left in the project is not re
 
 Kept because it applies to any change in this repository, not only to a ranked one:
 
-- `dotnet test LTR-Player.slnx` — 724 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 739 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.

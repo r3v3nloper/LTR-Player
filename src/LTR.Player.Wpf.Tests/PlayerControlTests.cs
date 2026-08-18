@@ -2,6 +2,7 @@ using LTR.Core.Content;
 using LTR.Core.Playback;
 using LTR.Core.Sources;
 using LTR.Playback;
+using LTR.TestSupport;
 
 namespace LTR.Player.Wpf;
 
@@ -409,20 +410,17 @@ public sealed class PlayerControlTests
 
     private static XtreamSource CreateSource()
     {
-        return new XtreamSource
-        {
-            Id = 1,
-            Name = "Source 1",
-            BaseUrl = new Uri("http://panel.example:8080", UriKind.Absolute),
-            Username = "alice",
-            Password = "s3cret",
-            Capabilities = new ProviderCapabilities
+        return new XtreamSourceBuilder()
+            .WithId(1)
+            .WithName("Source 1")
+            .WithCredentials("alice", "s3cret")
+            .WithCapabilities(new ProviderCapabilities
             {
                 SupportsLive = true,
                 SupportsVod = true,
                 ProbedAtUtc = MainViewModelHarness.Now,
-            },
-        };
+            })
+            .Build();
     }
 
     private static Channel Channel(int id, string externalId, string name)

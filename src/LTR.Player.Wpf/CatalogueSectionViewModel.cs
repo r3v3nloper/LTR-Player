@@ -27,7 +27,7 @@ namespace LTR.Player.Wpf;
 /// </para>
 /// </remarks>
 /// <typeparam name="TRow">The row type this section presents.</typeparam>
-public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
+public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject, ICategoryPickerSection
     where TRow : class
 {
     /// <summary>

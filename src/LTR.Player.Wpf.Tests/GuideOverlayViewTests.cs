@@ -31,7 +31,7 @@ public sealed class GuideOverlayViewTests
     public void ScrollingTheTimeline_LeavesTheChannelNameWhereItWas()
     {
         // Arrange & Act
-        var (before, after) = OnStaThread(() =>
+        var (before, after) = VisualTreeHarness.OnStaThread(() =>
         {
             var view = BuildGuide(out var scroller, out _);
             var name = FirstChannelName(view);
@@ -53,7 +53,7 @@ public sealed class GuideOverlayViewTests
     public void ScrollingTheTimeline_MovesTheProgrammeBlocksWithIt()
     {
         // Arrange & Act
-        var (before, after) = OnStaThread(() =>
+        var (before, after) = VisualTreeHarness.OnStaThread(() =>
         {
             var view = BuildGuide(out var scroller, out _);
             var programmes = FirstProgrammeStrip(view);
@@ -75,7 +75,7 @@ public sealed class GuideOverlayViewTests
     public void ScrollingTheTimeline_MovesTheNowMarkerWithTheBlocks()
     {
         // Arrange & Act
-        var (blocks, marker) = OnStaThread(() =>
+        var (blocks, marker) = VisualTreeHarness.OnStaThread(() =>
         {
             var view = BuildGuide(out var scroller, out var markerLayer);
             var programmes = FirstProgrammeStrip(view);
@@ -122,8 +122,8 @@ public sealed class GuideOverlayViewTests
         view.Height = 400;
         Settle(view);
 
-        scroller = Descendant<ScrollViewer>(view, "TimelineScroller");
-        nowMarker = Descendant<FrameworkElement>(view, "NowMarkerLayer");
+        scroller = VisualTreeHarness.Descendant<ScrollViewer>(view, "TimelineScroller");
+        nowMarker = VisualTreeHarness.Descendant<FrameworkElement>(view, "NowMarkerLayer");
 
         return view;
     }
@@ -147,7 +147,7 @@ public sealed class GuideOverlayViewTests
 
     private static TextBlock FirstChannelName(DependencyObject view)
     {
-        return Descendants<TextBlock>(view).First(text => text.Text == "Erste");
+        return VisualTreeHarness.Descendants<TextBlock>(view).First(text => text.Text == "Erste");
     }
 
     /// <summary>
@@ -157,23 +157,11 @@ public sealed class GuideOverlayViewTests
     {
         var guide = ((GuideHost)view.DataContext).Guide;
 
-        return Descendants<ItemsControl>(view)
+        return VisualTreeHarness.Descendants<ItemsControl>(view)
             .First(items => items is not ListBox
                 && Math.Abs(items.Width - guide.Timeline.Width) < 0.5
                 && items.Items.Count > 0
                 && items.Items[0] is GuideProgrammeViewModel);
-    }
-
-    private static T Descendant<T>(DependencyObject root, string name)
-        where T : FrameworkElement
-    {
-        return VisualTreeHarness.Descendant<T>(root, name);
-    }
-
-    private static IEnumerable<T> Descendants<T>(DependencyObject root)
-        where T : DependencyObject
-    {
-        return VisualTreeHarness.Descendants<T>(root);
     }
 
     /// <summary>
@@ -186,14 +174,6 @@ public sealed class GuideOverlayViewTests
         element.Arrange(new Rect(0, 0, 600, 400));
         element.UpdateLayout();
         element.UpdateLayout();
-    }
-
-    /// <summary>
-    /// WPF requires a single-threaded apartment, which xunit does not provide.
-    /// </summary>
-    private static T OnStaThread<T>(Func<T> work)
-    {
-        return VisualTreeHarness.OnStaThread(work);
     }
 
     /// <summary>Stands in for the shell, which is what the overlay binds its <c>Guide</c> through.</summary>

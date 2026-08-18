@@ -1,5 +1,6 @@
 using LTR.Core.Content;
 using LTR.Core.Sources;
+using LTR.TestSupport;
 
 namespace LTR.Player.Wpf;
 
@@ -234,20 +235,15 @@ public sealed class CategoryPinTests
 
     private static XtreamSource CreateSource()
     {
-        return new XtreamSource
-        {
-            Id = 1,
-            Name = "Test source",
-            BaseUrl = new Uri("http://panel.example:8080", UriKind.Absolute),
-            Username = "alice",
-            Password = "s3cret",
-            CreatedUtc = DateTimeOffset.UnixEpoch,
-            Capabilities = new ProviderCapabilities
+        return new XtreamSourceBuilder()
+            .WithId(1)
+            .WithCredentials("alice", "s3cret")
+            .WithCapabilities(new ProviderCapabilities
             {
                 SupportsLive = true,
                 SupportsVod = true,
                 SupportsSeries = true,
-            },
-        };
+            })
+            .Build();
     }
 }
