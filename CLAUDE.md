@@ -21,9 +21,13 @@ exists and not what was considered finished.
 | **M5** Player polish — OSD, fullscreen, keyboard, tracks | done | `Docs/player.md`; the live-caching value still wants measuring |
 | **M6** Hardening — error handling, settings, packaging | done | `Docs/packaging.md`; the quarantine had landed early, with M3 |
 
-**All six are merged into `main` and pushed.** Version 0.7.0 — bumped from 0.6.0 after the backlog was
-cleared, because that work carried a schema migration, two new CLI commands and visible changes in the window.
-`pwsh build/publish.ps1` produces a self-contained folder and a zip that runs on a machine with no .NET.
+**All six are merged into `main`.** Version 0.8.0 — bumped from 0.7.0 for pinned categories, on the same
+rule 0.7.0 was set by: a schema migration and a visible change in the window. `pwsh build/publish.ps1`
+produces a self-contained folder and a zip that runs on a machine with no .NET.
+
+Since 0.7.0, and not from the plan: the on-screen controls can be woken by the pointer again — which they
+could not, in fullscreen not at all — and a category can be pinned to the top of its picker. `Docs/player.md`
+and `Docs/categories.md` carry both.
 
 Both of M3's stated limits are gone: the timeline's channel names used to scroll away with the programme
 blocks, and it drew only the first 200 channels. It now pins the names and **pages** along the channel axis,

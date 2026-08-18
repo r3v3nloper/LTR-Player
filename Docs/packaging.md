@@ -13,7 +13,7 @@ run and should not be used for anything given to anyone. Output:
 
 ```
 artifacts/publish/                        the folder that runs
-artifacts/LTR-Player-0.7.0-win-x64.zip    110 MB
+artifacts/LTR-Player-0.8.0-win-x64.zip    110 MB
 ```
 
 The version comes from `Directory.Build.props` and nothing else states it. Bump it there — and the name above
