@@ -21,9 +21,13 @@ exists and not what was considered finished.
 | **M5** Player polish — OSD, fullscreen, keyboard, tracks | done | `Docs/player.md`; the live-caching value still wants measuring |
 | **M6** Hardening — error handling, settings, packaging | done | `Docs/packaging.md`; the quarantine had landed early, with M3 |
 
-**All six are merged into `main` and pushed.** Version 0.7.0 — bumped from 0.6.0 after the backlog was
-cleared, because that work carried a schema migration, two new CLI commands and visible changes in the window.
-`pwsh build/publish.ps1` produces a self-contained folder and a zip that runs on a machine with no .NET.
+**All six are merged into `main`.** Version 0.8.0 — bumped from 0.7.0 for pinned categories, on the same
+rule 0.7.0 was set by: a schema migration and a visible change in the window. `pwsh build/publish.ps1`
+produces a self-contained folder and a zip that runs on a machine with no .NET.
+
+Since 0.7.0, and not from the plan: the on-screen controls can be woken by the pointer again — which they
+could not, in fullscreen not at all — and a category can be pinned to the top of its picker. `Docs/player.md`
+and `Docs/categories.md` carry both.
 
 Both of M3's stated limits are gone: the timeline's channel names used to scroll away with the programme
 blocks, and it drew only the first 200 channels. It now pins the names and **pages** along the channel axis,
@@ -32,11 +36,15 @@ See ranks 7 and 12 under Done in `Docs/refactoring-backlog.md`.
 
 ### Where to pick up
 
-**`Docs/refactoring-backlog.md` is empty.** All fourteen ranked items are done — twelve from the review after
-the URL-sanitisation rank, plus two found while verifying others — and that file is now the record of how,
-newest first. **One was dropped rather than built:** rank 11's store-side paging of the channel list, on a
-measurement that is written down there so it is not re-derived. **Ranks quoted in commit messages belong to
-whichever scheme was current when they were written**; that file carries both mappings.
+**`Docs/refactoring-backlog.md` holds five open items** from the review of 18 August 2026, made after pinned
+categories shipped. Three of that review's eight were done in the same sitting. The fourteen ranks before it
+are done and kept there as the record of how — **one was dropped rather than built:** rank 11's store-side
+paging of the channel list, on a measurement that is written down there so it is not re-derived. **Ranks
+quoted in commit messages belong to whichever scheme was current when they were written**; that file carries
+all three mappings.
+
+Of what is open, rank 3 (a `CategoryPickerViewModel` both sections hold) supersedes the interface that rank 1
+put in, and rank 4 is `MainViewModel` growing again — the one to look at when a milestone starts.
 
 Read it before proposing a refactor here. Several entries record a *considered and rejected* design, and three
 record a rank whose own premise turned out to be half wrong once the code was read.
@@ -132,7 +140,9 @@ LTR.Player.Wpf                 The only project that references WPF. MainViewMod
                                catalogue sections, the guide and the on-screen controls, and is the
                                sections' ISourceCoordinator; the sections never reference each other.
                                Views/ holds one UserControl per section and per overlay, so
-                               MainWindow.xaml is composition only
+                               MainWindow.xaml is composition only. CategoryPickerView is the one view
+                               used by three sections at once — it names none of them and binds to
+                               whichever it is placed in
 ```
 
 Dependency direction: apps → Catalogue/Providers/Playback → *.Abstractions → Core. Core knows nobody.
@@ -209,6 +219,11 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   `MigrationUpgradeTests` is the one that matters for shipped installations: SQLite cannot alter a
   constraint in place, so EF implements one by rebuilding the table, and a rebuild is what silently empties
   it. Add a case there for every migration that alters an existing table.
+- **A category carries the viewer's pin, and the store is what sorts by it.** `Category.IsFavorite` is user
+  data exactly as a favourite channel is, so `AdoptProviderFields` leaves it alone. `GetCategoriesAsync`
+  orders pinned first — stated there because three pickers and the CLI read it, and restated once in
+  `CategoryPicker` because a pin has to move an entry without refilling the bound collection. `Docs/categories.md`
+  has the rest.
 - **A panel numbers its category identifiers per section,** so `58` is a live category and a film category
   at once. Category reconciliation is therefore scoped to the *kinds* an import covers, not to the source —
   scoped to the source, a live refresh deletes every film category — and its lookup is keyed by
@@ -270,7 +285,10 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   list box drops its selection, so it has to be restored.
 - **Fill a bound collection before selecting in it.** Emptying one makes a `ComboBox` write a null selection
   back through the binding, so a selection assigned first is discarded. Both new pickers rendered blank while
-  their lists looked perfectly correct, because the filter read the same null as "every category".
+  their lists looked perfectly correct, because the filter read the same null as "every category". The same
+  null is why **`SelectedCategory` is nullable** in both view models: a reader declared against a non-null
+  property compiles and then dereferences null during that instant — which is how a command guard added for
+  pinned categories crashed the window on startup, long after the trap had been written down here.
 - **Dispose the DI container asynchronously.** It holds `IAsyncDisposable` singletons; the synchronous
   `Dispose` throws and `PlaybackSession` never releases its stream.
 - **A view model that reads the clock must be given a `TimeProvider`.** `DateTimeOffset.UtcNow` in
@@ -357,7 +375,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **730 tests pass on `main`.** A refactor should not move that number.
+- **739 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.

@@ -1,5 +1,6 @@
 using LTR.Core.Content;
 using LTR.Core.Sources;
+using LTR.TestSupport;
 
 namespace LTR.Player.Wpf;
 
@@ -508,15 +509,7 @@ public sealed class MainViewModelTests
 
     private static XtreamSource CreateSource(int id)
     {
-        return new XtreamSource
-        {
-            Id = id,
-            Name = "Test source",
-            BaseUrl = new Uri("http://panel.example:8080", UriKind.Absolute),
-            Username = "alice",
-            Password = "s3cret",
-            CreatedUtc = DateTimeOffset.UnixEpoch,
-        };
+        return new XtreamSourceBuilder().WithId(id).WithCredentials("alice", "s3cret").Build();
     }
 
     private static Category CreateCategory(int sourceId, string externalId, string name)

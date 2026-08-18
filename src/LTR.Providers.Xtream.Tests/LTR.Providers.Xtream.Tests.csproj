@@ -24,6 +24,11 @@
     <ProjectReference Include="..\LTR.Providers.Xtream\LTR.Providers.Xtream.csproj" />
   </ItemGroup>
 
+  <!-- Linked rather than copied: one source builder for every project that needs one. -->
+  <ItemGroup>
+    <Compile Include="../TestSupport/XtreamSourceBuilder.cs" Link="XtreamSourceBuilder.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

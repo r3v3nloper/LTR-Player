@@ -14,7 +14,7 @@ namespace LTR.Player.Wpf;
 /// <summary>
 /// Presents one source's channels: the filtered list, the category picker and the favourite marker.
 /// </summary>
-public sealed partial class ChannelListViewModel : ObservableObject
+public sealed partial class ChannelListViewModel : ObservableObject, ICategoryPickerSection
 {
     private readonly ILiveCatalogue _liveCatalogue;
     private readonly ISourceStore _sources;
@@ -42,8 +42,18 @@ public sealed partial class ChannelListViewModel : ObservableObject
     /// </summary>
     private CatalogueFilter _activeFilter = CatalogueFilter.None;
 
+    /// <summary>
+    /// The category the picker is on, or null while the picker is being refilled.
+    /// </summary>
+    /// <remarks>
+    /// Nullable because a ComboBox genuinely writes null here: emptying the bound collection makes it push a
+    /// null selection back through the binding. Anything reading this runs during that instant — the pin's
+    /// own command guard is asked on every selection change, which is how a non-null declaration became a
+    /// crash on startup rather than a warning.
+    /// </remarks>
     [ObservableProperty]
-    private CategoryChoice _selectedCategory = CategoryChoice.All;
+    [NotifyCanExecuteChangedFor(nameof(ToggleCategoryFavoriteCommand))]
+    private CategoryChoice? _selectedCategory = CategoryChoice.All;
 
     [ObservableProperty]
     private string _channelFilterText = string.Empty;
@@ -268,6 +278,26 @@ public sealed partial class ChannelListViewModel : ObservableObject
         return SelectedChannel is not null;
     }
 
+    /// <summary>
+    /// Pins the chosen category to the top of the picker, or lets it fall back.
+    /// </summary>
+    /// <remarks>
+    /// The rows are left alone on purpose: a pin says where a category is listed and nothing about which
+    /// channels the filter admits, so the list the viewer is looking at does not move under them.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasPinnableCategory))]
+    private Task ToggleCategoryFavoriteAsync(CancellationToken cancellationToken)
+    {
+        return SelectedCategory is { } choice
+            ? CategoryPicker.ToggleFavoriteAsync(Categories, choice, _sources, cancellationToken)
+            : Task.CompletedTask;
+    }
+
+    private bool HasPinnableCategory()
+    {
+        return SelectedCategory is { IsPinnable: true };
+    }
+
     private void Replace(IReadOnlyList<Channel> channels, IReadOnlyList<Category> categories)
     {
         _channels.Clear();
@@ -275,13 +305,7 @@ public sealed partial class ChannelListViewModel : ObservableObject
 
         HasGuide = false;
 
-        Categories.Clear();
-        Categories.Add(CategoryChoice.All);
-
-        foreach (var category in categories)
-        {
-            Categories.Add(new CategoryChoice(category.Name, category.ExternalId));
-        }
+        CategoryPicker.Fill(Categories, categories);
 
         // Both reset rather than preserved: a category and a row from the previous source mean nothing
         // here, and the row objects themselves have just been replaced.
@@ -295,7 +319,7 @@ public sealed partial class ChannelListViewModel : ObservableObject
         RefreshChannelView();
     }
 
-    partial void OnSelectedCategoryChanged(CategoryChoice value)
+    partial void OnSelectedCategoryChanged(CategoryChoice? value)
     {
         RefreshChannelView();
     }

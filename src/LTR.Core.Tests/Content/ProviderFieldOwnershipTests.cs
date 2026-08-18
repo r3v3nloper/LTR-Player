@@ -179,6 +179,7 @@ public sealed class ProviderFieldOwnershipTests
             Name = "Sport",
             Kind = ContentKind.Live,
             SortOrder = 3,
+            IsFavorite = true,
         };
 
         var fetched = new Category
@@ -197,5 +198,6 @@ public sealed class ProviderFieldOwnershipTests
         stored.Name.ShouldBe("Sport HD");
         stored.SortOrder.ShouldBe(1);
         stored.Kind.ShouldBe(ContentKind.Live, "the kind is part of what matched them");
+        stored.IsFavorite.ShouldBeTrue("a pin is the viewer's, and every import would otherwise clear it");
     }
 }

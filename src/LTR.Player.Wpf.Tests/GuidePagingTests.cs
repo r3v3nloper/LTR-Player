@@ -1,5 +1,6 @@
 using LTR.Core.Content;
 using LTR.Core.Sources;
+using LTR.TestSupport;
 
 namespace LTR.Player.Wpf;
 
@@ -202,14 +203,6 @@ public sealed class GuidePagingTests
 
     private static XtreamSource CreateSource()
     {
-        return new XtreamSource
-        {
-            Id = 1,
-            Name = "Test source",
-            BaseUrl = new Uri("http://panel.example:8080", UriKind.Absolute),
-            Username = "alice",
-            Password = "s3cret",
-            CreatedUtc = DateTimeOffset.UnixEpoch,
-        };
+        return new XtreamSourceBuilder().WithId(1).WithCredentials("alice", "s3cret").Build();
     }
 }

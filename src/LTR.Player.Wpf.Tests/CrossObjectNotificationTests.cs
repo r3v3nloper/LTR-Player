@@ -1,5 +1,6 @@
 using LTR.Core.Content;
 using LTR.Core.Sources;
+using LTR.TestSupport;
 
 namespace LTR.Player.Wpf;
 
@@ -217,20 +218,17 @@ public sealed class CrossObjectNotificationTests
 
     private static XtreamSource CreateSource(int id = 1)
     {
-        return new XtreamSource
-        {
-            Id = id,
-            Name = $"Source {id}",
-            BaseUrl = new Uri("http://panel.example:8080", UriKind.Absolute),
-            Username = "alice",
-            Password = "s3cret",
-            Capabilities = new ProviderCapabilities
+        return new XtreamSourceBuilder()
+            .WithId(id)
+            .WithName($"Source {id}")
+            .WithCredentials("alice", "s3cret")
+            .WithCapabilities(new ProviderCapabilities
             {
                 SupportsLive = true,
                 SupportsVod = true,
                 ProbedAtUtc = MainViewModelHarness.Now,
-            },
-        };
+            })
+            .Build();
     }
 
     private static Channel CreateChannel(int id, string externalId, string name)

@@ -2,6 +2,7 @@ using LTR.Core.Content;
 using LTR.Core.Sources;
 using LTR.Playback;
 using LTR.Playback.LibVlc;
+using LTR.TestSupport;
 
 namespace LTR.Player.Wpf;
 
@@ -231,13 +232,10 @@ public sealed class SettingsTests
 
     private static XtreamSource CreateSource()
     {
-        return new XtreamSource
-        {
-            Id = 1,
-            Name = "Panel",
-            BaseUrl = new Uri("http://panel.example:8080", UriKind.Absolute),
-            Username = "alice",
-            Password = "s3cret",
-        };
+        return new XtreamSourceBuilder()
+            .WithId(1)
+            .WithName("Panel")
+            .WithCredentials("alice", "s3cret")
+            .Build();
     }
 }

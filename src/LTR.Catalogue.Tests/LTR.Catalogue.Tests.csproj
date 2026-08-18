@@ -9,6 +9,7 @@
   <!-- Linked rather than copied: one test clock and one refusing registry for every project that needs them. -->
   <ItemGroup>
     <Compile Include="../TestSupport/TestClock.cs" Link="TestClock.cs" />
+    <Compile Include="../TestSupport/XtreamSourceBuilder.cs" Link="XtreamSourceBuilder.cs" />
     <Compile
       Include="../TestSupport/NotSupportedProviderRegistry.cs"
       Link="NotSupportedProviderRegistry.cs" />

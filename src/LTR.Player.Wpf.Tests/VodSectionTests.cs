@@ -2,6 +2,7 @@ using LTR.Core.Content;
 using LTR.Core.Playback;
 using LTR.Core.Sources;
 using LTR.Playback;
+using LTR.TestSupport;
 
 namespace LTR.Player.Wpf;
 
@@ -772,21 +773,18 @@ public sealed class VodSectionTests
         bool supportsVod = true,
         bool supportsSeries = true)
     {
-        return new XtreamSource
-        {
-            Id = id,
-            Name = $"Source {id}",
-            BaseUrl = new Uri("http://panel.example:8080", UriKind.Absolute),
-            Username = "alice",
-            Password = "s3cret",
-            Capabilities = new ProviderCapabilities
+        return new XtreamSourceBuilder()
+            .WithId(id)
+            .WithName($"Source {id}")
+            .WithCredentials("alice", "s3cret")
+            .WithCapabilities(new ProviderCapabilities
             {
                 SupportsLive = true,
                 SupportsVod = supportsVod,
                 SupportsSeries = supportsSeries,
                 ProbedAtUtc = MainViewModelHarness.Now,
-            },
-        };
+            })
+            .Build();
     }
 
     private static VodItem Movie(int id, string name)
