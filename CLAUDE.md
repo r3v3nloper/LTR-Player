@@ -55,8 +55,8 @@ them:
 - **`LiveNetworkCachingMilliseconds` (600 ms) is a guess, not a measurement.** The settings pane exposes it
   and `PlaybackSession` logs how long each open took, which is what makes tuning possible — see
   `Docs/verification.md` §4.
-- **The M5 and M6 checks that need a real panel or a window** are `Docs/verification.md` §§7–9: the player
-  controls, a failing stream's reported reason, and the packaged build.
+- **The checks that need a real panel or a window** are `Docs/verification.md` §§7–10: the player
+  controls, a failing stream's reported reason, the packaged build, and the pinned categories.
 
 ### What M5 settled, and the one thing it did not
 

@@ -222,18 +222,25 @@ Nothing below the UI can answer this; it needs the window. `Docs/player.md` has 
 making, in the order that finds problems fastest:
 
 1. **Play a channel.** The controls appear, say what is playing, and take themselves away after four seconds.
-   The pointer moving over the picture brings them back.
-2. **Zap with Page Up and Page Down.** Each press changes channel once. Then narrow the list with the search
+   Moving the pointer *over the picture* brings them back — not over the side panel, which is a different
+   window and was for a while the only thing that worked. Let them go again with the pointer resting on the
+   bar itself: they must stay, because a bar that vanishes from under a hand sends the click to the picture.
+2. **Press F and repeat that.** The same wake-up in fullscreen, where there is no side panel to fall back on.
+   The mouse cursor goes away with the bar here and comes back with it; in a window it stays either way.
+3. **Double-click the picture, then double-click the skip-forward button twice over.** The first goes
+   fullscreen; the second must skip twenty seconds and *not* leave fullscreen. WPF offers a double-click to
+   the window even when a button has already dealt with it, so this is the case that regressed once.
+4. **Zap with Page Up and Page Down.** Each press changes channel once. Then narrow the list with the search
    box and zap again — it must walk only what the list is showing.
-3. **Type in the search box.** `a`, `f`, `g`, `i` and `m` must reach the box rather than the player. This is
+5. **Type in the search box.** `a`, `f`, `g`, `i` and `m` must reach the box rather than the player. This is
    the one that fails if the keyboard is ever moved into markup.
-4. **Press F, then Escape.** The panel goes and comes back at the width you left it, not at 360 pixels.
-5. **Play a film and drag the seek bar.** The thumb must stay under the pointer while held, and playback move
+6. **Press F, then Escape.** The panel goes and comes back at the width you left it, not at 360 pixels.
+7. **Play a film and drag the seek bar.** The thumb must stay under the pointer while held, and playback move
    on release. Then press Left and Right for ten-second steps.
-6. **Open the audio menu on a channel that has two languages.** Switch, and confirm the picker still shows the
+8. **Open the audio menu on a channel that has two languages.** Switch, and confirm the picker still shows the
    right entry a few seconds later rather than snapping back.
-7. **Let a film play to its end.** It must come off the continue-watching list without the window being
-   closed first — that is the one this milestone fixed, and the failure mode is silent.
+9. **Let a film play to its end.** It must come off the continue-watching list without the window being
+   closed first — that is the one M5 fixed, and the failure mode is silent.
 
 ## 8. Does a failing stream say why?
 
@@ -267,6 +274,24 @@ Start-Process artifacts\publish\LTR-Player.exe -WorkingDirectory C:\
 
 A window that opens and plays nothing is the failure mode to watch for: it means LibVLC's natives are absent,
 which is silent everywhere else. The script checks for them by name and refuses to zip without them.
+
+## 10. Do pinned categories hold?
+
+Also the window's, and it needs a subscription with enough categories to make the point — the one this was
+built against lists 243. `Docs/categories.md` has the design.
+
+1. **Pick a category from far down the list and press the star.** It jumps to the top with a star on it, and
+   two things must *not* happen: the picker must not fall back to "All categories", and the channel list must
+   not change. A pin says where a category is listed and nothing about what it contains.
+2. **Close the player and start it again.** It is still at the top, still starred. This is the half that only
+   a restart can show, because it is the database rather than the window that has to have kept it.
+3. **Press the star again.** It returns to where the provider had it, not to the end of the list.
+4. **Pin two, from far apart.** They keep the provider's order between them: pinning is not a stack, so the
+   most recently starred one does not climb over the other.
+5. **Select "All categories".** The star is greyed out — the entry stands for no category, so there is
+   nothing to pin.
+6. **Pin a category under Films, then look at Live.** A panel numbers its categories per section, so `58` is
+   a live category and a film category at once; pinning one must leave the other alone.
 
 ## Automated tests
 

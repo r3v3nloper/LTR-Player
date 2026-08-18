@@ -46,8 +46,8 @@ reconciliation rules were read and left alone: each carries its reasoning and it
 Not refactoring, and unchanged by this review:
 
 - **Two checks that need the subscription or a window**, carried in `Docs/verification.md`: the
-  `LiveNetworkCachingMilliseconds` figure has never been measured against a real panel, and §§7–9 (the player
-  controls, a failing stream's reported reason, the packaged build) need a person at the screen.
+  `LiveNetworkCachingMilliseconds` figure has never been measured against a real panel, and §§7–10 (the player
+  controls, a failing stream's reported reason, the packaged build, the pinned categories) need a person at the screen.
 - **Whatever the next milestone turns out to be.** The plan lives outside the repository.
 
 ## Before starting anything here
