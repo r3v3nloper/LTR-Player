@@ -277,7 +277,10 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   list box drops its selection, so it has to be restored.
 - **Fill a bound collection before selecting in it.** Emptying one makes a `ComboBox` write a null selection
   back through the binding, so a selection assigned first is discarded. Both new pickers rendered blank while
-  their lists looked perfectly correct, because the filter read the same null as "every category".
+  their lists looked perfectly correct, because the filter read the same null as "every category". The same
+  null is why **`SelectedCategory` is nullable** in both view models: a reader declared against a non-null
+  property compiles and then dereferences null during that instant — which is how a command guard added for
+  pinned categories crashed the window on startup, long after the trap had been written down here.
 - **Dispose the DI container asynchronously.** It holds `IAsyncDisposable` singletons; the synchronous
   `Dispose` throws and `PlaybackSession` never releases its stream.
 - **A view model that reads the clock must be given a `TimeProvider`.** `DateTimeOffset.UtcNow` in
@@ -364,7 +367,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **737 tests pass on `main`.** A refactor should not move that number.
+- **738 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.

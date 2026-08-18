@@ -55,3 +55,11 @@ the selection like every other guard in this application.
 The stored category's own, never the provider's number. A panel numbers its categories per section, so `58`
 is a live category and a film category at once — pinning "Action" in the film picker must not pin
 "DE Deutschland" in the live one. `CategoryPinTests.TheFilmSectionPinsItsOwnCategories` is that case.
+
+## The selection can be empty
+
+`SelectedCategory` is nullable in both view models, and not defensively. A ComboBox pushes a null selection
+back through the binding whenever its bound collection is emptied, which is what filling the picker does — so
+the first fill at startup passes through every reader of the selection. The pin's command guard is asked on
+each selection change and was declared against a non-null property, which made it the one reader that could
+not survive that instant. Anything new that reads the selection has to allow for it.
