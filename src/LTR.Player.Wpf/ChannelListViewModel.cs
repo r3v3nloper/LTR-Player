@@ -43,6 +43,7 @@ public sealed partial class ChannelListViewModel : ObservableObject
     private CatalogueFilter _activeFilter = CatalogueFilter.None;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ToggleCategoryFavoriteCommand))]
     private CategoryChoice _selectedCategory = CategoryChoice.All;
 
     [ObservableProperty]
@@ -268,6 +269,24 @@ public sealed partial class ChannelListViewModel : ObservableObject
         return SelectedChannel is not null;
     }
 
+    /// <summary>
+    /// Pins the chosen category to the top of the picker, or lets it fall back.
+    /// </summary>
+    /// <remarks>
+    /// The rows are left alone on purpose: a pin says where a category is listed and nothing about which
+    /// channels the filter admits, so the list the viewer is looking at does not move under them.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasPinnableCategory))]
+    private Task ToggleCategoryFavoriteAsync(CancellationToken cancellationToken)
+    {
+        return CategoryPicker.ToggleFavoriteAsync(Categories, SelectedCategory, _sources, cancellationToken);
+    }
+
+    private bool HasPinnableCategory()
+    {
+        return SelectedCategory.IsPinnable;
+    }
+
     private void Replace(IReadOnlyList<Channel> channels, IReadOnlyList<Category> categories)
     {
         _channels.Clear();
@@ -275,13 +294,7 @@ public sealed partial class ChannelListViewModel : ObservableObject
 
         HasGuide = false;
 
-        Categories.Clear();
-        Categories.Add(CategoryChoice.All);
-
-        foreach (var category in categories)
-        {
-            Categories.Add(new CategoryChoice(category.Name, category.ExternalId));
-        }
+        CategoryPicker.Fill(Categories, categories);
 
         // Both reset rather than preserved: a category and a row from the previous source mean nothing
         // here, and the row objects themselves have just been replaced.

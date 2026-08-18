@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using LTR.Catalogue;
 using LTR.Core.Content;
 using LTR.Core.Sources;
@@ -41,6 +42,7 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
     private readonly IVodCatalogue _catalogue;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ToggleCategoryFavoriteCommand))]
     private CategoryChoice _selectedCategory = CategoryChoice.All;
 
     [ObservableProperty]
@@ -86,8 +88,7 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
         SearchText = string.Empty;
 
         Rows.Clear();
-        Categories.Clear();
-        Categories.Add(CategoryChoice.All);
+        CategoryPicker.Fill(Categories, []);
 
         if (source is null)
         {
@@ -104,10 +105,7 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
             .GetCategoriesAsync(source.Id, CategoryKind, cancellationToken)
             .ConfigureAwait(true);
 
-        foreach (var category in categories)
-        {
-            Categories.Add(new CategoryChoice(category.Name, category.ExternalId));
-        }
+        CategoryPicker.Fill(Categories, categories);
 
         // Selected last, and that is not cosmetic. Emptying the bound collection makes the ComboBox write a
         // null selection back through the binding, so a selection assigned before the picker is refilled is
@@ -144,6 +142,19 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
         Notice = Describe(page, filter);
     }
 
+    /// <summary>
+    /// Pins the chosen category to the top of the picker, or lets it fall back.
+    /// </summary>
+    /// <remarks>
+    /// No search follows: a pin says where a category is listed and nothing about what matches it, so the
+    /// results stay as they are.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(HasPinnableCategory))]
+    public Task ToggleCategoryFavoriteAsync(CancellationToken cancellationToken)
+    {
+        return CategoryPicker.ToggleFavoriteAsync(Categories, SelectedCategory, _sources, cancellationToken);
+    }
+
     /// <summary>Which kind of category this section's picker lists.</summary>
     protected abstract ContentKind CategoryKind { get; }
 
@@ -165,6 +176,11 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
     /// </summary>
     protected virtual void ClearSelection()
     {
+    }
+
+    private bool HasPinnableCategory()
+    {
+        return SelectedCategory.IsPinnable;
     }
 
     private string Describe(CataloguePage<TRow> page, CatalogueFilter filter)

@@ -132,7 +132,9 @@ LTR.Player.Wpf                 The only project that references WPF. MainViewMod
                                catalogue sections, the guide and the on-screen controls, and is the
                                sections' ISourceCoordinator; the sections never reference each other.
                                Views/ holds one UserControl per section and per overlay, so
-                               MainWindow.xaml is composition only
+                               MainWindow.xaml is composition only. CategoryPickerView is the one view
+                               used by three sections at once — it names none of them and binds to
+                               whichever it is placed in
 ```
 
 Dependency direction: apps → Catalogue/Providers/Playback → *.Abstractions → Core. Core knows nobody.
@@ -209,6 +211,11 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   `MigrationUpgradeTests` is the one that matters for shipped installations: SQLite cannot alter a
   constraint in place, so EF implements one by rebuilding the table, and a rebuild is what silently empties
   it. Add a case there for every migration that alters an existing table.
+- **A category carries the viewer's pin, and the store is what sorts by it.** `Category.IsFavorite` is user
+  data exactly as a favourite channel is, so `AdoptProviderFields` leaves it alone. `GetCategoriesAsync`
+  orders pinned first — stated there because three pickers and the CLI read it, and restated once in
+  `CategoryPicker` because a pin has to move an entry without refilling the bound collection. `Docs/categories.md`
+  has the rest.
 - **A panel numbers its category identifiers per section,** so `58` is a live category and a film category
   at once. Category reconciliation is therefore scoped to the *kinds* an import covers, not to the source —
   scoped to the source, a live refresh deletes every film category — and its lookup is keyed by
@@ -357,7 +364,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **730 tests pass on `main`.** A refactor should not move that number.
+- **737 tests pass on `main`.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.

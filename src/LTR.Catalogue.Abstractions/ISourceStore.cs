@@ -36,6 +36,15 @@ public interface ISourceStore
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Pins a category to the top of the pickers, or lets it fall back into the provider's order.
+    /// </summary>
+    /// <remarks>
+    /// Belongs here for the reason the question above does, and answers it: where a category sits is part of
+    /// what the source declares, corrected by what the viewer has said about it.
+    /// </remarks>
+    Task SetCategoryFavoriteAsync(int categoryId, bool isFavorite, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Stores the two settings a viewer may need to change on a source they have already added.
     /// </summary>
     /// <remarks>

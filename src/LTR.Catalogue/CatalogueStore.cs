@@ -48,6 +48,12 @@ internal sealed class CatalogueStore
         return _database.RunAsync(context => context.GetCategoriesAsync(sourceId, kind, cancellationToken));
     }
 
+    public Task SetCategoryFavoriteAsync(int categoryId, bool isFavorite, CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(
+            context => context.SetCategoryFavoriteAsync(categoryId, isFavorite, cancellationToken));
+    }
+
     public Task<IReadOnlyList<ChannelGuideSlice>> GetNowAndNextAsync(
         int sourceId,
         DateTimeOffset atUtc,

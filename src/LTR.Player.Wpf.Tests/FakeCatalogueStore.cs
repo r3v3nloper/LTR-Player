@@ -22,6 +22,9 @@ internal sealed class FakeCatalogueStore
     /// <summary>Favourite changes that were written, so a test can prove one was persisted.</summary>
     public List<(int ChannelId, bool IsFavorite)> FavoriteWrites { get; } = [];
 
+    /// <summary>Category pins that were written, for the same reason.</summary>
+    public List<(int CategoryId, bool IsFavorite)> CategoryFavoriteWrites { get; } = [];
+
     public List<GuideChannel> GuideChannels { get; } = [];
 
     public List<EpgEntry> Programmes { get; } = [];
@@ -59,13 +62,41 @@ internal sealed class FakeCatalogueStore
         return [.. Channels.Where(channel => channel.SourceId == sourceId)];
     }
 
+    /// <remarks>
+    /// Ordered as the real query is — pinned first, then the provider's own order — because where a pinned
+    /// category sits after the next load is exactly what a picker test is about. The rule is duplicated here
+    /// rather than reached for, which is safe only because the query itself is covered against real SQLite
+    /// in the persistence tests.
+    /// </remarks>
     public Task<IReadOnlyList<Category>> GetCategoriesAsync(
         int sourceId,
         ContentKind kind,
         CancellationToken cancellationToken)
     {
         return Task.FromResult<IReadOnlyList<Category>>(
-            [.. Categories.Where(category => category.SourceId == sourceId && category.Kind == kind)]);
+        [
+            .. Categories
+                .Where(category => category.SourceId == sourceId && category.Kind == kind)
+                .OrderByDescending(category => category.IsFavorite)
+                .ThenBy(category => category.SortOrder)
+                .ThenBy(category => category.Name),
+        ]);
+    }
+
+    /// <remarks>
+    /// Writes the pin onto the stored category as well as recording it, so a test can reload the source and
+    /// find the picker in the order the pin implies.
+    /// </remarks>
+    public Task SetCategoryFavoriteAsync(int categoryId, bool isFavorite, CancellationToken cancellationToken)
+    {
+        CategoryFavoriteWrites.Add((categoryId, isFavorite));
+
+        if (Categories.FirstOrDefault(category => category.Id == categoryId) is { } stored)
+        {
+            stored.IsFavorite = isFavorite;
+        }
+
+        return Task.CompletedTask;
     }
 
     /// <summary>

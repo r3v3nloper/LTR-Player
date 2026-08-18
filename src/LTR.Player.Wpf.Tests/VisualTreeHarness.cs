@@ -70,7 +70,11 @@ internal static class VisualTreeHarness
         {
             if (Application.Current is null)
             {
-                _ = new Application();
+                // Explicit shutdown, and set here because only the thread that made it may. A test that
+                // shows a window and closes it again would otherwise shut the application down with it,
+                // and every window a later test shows is then never loaded — its content attaches to no
+                // window, and the test reads that as the feature not working.
+                _ = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             }
 
             if (Application.Current!.Resources.Contains("Negated"))

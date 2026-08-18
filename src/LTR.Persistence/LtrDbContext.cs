@@ -234,8 +234,12 @@ public sealed partial class LtrDbContext : DbContext
     }
 
     /// <summary>
-    /// Loads a source's categories of one kind, ordered the way the provider intended.
+    /// Loads a source's categories of one kind: the viewer's pinned ones first, then the provider's order.
     /// </summary>
+    /// <remarks>
+    /// Ordered here rather than in each picker, because there are three pickers and the CLI besides, and a
+    /// rule stated four times is a rule that will be stated differently in one of them.
+    /// </remarks>
     public async Task<IReadOnlyList<Category>> GetCategoriesAsync(
         int sourceId,
         ContentKind kind,
@@ -244,7 +248,8 @@ public sealed partial class LtrDbContext : DbContext
         return await Categories
             .AsNoTracking()
             .Where(category => category.SourceId == sourceId && category.Kind == kind)
-            .OrderBy(category => category.SortOrder)
+            .OrderByDescending(category => category.IsFavorite)
+            .ThenBy(category => category.SortOrder)
             .ThenBy(category => category.Name)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -317,6 +322,19 @@ public sealed partial class LtrDbContext : DbContext
             .Where(channel => channel.Id == channelId)
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(channel => channel.IsFavorite, isFavorite),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Pins or unpins a category, which is what decides where it sits in the picker.
+    /// </summary>
+    public async Task SetCategoryFavoriteAsync(int categoryId, bool isFavorite, CancellationToken cancellationToken)
+    {
+        await Categories
+            .Where(category => category.Id == categoryId)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(category => category.IsFavorite, isFavorite),
                 cancellationToken)
             .ConfigureAwait(false);
     }

@@ -1,0 +1,58 @@
+<UserControl x:Class="LTR.Player.Wpf.Views.CategoryPickerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    The category picker, and the star that pins one to the top of it.
+
+    Used by all three sections. Its data context is whichever section it sits in, which is why nothing here
+    names one: the channel list and the two catalogue sections offer the same three members, and a picker
+    that spelled out `Channels.` could not be the same file for `Movies.`.
+
+    A panel lists a couple of hundred categories in whatever order it holds them, and the two or three
+    somebody watches are as likely to be at the bottom as anywhere. Pinned ones sort above the rest, in both
+    the drop-down and the catalogue the next load reads.
+  -->
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition Width="Auto" />
+    </Grid.ColumnDefinitions>
+
+    <ComboBox Grid.Column="0"
+              ItemsSource="{Binding Categories}"
+              SelectedItem="{Binding SelectedCategory}">
+      <ComboBox.ItemTemplate>
+        <DataTemplate>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Collapsed rather than absent, so every label starts at the same place and the pinned ones
+                 do not read as indented. -->
+            <TextBlock Grid.Column="0"
+                       Text="★"
+                       Margin="0,0,4,0"
+                       Foreground="{StaticResource FavoriteBrush}"
+                       Visibility="{Binding IsFavorite,
+                                            Converter={StaticResource BooleanToVisibility}}" />
+
+            <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+          </Grid>
+        </DataTemplate>
+      </ComboBox.ItemTemplate>
+    </ComboBox>
+
+    <!-- Disabled on the unrestricted entry, which stands for no category and so has nothing to pin. -->
+    <Button Grid.Column="1"
+            Content="★"
+            Margin="6,0,0,0"
+            Padding="10,7"
+            ToolTip="Keep this category at the top of the list"
+            Foreground="{StaticResource FavoriteBrush}"
+            Background="{StaticResource BorderBrush}"
+            Command="{Binding ToggleCategoryFavoriteCommand}" />
+  </Grid>
+</UserControl>

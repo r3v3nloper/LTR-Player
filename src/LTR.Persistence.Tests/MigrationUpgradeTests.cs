@@ -38,6 +38,9 @@ public sealed class MigrationUpgradeTests
     /// </summary>
     private const string BeforeDetailAttempt = "20260814063550_AddVodCatalogue";
 
+    /// <summary>The last migration before pinned categories, which is what every shipped 0.7.0 holds.</summary>
+    private const string BeforeCategoryFavorite = "20260817091418_AddMovieDetailAttempt";
+
     /// <summary>A fixed instant, as the other persistence tests use.</summary>
     private static readonly DateTimeOffset SixPm = new(2026, 8, 12, 18, 0, 0, TimeSpan.Zero);
 
@@ -267,6 +270,93 @@ public sealed class MigrationUpgradeTests
         // And it is writable afterwards, not merely present.
         await verifyContext.RecordMovieDetailAbsentAsync(1, SixPm, cancellationToken);
         (await verifyContext.GetMovieAsync(1, cancellationToken))!.DetailAttemptedUtc.ShouldBe(SixPm);
+    }
+
+    /// <summary>
+    /// The categories table gains the pin, and everything already in it has to come through unpinned.
+    /// </summary>
+    /// <remarks>
+    /// Categories are reconciled rather than rewritten on every import, and their local identities are what
+    /// every stored channel and film points at. A rebuild that renumbered them would leave a catalogue whose
+    /// rows all belong to categories that no longer exist — which looks, from the window, like a subscription
+    /// that has lost its channels.
+    /// </remarks>
+    [Fact]
+    public async Task AddCategoryFavorite_KeepsTheCategoriesAndWhatPointsAtThem()
+    {
+        // Arrange: a 0.7.0 database with a live category, a film category numbered the same, and rows in
+        // both — the collision the category table is keyed to allow.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var connection = new SqliteConnection("Filename=:memory:");
+        await connection.OpenAsync(cancellationToken);
+
+        var options = new DbContextOptionsBuilder<LtrDbContext>()
+            .UseSqlite(connection)
+            .Options;
+
+        await using (var context = new LtrDbContext(options, new ReversingCredentialProtector()))
+        {
+            await context.GetService<IMigrator>().MigrateAsync(BeforeCategoryFavorite, cancellationToken);
+        }
+
+        await ExecuteAsync(
+            connection,
+            """
+            INSERT INTO Sources
+                (Id, Name, UserAgent, PreferredStreamFormat, CreatedUtc, Protocol,
+                 Capabilities_SupportsLive, Capabilities_SupportsVod, Capabilities_SupportsSeries,
+                 Capabilities_SupportsXmltvEpg, Capabilities_SupportsShortEpg, Capabilities_SupportsMpegTs,
+                 Capabilities_SupportsHls, Capabilities_RequiresLivePathSegment,
+                 BaseUrl, Username, Password)
+            VALUES
+                (1, 'Existing subscription', 'VLC/3.0.21', 0, '1970-01-01 00:00:00+00:00', 'xtream',
+                 1, 1, 1, 1, 1, 1, 0, 1,
+                 'http://panel.example:8080/', 'alice', 'rev:terc3s');
+
+            INSERT INTO Categories (Id, SourceId, ExternalId, Name, Kind, SortOrder)
+            VALUES
+                (1, 1, '58', 'DE Deutschland', 0, 3),
+                (2, 1, '58', 'Action', 1, 0);
+
+            INSERT INTO Channels
+                (Id, SourceId, CategoryId, CategoryExternalId, ExternalId, Name, HasArchive, IsFavorite,
+                 SortOrder)
+            VALUES (1, 1, 1, '58', '101', 'Erste', 0, 1, 0);
+
+            INSERT INTO Movies
+                (Id, SourceId, CategoryId, CategoryExternalId, ExternalId, Name, HasDetail, IsWatched,
+                 SortOrder)
+            VALUES (1, 1, 2, '58', '8412', 'Arrival', 1, 0, 0);
+            """,
+            cancellationToken);
+
+        // Act
+        await using (var context = new LtrDbContext(options, new ReversingCredentialProtector()))
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+        }
+
+        // Assert
+        await using var verifyContext = new LtrDbContext(options, new ReversingCredentialProtector());
+
+        var live = await verifyContext.GetCategoriesAsync(1, ContentKind.Live, cancellationToken);
+        live.ShouldHaveSingleItem().Name.ShouldBe("DE Deutschland");
+        live[0].IsFavorite.ShouldBeFalse("nothing was pinned before there was a pin");
+
+        var films = await verifyContext.GetCategoriesAsync(1, ContentKind.Movie, cancellationToken);
+        films.ShouldHaveSingleItem().Name.ShouldBe("Action", "the two kinds still number 58 apiece");
+
+        var channel = (await verifyContext.GetLiveChannelsAsync(1, cancellationToken)).ShouldHaveSingleItem();
+        channel.CategoryId.ShouldBe(live[0].Id, "a renumbered category orphans everything in it");
+
+        var movie = (await verifyContext.GetMoviesAsync(1, cancellationToken)).ShouldHaveSingleItem();
+        movie.CategoryId.ShouldBe(films[0].Id);
+
+        // And the new column is writable afterwards, not merely present.
+        await verifyContext.SetCategoryFavoriteAsync(live[0].Id, isFavorite: true, cancellationToken);
+
+        (await verifyContext.GetCategoriesAsync(1, ContentKind.Live, cancellationToken))
+            .ShouldHaveSingleItem().IsFavorite.ShouldBeTrue();
     }
 
     private static async Task ExecuteAsync(
