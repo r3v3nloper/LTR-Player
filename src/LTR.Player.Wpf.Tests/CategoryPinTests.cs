@@ -156,6 +156,41 @@ public sealed class CategoryPinTests
         viewModel.Channels.ToggleCategoryFavoriteCommand.CanExecute(null).ShouldBeTrue();
     }
 
+    /// <remarks>
+    /// This crashed the window on startup. A ComboBox pushes a null selection back through the binding the
+    /// moment its bound collection is emptied, which is what filling the picker does — and the pin's guard is
+    /// asked on every selection change, so it reads the selection during exactly that instant. Every other
+    /// reader in both view models already allowed for it; the guard, declared against a non-null property,
+    /// did not.
+    /// </remarks>
+    [Fact]
+    public async Task TheGuardSurvivesThePickerWritingBackAnEmptySelection()
+    {
+        // Arrange
+        var context = new MainViewModelHarness();
+        context.Store.Sources.Add(CreateSource());
+        context.Store.Categories.Add(Category(1, "10", "AR Arabic", order: 0));
+        context.Store.Categories.Add(Category(7, "58", "Action", order: 0, kind: ContentKind.Movie));
+
+        var viewModel = context.Build();
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        // Act: what the control does while the list under it is replaced.
+        var live = () => viewModel.Channels.SelectedCategory = null;
+        var films = () => viewModel.Movies.SelectedCategory = null;
+
+        // Assert
+        live.ShouldNotThrow();
+        films.ShouldNotThrow();
+
+        viewModel.Channels.ToggleCategoryFavoriteCommand.CanExecute(null).ShouldBeFalse();
+        viewModel.Movies.ToggleCategoryFavoriteCommand.CanExecute(null).ShouldBeFalse();
+
+        // And pressing it anyway — as a button already enabled would — writes nothing.
+        await viewModel.Channels.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
+        context.Store.CategoryFavoriteWrites.ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task TheFilmSectionPinsItsOwnCategories()
     {

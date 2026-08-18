@@ -41,9 +41,17 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
     private readonly ISourceStore _sources;
     private readonly IVodCatalogue _catalogue;
 
+    /// <summary>
+    /// The category the picker is on, or null while the picker is being refilled.
+    /// </summary>
+    /// <remarks>
+    /// Nullable because a ComboBox writes null here whenever the bound collection is emptied — the same
+    /// instant the ordering rule below is written against. Every read of it has to allow for that, the pin's
+    /// command guard included, because that guard is asked on every selection change.
+    /// </remarks>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ToggleCategoryFavoriteCommand))]
-    private CategoryChoice _selectedCategory = CategoryChoice.All;
+    private CategoryChoice? _selectedCategory = CategoryChoice.All;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -152,7 +160,9 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
     [RelayCommand(CanExecute = nameof(HasPinnableCategory))]
     public Task ToggleCategoryFavoriteAsync(CancellationToken cancellationToken)
     {
-        return CategoryPicker.ToggleFavoriteAsync(Categories, SelectedCategory, _sources, cancellationToken);
+        return SelectedCategory is { } choice
+            ? CategoryPicker.ToggleFavoriteAsync(Categories, choice, _sources, cancellationToken)
+            : Task.CompletedTask;
     }
 
     /// <summary>Which kind of category this section's picker lists.</summary>
@@ -180,7 +190,7 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
 
     private bool HasPinnableCategory()
     {
-        return SelectedCategory.IsPinnable;
+        return SelectedCategory is { IsPinnable: true };
     }
 
     private string Describe(CataloguePage<TRow> page, CatalogueFilter filter)

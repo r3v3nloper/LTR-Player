@@ -42,9 +42,18 @@ public sealed partial class ChannelListViewModel : ObservableObject
     /// </summary>
     private CatalogueFilter _activeFilter = CatalogueFilter.None;
 
+    /// <summary>
+    /// The category the picker is on, or null while the picker is being refilled.
+    /// </summary>
+    /// <remarks>
+    /// Nullable because a ComboBox genuinely writes null here: emptying the bound collection makes it push a
+    /// null selection back through the binding. Anything reading this runs during that instant — the pin's
+    /// own command guard is asked on every selection change, which is how a non-null declaration became a
+    /// crash on startup rather than a warning.
+    /// </remarks>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ToggleCategoryFavoriteCommand))]
-    private CategoryChoice _selectedCategory = CategoryChoice.All;
+    private CategoryChoice? _selectedCategory = CategoryChoice.All;
 
     [ObservableProperty]
     private string _channelFilterText = string.Empty;
@@ -279,12 +288,14 @@ public sealed partial class ChannelListViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(HasPinnableCategory))]
     private Task ToggleCategoryFavoriteAsync(CancellationToken cancellationToken)
     {
-        return CategoryPicker.ToggleFavoriteAsync(Categories, SelectedCategory, _sources, cancellationToken);
+        return SelectedCategory is { } choice
+            ? CategoryPicker.ToggleFavoriteAsync(Categories, choice, _sources, cancellationToken)
+            : Task.CompletedTask;
     }
 
     private bool HasPinnableCategory()
     {
-        return SelectedCategory.IsPinnable;
+        return SelectedCategory is { IsPinnable: true };
     }
 
     private void Replace(IReadOnlyList<Channel> channels, IReadOnlyList<Category> categories)
@@ -308,7 +319,7 @@ public sealed partial class ChannelListViewModel : ObservableObject
         RefreshChannelView();
     }
 
-    partial void OnSelectedCategoryChanged(CategoryChoice value)
+    partial void OnSelectedCategoryChanged(CategoryChoice? value)
     {
         RefreshChannelView();
     }
