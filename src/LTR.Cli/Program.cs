@@ -91,6 +91,11 @@ static ServiceProvider BuildServiceProvider(bool verbose)
 
     services.AddSingleton<LiveCommandHandler>();
 
+    // The console as a dependency, for the two collaborators whose *output is the result*: one decides
+    // whether a subscription's credentials are printed, the other whether teardown was clean. Reaching for
+    // Console directly is what left both untestable. Everything else here still prints its own listings.
+    services.AddSingleton(Console.Out);
+
     services.AddSingleton<StoredSourceLookup>();
     services.AddSingleton<ResolvedAddressReport>();
     services.AddSingleton<ConnectionReleaseCheck>();

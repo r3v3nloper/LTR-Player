@@ -14,13 +14,20 @@ namespace LTR.Cli;
 /// screenshots and bug reports. What counts as a credential is the protocol's business, so the masking comes
 /// from the provider layer rather than being spelled out here.
 /// </remarks>
+/// <param name="output">
+/// Where the lines go, injected rather than reached for. <c>Console.Out</c> in the application and a
+/// <see cref="System.IO.StringWriter"/> in the tests — which is the whole reason the gate below can be held by
+/// one: a decision about credentials that only a human reading scrollback could check was not being checked.
+/// </param>
 internal sealed class ResolvedAddressReport
 {
     private readonly IProviderRegistry _providers;
+    private readonly TextWriter _output;
 
-    public ResolvedAddressReport(IProviderRegistry providers)
+    public ResolvedAddressReport(IProviderRegistry providers, TextWriter output)
     {
         _providers = providers;
+        _output = output;
     }
 
     public void Print(MediaRequest request, PlaylistSource source, bool revealCredentials)
@@ -34,17 +41,17 @@ internal sealed class ResolvedAddressReport
             ? verbatim
             : _providers.GetUrlSanitizer(source).Sanitize(request.Url, source);
 
-        Console.WriteLine($"Format      {request.Format}");
-        Console.WriteLine($"User agent  {request.UserAgent}");
-        Console.WriteLine($"URL         {masked}");
+        _output.WriteLine($"Format      {request.Format}");
+        _output.WriteLine($"User agent  {request.UserAgent}");
+        _output.WriteLine($"URL         {masked}");
 
         if (revealCredentials)
         {
             return;
         }
 
-        Console.WriteLine();
-        Console.WriteLine(
+        _output.WriteLine();
+        _output.WriteLine(
             string.Equals(masked, verbatim, StringComparison.Ordinal)
                 ? "Nothing in this address could be identified as a credential, so it is printed as it "
                     + "stands. A playlist's path is the case where that happens: with no credentials on "

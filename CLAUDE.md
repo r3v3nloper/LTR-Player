@@ -40,19 +40,18 @@ See ranks 7 and 12 under Done in `Docs/refactoring-backlog.md`.
 
 ### Where to pick up
 
-**`Docs/refactoring-backlog.md` holds eight open items** from the review of 19 August 2026, made after previous
-and next were fixed. Four are carried from the review of 18 August; six were new, and two of the ten were done
-in the same sitting. The fourteen ranks before those are done and kept there as the record of how — **one was
-dropped rather than built:** rank 11's store-side paging of the channel list, on a measurement that is written
-down there so it is not re-derived. **Ranks quoted in commit messages belong to whichever review was current
-when they were written**; that file carries every mapping, and there have been three renumberings, so say which
-review you mean.
+**`Docs/refactoring-backlog.md` holds seven open items** from the review of 19 August 2026, made after previous
+and next were fixed. Four are carried from the review of 18 August; six were new, and three of the ten were
+done in the same sitting — the CLI's two, and the watch-progress partial. The fourteen ranks before those are
+done and kept there as the record of how — **one was dropped rather than built:** rank 11's store-side paging of
+the channel list, on a measurement that is written down there so it is not re-derived. **Ranks quoted in commit
+messages belong to whichever review was current when they were written**; that file carries every mapping, and
+there have been three renumberings, so say which review you mean.
 
-Of what is open, rank 2 is the other half of the CLI's testing gap — `ResolvedAddressReport` and
-`ConnectionReleaseCheck` decide whether credentials reach the console and whether teardown is clean, both
-straight into `Console.WriteLine` and so untestable. Rank 3 (a `CategoryPickerViewModel` both sections hold)
-supersedes the interface that 18 August's rank 1 put in. Rank 5 is `MainViewModel` growing again — the one to
-look at when a milestone starts, and it grew again on 19 August.
+Of what is open, rank 3 (a `CategoryPickerViewModel` both sections hold) supersedes the interface that
+18 August's rank 1 put in, and rank 5 is `MainViewModel` growing again — the one to look at when a milestone
+starts, and it grew again on 19 August. Rank 4 is the pair of records of what is playing, which that same
+change introduced.
 
 Read it before proposing a refactor here. Several entries record a *considered and rejected* design, and three
 record a rank whose own premise turned out to be half wrong once the code was read.
@@ -158,9 +157,11 @@ LTR.Security.Dpapi             Windows credential protection, kept out of Core o
 LTR.Cli                        Headless verification of everything below the UI (§2.12). One class per
                                command under Commands/ states its options and action; Program is
                                composition only. A command touching the database goes through
-                               CatalogueCommandRunner, so probing a panel creates no database file. It has a
-                               test project now, covering the failure wording only — the rest prints straight
-                               to the console and cannot be reached until that has a seam
+                               CatalogueCommandRunner, so probing a panel creates no database file. The two
+                               collaborators whose *output is the result* — ResolvedAddressReport, which
+                               decides whether credentials are printed, and ConnectionReleaseCheck, which
+                               decides whether teardown was clean — take an injected TextWriter and are
+                               tested; the listing handlers still write to Console directly
 LTR.Player.Wpf                 The only project that references WPF. MainViewModel composes the four
                                catalogue sections, the guide and the on-screen controls, and is the
                                sections' ISourceCoordinator; the sections never reference each other.
@@ -205,7 +206,9 @@ sanitised *every* query value goes and only the names stay. Its **path** is reda
 the one place the credentials are on record: the query of the source's own playlist and guide addresses. Only
 where such a value is a **whole path segment**, because `output=ts` would otherwise take the extension off
 every channel. What is left uncovered is a playlist held as a file that declares no `x-tvg-url` either — then
-nothing reveals them, and the CLI says so rather than claiming a masking it did not perform. `user:password@host` is removed for every protocol by `SensitiveUrlSanitizer<TSource>`,
+nothing reveals them, and the CLI says so rather than claiming a masking it did not perform; that self-report,
+and the `--reveal` gate it sits under, are held by `ResolvedAddressReportTests` since 19 August 2026 and were
+mutation-checked. `user:password@host` is removed for every protocol by `SensitiveUrlSanitizer<TSource>`,
 which is the only form that needs no protocol knowledge. A failure that wants to carry an address throws
 `ProviderRequestException` (`XtreamApiException` derives from it) and puts the *sanitised* address on
 `SanitizedUrl` — the CLI prints it, and catching a protocol's own type there is what left playlist failures
@@ -400,7 +403,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **765 tests pass on this branch; 739 on `main` before it.** A refactor should not move that number.
+- **774 tests pass on this branch; 739 on `main` before it.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.

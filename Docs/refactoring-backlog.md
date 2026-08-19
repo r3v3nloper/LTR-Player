@@ -1,7 +1,7 @@
 # Refactoring backlog
 
-**Eight items open, from the review of 19 August 2026**, which carries four of the previous review's five
-forward and adds six. Two of its ten were done in the same sitting. The fourteen ranks before those are done
+**Seven items open, from the review of 19 August 2026**, which carries four of the previous review's five
+forward and adds six. Three of its ten were done in the same sitting. The fourteen ranks before those are done
 and are kept below as the record of how — including one that was dropped rather than built, with the
 measurement that decided it.
 
@@ -17,7 +17,7 @@ change. Criticality first, effort second, so rank 1 is the one worth doing on an
 | Rank | Project | Area | Issue | Proposed refactor | Criticality | Effort | Status |
 |---|---|---|---|---|---|---|---|
 | 1 | LTR.Cli | Maintainability | `StreamFailureNotes.Describe` has no guard that every reason worth wording has wording of its own. Its window counterpart does, and `CLAUDE.md` records that test as part of what established the split — but the CLI has no test project, so the front end that exists *for diagnosing* is the one where a reason added later silently reads as the fallback. That is the defect the import stages already shipped once ("Working..."). | An `LTR.Cli.Tests` project, and the `EveryReason_HasWordingOfItsOwn` theory from `StreamFailureTextTests` pointed at `StreamFailureNotes`. Needs `InternalsVisibleTo`, or the class made public. | Moderate | Low | **Done** |
-| 2 | LTR.Cli | Security | `ResolvedAddressReport` decides whether a paid subscription's credentials reach the console, and `ConnectionReleaseCheck` decides whether teardown is reported clean — the one thing `CLAUDE.md` calls the actual proof. Both write straight to `Console`, so neither decision can be tested. The masking is currently right (read and confirmed: `--reveal` is the only path to a verbatim address anywhere in the tree), and nothing holds it there. | Have both return their lines, or take a writer; the command prints. Then test the gate and the three release verdicts. | Moderate | Low | Open |
+| 2 | LTR.Cli | Security | `ResolvedAddressReport` decides whether a paid subscription's credentials reach the console, and `ConnectionReleaseCheck` decides whether teardown is reported clean — the one thing `CLAUDE.md` calls the actual proof. Both write straight to `Console`, so neither decision can be tested. The masking is currently right (read and confirmed: `--reveal` is the only path to a verbatim address anywhere in the tree), and nothing holds it there. | Have both return their lines, or take a writer; the command prints. Then test the gate and the three release verdicts. | Moderate | Low | **Done** |
 | 3 | LTR.Player.Wpf | Maintainability | Carried from rank 3 of 18 August, re-verified. Both view models hold the picker's collection, selection, guard and command in identical ~25 lines. `CategoryPicker.Fill` still requires the caller to set the selection *afterwards* — the unwritten protocol whose violation crashed the window on startup. | A `CategoryPickerViewModel` both sections hold, owning state and command together; the markup binds it directly. Supersedes `ICategoryPickerSection`. | Moderate | Medium | Open |
 | 4 | LTR.Player.Wpf | Maintainability | Two records of what is playing. `MainViewModel.NowPlayingItem` carries the kind and the episode for the transport; `WatchProgressRecorder` privately carries the kind and the item id for progress. They are *not* the same fact — the recorder deliberately ignores a live channel — but both are maintained by the same four play methods, and a fifth play path that updates only one would leave previous and next acting on the wrong thing, silently. | Move `NowPlayingItem` onto `PlaybackCoordinator`, which already owns the recorder and is the only thing that opens a stream. The guard notification then crosses an object boundary, so it goes in `CrossObjectNotifications` — the mechanism that exists for it. | Moderate | Medium | Open |
 | 5 | LTR.Player.Wpf | Maintainability | Carried from rank 4 of 18 August, and **worse**: `MainViewModel` is 476 code lines (was 438), with ten commands and eight helpers in the "what plays" group alone. The recurring growth `CLAUDE.md` warns about. | Extract that group beside `PlaybackCoordinator`. Note what the previous estimate did not: the markup binds `DataContext.PlayNextCommand` on the window, and `[NotifyCanExecuteChangedFor]` cannot cross an object, so the notification table moves with it. That is the High. | Moderate | High | Open |
@@ -28,14 +28,14 @@ change. Criticality first, effort second, so rank 1 is the one worth doing on an
 | 10 | LTR.Catalogue.Abstractions | Maintainability | `IVodCatalogue` is seven members over two unrelated entities, and both sections take the whole face where `CLAUDE.md`'s rule is to take the narrowest that fits. | Split into a film face and a series face. **Deferred deliberately** — this is the weakest item here, and §2.16 is the reason: the split costs an edit in the store, the container, two fakes and the CLI, and buys a narrower declaration nobody has been misled by. Do it if a third consumer appears. | Minor | Medium | Open |
 
 **No security finding, for the second review running.** The URL sanitisers, `PlaybackSession` and the
-reconciliation rules were read and left alone; each carries its reasoning and its tests. Rank 2 above is not a
-defect — it is that the one security-adjacent rule in the CLI is correct without being held.
+reconciliation rules were read and left alone; each carries its reasoning and its tests. Rank 2 above was not a
+defect — it was that the one security-adjacent rule in the CLI was correct without being held. It is held now.
 
 Two things this review changed on the spot rather than ranking: rank 6 of 18 August (`CLAUDE.md` not saying how
 `MainViewModel`'s size is counted) is **done** — the note now states that comments and blanks are excluded, and
 carries the new figure.
 
-### What the two finished ones changed
+### What the three finished ones changed
 
 - **Rank 1 — the CLI has a test project, and both wordings were mutation-checked together.**
   `LTR.Cli.Tests`, over `InternalsVisibleTo` as the other seven test projects do. Eight tests: the
@@ -51,6 +51,32 @@ carries the new figure.
   Two things not done, deliberately. `StreamFailureNotes` stayed `internal`; making it public to test it would
   widen the CLI's surface for a test's convenience. And nothing else in the CLI gained a test — the rest is
   `Console.WriteLine`, which is rank 2 above and needs a seam first.
+
+- **Rank 2 — the console is a dependency for the two whose output *is* the result, and both decisions were
+  mutation-checked.** `ResolvedAddressReport` and `ConnectionReleaseCheck` take a `TextWriter`: `Console.Out`
+  from the container, a `StringWriter` in the tests. Nine tests. Neither class changed what it decides.
+
+  **A writer, not returned lines** — which the rank offered as the alternative and would have been wrong for
+  the release check. Its progress lines are what a person watching a twenty-second wait reads; collecting them
+  to hand back at the end would have turned a live count into a silence. The cadence is a
+  `PollDelay { get; init; }` the tests zero, and deliberately **not** a `TimeProvider`: `TestClock` leaves
+  timers to the base class on purpose, so it would have waited for real.
+
+  **The gate is asserted against the real sanitiser**, through a container with both protocol packages, not
+  against a fake that returns what it was told to. Three mutations, each failing what it should: printing the
+  address verbatim regardless of `--reveal` fails one test; declaring teardown clean on any answer fails three;
+  spending only one attempt instead of five — so that a panel's ordinary lag reads as a leak — fails two.
+
+  Also covered: that the documented playlist gap still reports itself. A playlist with no query has nothing on
+  record to tell a secret path segment from a route, so sanitising changes nothing, and the note has to say so
+  rather than claim a masking. That once printed credentials in clear under a note saying they were masked.
+
+  **Verified against the real subscription too**, because a DI change is invisible to the compiler:
+  `live resolve` prints `http://hd-max.org:8080/live/***/***/744257.ts` and the masked-credentials note.
+
+  What is **not** done: the other eleven handlers still call `Console.WriteLine` for their listings. That was
+  never this rank — the two here are the ones whose output is a decision rather than a report — but the seam is
+  now registered, so a handler that wants it can take a `TextWriter`.
 
 - **Rank 7 — `LtrDbContext.WatchProgress.cs`, and the move is provably verbatim.** 464 code lines became 349
   plus 122. All 73 persistence tests pass with **no assertion touched**, which is the same proof rank 10 of
@@ -110,7 +136,7 @@ Not refactoring, and unchanged by this review:
 
 Kept because it applies to any change in this repository, not only to a ranked one:
 
-- `dotnet test LTR-Player.slnx` — 765 tests, all passing. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 774 tests, all passing. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.

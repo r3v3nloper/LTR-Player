@@ -6,6 +6,14 @@
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
 
+  <!-- Linked rather than copied, as the other test projects do: one refusing registry and one builder. -->
+  <ItemGroup>
+    <Compile Include="../TestSupport/XtreamSourceBuilder.cs" Link="XtreamSourceBuilder.cs" />
+    <Compile
+      Include="../TestSupport/NotSupportedProviderRegistry.cs"
+      Link="NotSupportedProviderRegistry.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="Shouldly" />
