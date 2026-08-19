@@ -22,7 +22,7 @@
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
-    <views:CategoryPickerView Grid.Row="0" DataContext="{Binding Movies}" />
+    <views:CategoryPickerView Grid.Row="0" DataContext="{Binding Movies.Picker}" />
 
     <!-- Delayed, because every keystroke is a database query over tens of thousands of rows. -->
     <TextBox Grid.Row="1"

@@ -103,9 +103,46 @@ public sealed class VodSectionTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        viewModel.Movies.Categories.Count.ShouldBe(2, "the catch-all entry and one film category");
-        viewModel.Movies.SelectedCategory.ShouldBe(CategoryChoice.All);
-        viewModel.SeriesCatalogue.SelectedCategory.ShouldBe(CategoryChoice.All);
+        viewModel.Movies.Picker.Categories.Count.ShouldBe(2, "the catch-all entry and one film category");
+        viewModel.Movies.Picker.SelectedCategory.ShouldBe(CategoryChoice.All);
+        viewModel.SeriesCatalogue.Picker.SelectedCategory.ShouldBe(CategoryChoice.All);
+    }
+
+    /// <summary>
+    /// Choosing a category asks the store again, with nothing else touched.
+    /// </summary>
+    /// <remarks>
+    /// The film section pages rather than filtering in memory, so a category is a *new search* — and the shell
+    /// is what runs it, from the one signal the section announces. Nothing covered that: found by mutation while
+    /// the picker was being extracted, by deleting the notification and watching all 228 tests pass.
+    /// </remarks>
+    [Fact]
+    public async Task ChoosingAFilmCategory_SearchesAgain()
+    {
+        // Arrange
+        var context = new MainViewModelHarness();
+        context.Store.Sources.Add(CreateSource());
+        context.Store.Categories.Add(
+            new Category { SourceId = 1, ExternalId = "58", Name = "Action", Kind = ContentKind.Movie });
+
+        var action = Movie(1, "Arrival");
+        action.CategoryExternalId = "58";
+        context.Store.Movies.Add(action);
+        context.Store.Movies.Add(Movie(2, "The Matrix"));
+
+        var viewModel = context.Build();
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        viewModel.Movies.Movies.Count.ShouldBe(2, "both are shown before a category is chosen");
+
+        // Act
+        viewModel.Movies.Picker.SelectedCategory = viewModel.Movies.Picker.Categories
+            .Single(category => category.ExternalId == "58");
+
+        await viewModel.WaitForIdleAsync();
+
+        // Assert
+        viewModel.Movies.Movies.ShouldHaveSingleItem().Name.ShouldBe("Arrival");
     }
 
     [Fact]

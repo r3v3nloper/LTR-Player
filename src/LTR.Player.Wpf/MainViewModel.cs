@@ -490,7 +490,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
                 Run(Movies.LoadSelectedDetailAsync);
                 break;
 
-            case nameof(MovieListViewModel.SearchText) or nameof(MovieListViewModel.SelectedCategory):
+            case nameof(MovieListViewModel.Criteria):
                 Run(Movies.SearchAsync);
                 break;
 
@@ -507,8 +507,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
                 Run(SeriesCatalogue.LoadSelectedAsync);
                 break;
 
-            case nameof(SeriesCatalogueViewModel.SearchText)
-                or nameof(SeriesCatalogueViewModel.SelectedCategory):
+            case nameof(SeriesCatalogueViewModel.Criteria):
                 Run(SeriesCatalogue.SearchAsync);
                 break;
 

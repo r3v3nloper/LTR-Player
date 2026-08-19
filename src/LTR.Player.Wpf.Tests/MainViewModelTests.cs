@@ -232,7 +232,7 @@ public sealed class MainViewModelTests
         // Assert
         viewModel.SourceManagement.IsAddingSource.ShouldBeFalse();
         viewModel.VisibleChannels().Count.ShouldBe(1);
-        viewModel.Channels.Categories.Count.ShouldBe(2, "the all-categories entry plus the stored one");
+        viewModel.Channels.Picker.Categories.Count.ShouldBe(2, "the all-categories entry plus the stored one");
     }
 
     [Fact]
@@ -294,13 +294,45 @@ public sealed class MainViewModelTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Act
-        viewModel.Channels.SelectedCategory = viewModel.Channels.Categories
+        viewModel.Channels.Picker.SelectedCategory = viewModel.Channels.Picker.Categories
             .Single(category => category.ExternalId == "10");
         viewModel.Channels.ChannelFilterText = "tf1";
 
         // Assert
         var visible = viewModel.VisibleChannels();
         visible.ShouldHaveSingleItem().Name.ShouldBe("FR: TF1 HD");
+    }
+
+    /// <summary>
+    /// A category on its own narrows the list, with nothing else touched afterwards.
+    /// </summary>
+    /// <remarks>
+    /// The test above cannot establish this and looked as though it did: it sets the search text *after* the
+    /// category, and the text change refreshes the view by itself — so the category took effect through the
+    /// wrong cause and removing the picker's own notification broke nothing. Found by mutation while the picker
+    /// was being extracted, and true of the arrangement before it too.
+    /// </remarks>
+    [Fact]
+    public async Task TheCategoryFilter_NarrowsTheListOnItsOwn()
+    {
+        // Arrange
+        var context = new MainViewModelHarness();
+        context.Store.Sources.Add(CreateSource(id: 1));
+        context.Store.Categories.Add(CreateCategory(1, "10", "France"));
+        context.Store.Channels.Add(CreateChannel(1, 10, "101", "FR: TF1 HD", "10"));
+        context.Store.Channels.Add(CreateChannel(1, 12, "103", "DE: Das Erste", "20"));
+
+        var viewModel = context.Build();
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        viewModel.VisibleChannels().Count.ShouldBe(2, "both are shown before a category is chosen");
+
+        // Act
+        viewModel.Channels.Picker.SelectedCategory = viewModel.Channels.Picker.Categories
+            .Single(category => category.ExternalId == "10");
+
+        // Assert
+        viewModel.VisibleChannels().ShouldHaveSingleItem().Name.ShouldBe("FR: TF1 HD");
     }
 
     [Fact]

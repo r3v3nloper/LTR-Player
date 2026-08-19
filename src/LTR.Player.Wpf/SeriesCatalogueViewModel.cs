@@ -52,7 +52,7 @@ public sealed partial class SeriesCatalogueViewModel : CatalogueSectionViewModel
         IVodCatalogue catalogue,
         IVodDetailService detail,
         ILogger<SeriesCatalogueViewModel> logger)
-        : base(sources, catalogue)
+        : base(sources, catalogue, ContentKind.Series)
     {
         _detail = detail;
         _logger = logger;
@@ -65,7 +65,6 @@ public sealed partial class SeriesCatalogueViewModel : CatalogueSectionViewModel
 
     public ObservableCollection<EpisodeItemViewModel> Episodes { get; } = [];
 
-    protected override ContentKind CategoryKind => ContentKind.Series;
 
     protected override string EntryNoun => "series";
 

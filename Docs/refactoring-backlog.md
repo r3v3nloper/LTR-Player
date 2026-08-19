@@ -1,7 +1,7 @@
 # Refactoring backlog
 
-**Four items open, from the review of 19 August 2026**, which carries four of the previous review's five
-forward and adds six. Six of its ten were done in the same sitting. The fourteen ranks before those are done
+**Three items open, from the review of 19 August 2026**, which carries four of the previous review's five
+forward and adds six. Seven of its ten were done in the same sitting. The fourteen ranks before those are done
 and are kept below as the record of how — including one that was dropped rather than built, with the
 measurement that decided it.
 
@@ -18,7 +18,7 @@ change. Criticality first, effort second, so rank 1 is the one worth doing on an
 |---|---|---|---|---|---|---|---|
 | 1 | LTR.Cli | Maintainability | `StreamFailureNotes.Describe` has no guard that every reason worth wording has wording of its own. Its window counterpart does, and `CLAUDE.md` records that test as part of what established the split — but the CLI has no test project, so the front end that exists *for diagnosing* is the one where a reason added later silently reads as the fallback. That is the defect the import stages already shipped once ("Working..."). | An `LTR.Cli.Tests` project, and the `EveryReason_HasWordingOfItsOwn` theory from `StreamFailureTextTests` pointed at `StreamFailureNotes`. Needs `InternalsVisibleTo`, or the class made public. | Moderate | Low | **Done** |
 | 2 | LTR.Cli | Security | `ResolvedAddressReport` decides whether a paid subscription's credentials reach the console, and `ConnectionReleaseCheck` decides whether teardown is reported clean — the one thing `CLAUDE.md` calls the actual proof. Both write straight to `Console`, so neither decision can be tested. The masking is currently right (read and confirmed: `--reveal` is the only path to a verbatim address anywhere in the tree), and nothing holds it there. | Have both return their lines, or take a writer; the command prints. Then test the gate and the three release verdicts. | Moderate | Low | **Done** |
-| 3 | LTR.Player.Wpf | Maintainability | Carried from rank 3 of 18 August, re-verified. Both view models hold the picker's collection, selection, guard and command in identical ~25 lines. `CategoryPicker.Fill` still requires the caller to set the selection *afterwards* — the unwritten protocol whose violation crashed the window on startup. | A `CategoryPickerViewModel` both sections hold, owning state and command together; the markup binds it directly. Supersedes `ICategoryPickerSection`. | Moderate | Medium | Open |
+| 3 | LTR.Player.Wpf | Maintainability | Carried from rank 3 of 18 August, re-verified. Both view models hold the picker's collection, selection, guard and command in identical ~25 lines. `CategoryPicker.Fill` still requires the caller to set the selection *afterwards* — the unwritten protocol whose violation crashed the window on startup. | A `CategoryPickerViewModel` both sections hold, owning state and command together; the markup binds it directly. Supersedes `ICategoryPickerSection`. | Moderate | Medium | **Done** |
 | 4 | LTR.Player.Wpf | Maintainability | Two records of what is playing. `MainViewModel.NowPlayingItem` carries the kind and the episode for the transport; `WatchProgressRecorder` privately carries the kind and the item id for progress. They are *not* the same fact — the recorder deliberately ignores a live channel — but both are maintained by the same four play methods, and a fifth play path that updates only one would leave previous and next acting on the wrong thing, silently. | Move `NowPlayingItem` onto `PlaybackCoordinator`, which already owns the recorder and is the only thing that opens a stream. The guard notification then crosses an object boundary, so it goes in `CrossObjectNotifications` — the mechanism that exists for it. | Moderate | Medium | **Done** |
 | 5 | LTR.Player.Wpf | Maintainability | Carried from rank 4 of 18 August, and **worse**: `MainViewModel` is 476 code lines (was 438), with ten commands and eight helpers in the "what plays" group alone. The recurring growth `CLAUDE.md` warns about. | Extract that group beside `PlaybackCoordinator`. Note what the previous estimate did not: the markup binds `DataContext.PlayNextCommand` on the window, and `[NotifyCanExecuteChangedFor]` cannot cross an object, so the notification table moves with it. That is the High. | Moderate | High | **Done** |
 | 6 | LTR.Player.Wpf.Tests | Maintainability | `WaitForIdleAsync` is copied verbatim into three test classes and `Row` into two, all over the same `MainViewModelHarness` every one of them already holds. Rank 2 of 18 August moved the *source object* to `TestSupport` and left these behind. | Put `WaitForIdleAsync` and `Row` on the harness. Leave the per-class `Channel`/`Movie`/`SeriesEntry` factories where they are — they carry a value, which is the distinction that review already drew. | Minor | Low | **Done** |
@@ -35,7 +35,7 @@ Two things this review changed on the spot rather than ranking: rank 6 of 18 Aug
 `MainViewModel`'s size is counted) is **done** — the note now states that comments and blanks are excluded, and
 carries the new figure.
 
-### What the six finished ones changed
+### What the seven finished ones changed
 
 - **Rank 1 — the CLI has a test project, and both wordings were mutation-checked together.**
   `LTR.Cli.Tests`, over `InternalsVisibleTo` as the other seven test projects do. Eight tests: the
@@ -77,6 +77,37 @@ carries the new figure.
   What is **not** done: the other eleven handlers still call `Console.WriteLine` for their listings. That was
   never this rank — the two here are the ones whose output is a decision rather than a report — but the seam is
   now registered, so a handler that wants it can take a `TextWriter`.
+
+- **Rank 3 — `CategoryPickerViewModel`, and the mutation check found two untested behaviours.** One object per
+  section, holding the entries, the selection, the guard and the pin. It replaced ~25 identical lines in each of
+  two view models *and* the static `CategoryPicker` they shared, both of which are gone, along with
+  `ICategoryPickerSection` — an interface stated the shape three sections had to offer; there is now one class,
+  so there is no shape to state. `CatalogueSectionViewModel` is 93 code lines from 152.
+
+  **What it was for: the order is no longer anybody's to get wrong.** Filling the entries and choosing one is a
+  single method, because as two it had an unwritten rule — select *after* filling, or the ComboBox writes null
+  back through the binding and the picker renders blank over a filter that admits everything. That is a
+  structural guarantee rather than a tested one, and worth saying plainly: no test here can see it, because a
+  test has no ComboBox to write the null.
+
+  **The mutation check is what earned its keep.** Deleting the picker's `SelectionChanged` wiring — in either
+  owner — left **all 228 tests passing**. Choosing a category was covered in neither section:
+
+  - The channel list's test set the search text *after* the category, and the text change refreshes the view by
+    itself, so the category took effect through the wrong cause.
+  - The film section had no test that changed only the category at all.
+
+  Both are pre-existing gaps, not introduced here. Two tests were added — one per section, each changing only
+  the category — and each now fails when its wiring is removed. A third mutation, breaking the `Criteria`
+  signal the shell watches, fails two.
+
+  **`Criteria` is the other thing that came out of it.** The shell watched two property names per section
+  (`SearchText`, `SelectedCategory`) to know it had to search again; it now watches one, and that one property
+  *is* the filter `SearchAsync` asks the store with — so what is announced and what is applied cannot drift.
+
+  One incidental correction: the abstract `CategoryKind` became a constructor parameter, because the base
+  constructor builds the picker and reading an override from a base constructor is the pattern that reads a
+  field the derived class has not assigned yet.
 
 - **Rank 4 — what previous and next act on belongs to the thing that opens streams.** `NowPlayingItem` moved
   from `MainViewModel` to `PlaybackCoordinator`, which was already calling `WatchProgressRecorder.Track` for

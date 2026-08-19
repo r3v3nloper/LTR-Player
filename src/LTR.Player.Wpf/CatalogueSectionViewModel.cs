@@ -27,7 +27,7 @@ namespace LTR.Player.Wpf;
 /// </para>
 /// </remarks>
 /// <typeparam name="TRow">The row type this section presents.</typeparam>
-public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject, ICategoryPickerSection
+public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
     where TRow : class
 {
     /// <summary>
@@ -38,20 +38,7 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
     /// </remarks>
     public const int ResultLimit = 200;
 
-    private readonly ISourceStore _sources;
     private readonly IVodCatalogue _catalogue;
-
-    /// <summary>
-    /// The category the picker is on, or null while the picker is being refilled.
-    /// </summary>
-    /// <remarks>
-    /// Nullable because a ComboBox writes null here whenever the bound collection is emptied — the same
-    /// instant the ordering rule below is written against. Every read of it has to allow for that, the pin's
-    /// command guard included, because that guard is asked on every selection change.
-    /// </remarks>
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ToggleCategoryFavoriteCommand))]
-    private CategoryChoice? _selectedCategory = CategoryChoice.All;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -64,15 +51,40 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
     /// Only for the category picker. Categories are numbered per section by the panel, so the question
     /// carries its kind and belongs to the source rather than to either catalogue.
     /// </param>
-    protected CatalogueSectionViewModel(ISourceStore sources, IVodCatalogue catalogue)
+    /// <param name="categoryKind">
+    /// Which kind of category this section's picker lists. A constructor parameter rather than the abstract
+    /// property it replaced, because the picker is built here and reading an override from a base constructor
+    /// is the pattern that reads a field the derived class has not assigned yet.
+    /// </param>
+    protected CatalogueSectionViewModel(
+        ISourceStore sources,
+        IVodCatalogue catalogue,
+        ContentKind categoryKind)
     {
-        _sources = sources;
         _catalogue = catalogue;
+
+        Picker = new CategoryPickerViewModel(sources, categoryKind)
+        {
+            // A different category means different rows, and only the shell can start the search that reads
+            // them — so this announces the change and the shell answers it, exactly as the search box does.
+            SelectionChanged = () => OnPropertyChanged(nameof(Criteria)),
+        };
     }
 
-    public ObservableCollection<CategoryChoice> Categories { get; } = [CategoryChoice.All];
+    /// <summary>The category picker, which the markup binds to directly.</summary>
+    public CategoryPickerViewModel Picker { get; }
 
     public ObservableCollection<TRow> Rows { get; } = [];
+
+    /// <summary>
+    /// What the section is filtering by, and the one signal the shell watches to know it has to search again.
+    /// </summary>
+    /// <remarks>
+    /// One property rather than the two the shell used to watch — the search text and the selected category.
+    /// It is also what <see cref="SearchAsync"/> asks the store with, so the thing announced and the thing
+    /// applied cannot drift apart.
+    /// </remarks>
+    public CatalogueFilter Criteria => new(SearchText, Picker.RestrictedTo);
 
     /// <summary>Whether the source offers this section at all, which decides whether it can be opened.</summary>
     public bool IsAvailable => Source is not null && SupportsSection(Source);
@@ -96,30 +108,19 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
         SearchText = string.Empty;
 
         Rows.Clear();
-        CategoryPicker.Fill(Categories, []);
 
         if (source is null)
         {
-            SelectedCategory = CategoryChoice.All;
+            Picker.Clear();
             Notice = string.Empty;
             OnPropertyChanged(nameof(IsAvailable));
 
             return;
         }
 
-        // Read through the parameter rather than the property, which is still null: the picker has to be
-        // complete before anything selects in it.
-        var categories = await _sources
-            .GetCategoriesAsync(source.Id, CategoryKind, cancellationToken)
-            .ConfigureAwait(true);
-
-        CategoryPicker.Fill(Categories, categories);
-
-        // Selected last, and that is not cosmetic. Emptying the bound collection makes the ComboBox write a
-        // null selection back through the binding, so a selection assigned before the picker is refilled is
-        // discarded and the control renders blank — while the filter, reading the same null, still admits
-        // every category. The list looks right and the picker looks broken.
-        SelectedCategory = CategoryChoice.All;
+        // Filling the picker and choosing an entry in it is one operation, in the picker, because as two it had
+        // an order that had to be got right and was not. See CategoryPickerViewModel.
+        await Picker.ShowAsync(source, cancellationToken).ConfigureAwait(true);
 
         Source = source;
         OnPropertyChanged(nameof(IsAvailable));
@@ -137,7 +138,7 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
             return;
         }
 
-        var filter = new CatalogueFilter(SearchText, SelectedCategory?.ExternalId);
+        var filter = Criteria;
         var page = await SearchAsync(source.Id, filter, cancellationToken).ConfigureAwait(true);
 
         Rows.Clear();
@@ -149,24 +150,6 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
 
         Notice = Describe(page, filter);
     }
-
-    /// <summary>
-    /// Pins the chosen category to the top of the picker, or lets it fall back.
-    /// </summary>
-    /// <remarks>
-    /// No search follows: a pin says where a category is listed and nothing about what matches it, so the
-    /// results stay as they are.
-    /// </remarks>
-    [RelayCommand(CanExecute = nameof(HasPinnableCategory))]
-    public Task ToggleCategoryFavoriteAsync(CancellationToken cancellationToken)
-    {
-        return SelectedCategory is { } choice
-            ? CategoryPicker.ToggleFavoriteAsync(Categories, choice, _sources, cancellationToken)
-            : Task.CompletedTask;
-    }
-
-    /// <summary>Which kind of category this section's picker lists.</summary>
-    protected abstract ContentKind CategoryKind { get; }
 
     /// <summary>
     /// The plural noun used in the count — "films", "series" — so the wording reads naturally without each
@@ -188,9 +171,13 @@ public abstract partial class CatalogueSectionViewModel<TRow> : ObservableObject
     {
     }
 
-    private bool HasPinnableCategory()
+    /// <remarks>
+    /// The search box's half of <see cref="Criteria"/>. The picker's half arrives through the callback the
+    /// constructor assigns, and both announce the same one property so the shell watches one name.
+    /// </remarks>
+    partial void OnSearchTextChanged(string value)
     {
-        return SelectedCategory is { IsPinnable: true };
+        OnPropertyChanged(nameof(Criteria));
     }
 
     private string Describe(CataloguePage<TRow> page, CatalogueFilter filter)

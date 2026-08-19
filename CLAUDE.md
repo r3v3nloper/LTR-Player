@@ -40,21 +40,23 @@ See ranks 7 and 12 under Done in `Docs/refactoring-backlog.md`.
 
 ### Where to pick up
 
-**`Docs/refactoring-backlog.md` holds four open items** from the review of 19 August 2026, made after previous
-and next were fixed. Four are carried from the review of 18 August; six were new, and six of the ten were done
-in the same sitting: the CLI's two, the watch-progress partial, the duplicated test helpers, the pair of
-records of what is playing, and the "what plays" group leaving the shell. The fourteen ranks before those are
-done and kept there as the record of how — **one was dropped rather than built:** rank 11's store-side paging
-of the channel list, on a measurement that is written down there so it is not re-derived. **Ranks quoted in
+**`Docs/refactoring-backlog.md` holds three open items** from the review of 19 August 2026, made after previous
+and next were fixed. Four are carried from the review of 18 August; six were new, and **seven of the ten were
+done in the same sitting**: the CLI's two, the watch-progress partial, the duplicated test helpers, the pair of
+records of what is playing, the "what plays" group leaving the shell, and the category picker becoming an object.
+The fourteen ranks before those are done and kept there as the record of how — **one was dropped rather than
+built:** rank 11's store-side paging of the channel list, on a measurement that is written down there so it is
+not re-derived. **Ranks quoted in
 commit messages belong to whichever review was current when they were written**; that file carries every
 mapping, and there have been three renumberings, so say which review you mean.
 
-**What is open is all Minor or Medium now.** Rank 3 (a `CategoryPickerViewModel` both sections hold) supersedes
-the interface 18 August's rank 1 put in and is the largest of the four; the rest are a code-behind split and two
-oversized test files.
+**What is open is all Minor now:** splitting `PlayerOverlayView.xaml.cs`, splitting two oversized test files,
+and one item recorded as deliberately deferred with its reason. Nothing in the ranked work is urgent — the next
+thing here is whatever the plan says, not this file.
 
-Read it before proposing a refactor here. Several entries record a *considered and rejected* design, and four
-record a rank whose own premise turned out to be half wrong once the code was read.
+Read it before proposing a refactor here. Several entries record a *considered and rejected* design, four record
+a rank whose own premise turned out to be half wrong once the code was read, and one records two untested
+behaviours that a mutation check found while the change was being made.
 
 Two things are outstanding that are *not* refactors, because only the person with the subscription can do
 them:
@@ -180,7 +182,7 @@ LTR.Player.Wpf                 The only project that references WPF. Three class
                                reference each other. Views/ holds one UserControl per section and per
                                overlay, so MainWindow.xaml is composition only. CategoryPickerView is the
                                one view used by three sections at once — it names none of them and binds to
-                               whichever it is placed in
+                               the CategoryPickerViewModel each of them holds
 ```
 
 Dependency direction: apps → Catalogue/Providers/Playback → *.Abstractions → Core. Core knows nobody.
@@ -261,9 +263,9 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   it. Add a case there for every migration that alters an existing table.
 - **A category carries the viewer's pin, and the store is what sorts by it.** `Category.IsFavorite` is user
   data exactly as a favourite channel is, so `AdoptProviderFields` leaves it alone. `GetCategoriesAsync`
-  orders pinned first — stated there because three pickers and the CLI read it, and restated once in
-  `CategoryPicker` because a pin has to move an entry without refilling the bound collection. `Docs/categories.md`
-  has the rest.
+  orders pinned first — stated there because the pickers and the CLI read it, and restated once in
+  `CategoryPickerViewModel` because a pin has to move an entry without refilling the bound collection.
+  `Docs/categories.md` has the rest.
 - **A panel numbers its category identifiers per section,** so `58` is a live category and a film category
   at once. Category reconciliation is therefore scoped to the *kinds* an import covers, not to the source —
   scoped to the source, a live refresh deletes every film category — and its lookup is keyed by
@@ -324,11 +326,14 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
 - **`Progress<T>` and `ICollectionView.Refresh` both matter:** a refresh resets the collection and the
   list box drops its selection, so it has to be restored.
 - **Fill a bound collection before selecting in it.** Emptying one makes a `ComboBox` write a null selection
-  back through the binding, so a selection assigned first is discarded. Both new pickers rendered blank while
-  their lists looked perfectly correct, because the filter read the same null as "every category". The same
-  null is why **`SelectedCategory` is nullable** in both view models: a reader declared against a non-null
-  property compiles and then dereferences null during that instant — which is how a command guard added for
-  pinned categories crashed the window on startup, long after the trap had been written down here.
+  back through the binding, so a selection assigned first is discarded. Both pickers rendered blank while their
+  lists looked perfectly correct, because the filter read the same null as "every category". The same null is
+  why **`SelectedCategory` is nullable**: a reader declared against a non-null property compiles and then
+  dereferences null during that instant — which is how a command guard added for pinned categories crashed the
+  window on startup, long after the trap had been written down here. **For the category pickers this is now
+  structural** — `CategoryPickerViewModel.ShowAsync` fills and selects as one operation, so no caller states the
+  order. No test can see it either way: a test has no ComboBox to write the null. Anything *new* that binds a
+  collection still owns the rule.
 - **Dispose the DI container asynchronously.** It holds `IAsyncDisposable` singletons; the synchronous
   `Dispose` throws and `PlaybackSession` never releases its stream.
 - **A view model that reads the clock must be given a `TimeProvider`.** `DateTimeOffset.UtcNow` in
@@ -415,7 +420,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **779 tests pass on this branch; 739 on `main`, verified by checking main out and running it.** A refactor
+- **781 tests pass on this branch; 739 on `main`, verified by checking main out and running it.** A refactor
   should not move that number. Counted by summing the per-project figures — the totals quoted in this
   branch's first three commit messages (757, 765, 774) are each four low, an arithmetic slip carried forward;
   the figures here are the measured ones.

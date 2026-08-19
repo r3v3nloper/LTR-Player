@@ -14,7 +14,7 @@ namespace LTR.Player.Wpf;
 /// <summary>
 /// Presents one source's channels: the filtered list, the category picker and the favourite marker.
 /// </summary>
-public sealed partial class ChannelListViewModel : ObservableObject, ICategoryPickerSection
+public sealed partial class ChannelListViewModel : ObservableObject
 {
     private readonly ILiveCatalogue _liveCatalogue;
     private readonly ISourceStore _sources;
@@ -41,19 +41,6 @@ public sealed partial class ChannelListViewModel : ObservableObject, ICategoryPi
     /// The filter the current view is using. Rebuilt once per refresh rather than per row.
     /// </summary>
     private CatalogueFilter _activeFilter = CatalogueFilter.None;
-
-    /// <summary>
-    /// The category the picker is on, or null while the picker is being refilled.
-    /// </summary>
-    /// <remarks>
-    /// Nullable because a ComboBox genuinely writes null here: emptying the bound collection makes it push a
-    /// null selection back through the binding. Anything reading this runs during that instant — the pin's
-    /// own command guard is asked on every selection change, which is how a non-null declaration became a
-    /// crash on startup rather than a warning.
-    /// </remarks>
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ToggleCategoryFavoriteCommand))]
-    private CategoryChoice? _selectedCategory = CategoryChoice.All;
 
     [ObservableProperty]
     private string _channelFilterText = string.Empty;
@@ -99,9 +86,17 @@ public sealed partial class ChannelListViewModel : ObservableObject, ICategoryPi
         _channelView.Filter = MatchesCurrentFilter;
 
         ChannelView = _channelView;
+
+        // Refilters in memory rather than asking the store again, which is the difference between this section
+        // and the two that page: it holds its whole catalogue.
+        Picker = new CategoryPickerViewModel(sources, ContentKind.Live)
+        {
+            SelectionChanged = RefreshChannelView,
+        };
     }
 
-    public ObservableCollection<CategoryChoice> Categories { get; } = [CategoryChoice.All];
+    /// <summary>The category picker, which the markup binds to directly.</summary>
+    public CategoryPickerViewModel Picker { get; }
 
     /// <summary>
     /// Filtered view over the loaded channels, and the only collection the UI binds to.
@@ -125,20 +120,23 @@ public sealed partial class ChannelListViewModel : ObservableObject, ICategoryPi
 
         if (source is null)
         {
-            Replace([], []);
+            Picker.Clear();
+            Replace([]);
+
             return;
         }
 
         var storedChannels = await _liveCatalogue.GetLiveChannelsAsync(source.Id, cancellationToken)
             .ConfigureAwait(true);
-        var storedCategories = await _sources
-            .GetCategoriesAsync(source.Id, ContentKind.Live, cancellationToken)
-            .ConfigureAwait(true);
 
-        Replace(storedChannels, storedCategories);
+        // The picker loads and selects in one operation, in the picker — see CategoryPickerViewModel for the
+        // order that used to be the caller's to get right.
+        await Picker.ShowAsync(source, cancellationToken).ConfigureAwait(true);
+
+        Replace(storedChannels);
 
         var favorites = _channels.Count(channel => channel.IsFavorite);
-        PlayerLog.LoadedCatalogue(_logger, source.Name, _channels.Count, storedCategories.Count, favorites);
+        PlayerLog.LoadedCatalogue(_logger, source.Name, _channels.Count, Picker.CategoryCount, favorites);
 
         _status.Text = favorites > 0
             ? $"{_channels.Count} channels, {favorites} favourites."
@@ -278,39 +276,16 @@ public sealed partial class ChannelListViewModel : ObservableObject, ICategoryPi
         return SelectedChannel is not null;
     }
 
-    /// <summary>
-    /// Pins the chosen category to the top of the picker, or lets it fall back.
-    /// </summary>
-    /// <remarks>
-    /// The rows are left alone on purpose: a pin says where a category is listed and nothing about which
-    /// channels the filter admits, so the list the viewer is looking at does not move under them.
-    /// </remarks>
-    [RelayCommand(CanExecute = nameof(HasPinnableCategory))]
-    private Task ToggleCategoryFavoriteAsync(CancellationToken cancellationToken)
-    {
-        return SelectedCategory is { } choice
-            ? CategoryPicker.ToggleFavoriteAsync(Categories, choice, _sources, cancellationToken)
-            : Task.CompletedTask;
-    }
-
-    private bool HasPinnableCategory()
-    {
-        return SelectedCategory is { IsPinnable: true };
-    }
-
-    private void Replace(IReadOnlyList<Channel> channels, IReadOnlyList<Category> categories)
+    private void Replace(IReadOnlyList<Channel> channels)
     {
         _channels.Clear();
         _channels.AddRange(channels.Select(channel => new ChannelItemViewModel(channel)));
 
         HasGuide = false;
 
-        CategoryPicker.Fill(Categories, categories);
-
-        // Both reset rather than preserved: a category and a row from the previous source mean nothing
-        // here, and the row objects themselves have just been replaced.
+        // Reset rather than preserved: a row from the previous source means nothing here, and the row objects
+        // themselves have just been replaced. The picker resets its own selection.
         SelectedChannel = null;
-        SelectedCategory = CategoryChoice.All;
         RefreshChannelView();
     }
 
@@ -319,10 +294,6 @@ public sealed partial class ChannelListViewModel : ObservableObject, ICategoryPi
         RefreshChannelView();
     }
 
-    partial void OnSelectedCategoryChanged(CategoryChoice? value)
-    {
-        RefreshChannelView();
-    }
 
     partial void OnShowFavoritesOnlyChanged(bool value)
     {
@@ -342,7 +313,7 @@ public sealed partial class ChannelListViewModel : ObservableObject, ICategoryPi
     {
         var previouslySelected = SelectedChannel;
 
-        _activeFilter = new CatalogueFilter(ChannelFilterText, SelectedCategory?.ExternalId, ShowFavoritesOnly);
+        _activeFilter = new CatalogueFilter(ChannelFilterText, Picker.RestrictedTo, ShowFavoritesOnly);
         ChannelView.Refresh();
 
         if (previouslySelected is not null && MatchesCurrentFilter(previouslySelected))
