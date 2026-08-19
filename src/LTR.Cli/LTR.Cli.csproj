@@ -16,6 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="LTR.Cli.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\LTR.Catalogue\LTR.Catalogue.csproj" />
     <ProjectReference Include="..\LTR.Persistence\LTR.Persistence.csproj" />
     <ProjectReference Include="..\LTR.Playback.LibVlc\LTR.Playback.LibVlc.csproj" />

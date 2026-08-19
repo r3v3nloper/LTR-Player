@@ -40,17 +40,19 @@ See ranks 7 and 12 under Done in `Docs/refactoring-backlog.md`.
 
 ### Where to pick up
 
-**`Docs/refactoring-backlog.md` holds ten open items** from the review of 19 August 2026, made after previous
-and next were fixed. Four are carried from the review of 18 August; six are new. The fourteen ranks before
-those are done and kept there as the record of how — **one was dropped rather than built:** rank 11's
-store-side paging of the channel list, on a measurement that is written down there so it is not re-derived.
-**Ranks quoted in commit messages belong to whichever review was current when they were written**; that file
-carries every mapping, and there have been three renumberings, so say which review you mean.
+**`Docs/refactoring-backlog.md` holds eight open items** from the review of 19 August 2026, made after previous
+and next were fixed. Four are carried from the review of 18 August; six were new, and two of the ten were done
+in the same sitting. The fourteen ranks before those are done and kept there as the record of how — **one was
+dropped rather than built:** rank 11's store-side paging of the channel list, on a measurement that is written
+down there so it is not re-derived. **Ranks quoted in commit messages belong to whichever review was current
+when they were written**; that file carries every mapping, and there have been three renumberings, so say which
+review you mean.
 
-Of what is open: ranks 1 and 2 are the CLI having no test project, which leaves the diagnosing front end's
-failure wording unguarded and the credential-masking gate unheld — both cheap. Rank 3 (a
-`CategoryPickerViewModel` both sections hold) supersedes the interface that 18 August's rank 1 put in. Rank 5
-is `MainViewModel` growing again — the one to look at when a milestone starts, and it grew again on 19 August.
+Of what is open, rank 2 is the other half of the CLI's testing gap — `ResolvedAddressReport` and
+`ConnectionReleaseCheck` decide whether credentials reach the console and whether teardown is clean, both
+straight into `Console.WriteLine` and so untestable. Rank 3 (a `CategoryPickerViewModel` both sections hold)
+supersedes the interface that 18 August's rank 1 put in. Rank 5 is `MainViewModel` growing again — the one to
+look at when a milestone starts, and it grew again on 19 August.
 
 Read it before proposing a refactor here. Several entries record a *considered and rejected* design, and three
 record a rank whose own premise turned out to be half wrong once the code was read.
@@ -117,7 +119,9 @@ them:
 
 - **A failed stream asks the provider why.** `StreamFailureReason` classifies in Core,
   `IStreamFailureExplainer` does the asking in LTR.Catalogue, and each front end words it — the split
-  `SourceImportStage` established, with a test that every reason has wording of its own. A playlist source is
+  `SourceImportStage` established, with a test **in each front end** that every reason has wording of its own.
+  That was true of the window from M6 and of the CLI only from 19 August 2026; add a reason and both fail,
+  which is the point of the guard and is worth re-checking by mutation rather than trusting. A playlist source is
   never asked (no account, and asking re-downloads the document), and a superseded open is not a failure, so
   zapping does not interrogate the panel once per key press.
 - **Settings are `settings.json` beside the database, not a table in it.** The catalogue is a cache that gets
@@ -145,14 +149,18 @@ LTR.Catalogue[.Abstractions]   Application layer: import orchestration and catal
                               IGuideCatalogue, IVodCatalogue, IWatchProgressStore — so a consumer
                               declares the face it uses. Take the narrowest that fits
 LTR.Epg.Xmltv                  XMLTV reader. No dependencies at all — not even on Core
-LTR.Persistence                LtrDbContext. All database logic lives here (§3.3.2)
+LTR.Persistence                LtrDbContext, one partial per subject: Live, Guide, Vod, WatchProgress. All
+                               database logic lives here (§3.3.2). The WatchProgress partial exists because
+                               a position is the one thing in the catalogue a refresh must never touch
 LTR.Playback[.Abstractions]    Engine-neutral playback policy
 LTR.Playback.LibVlc            LibVLC engine
 LTR.Security.Dpapi             Windows credential protection, kept out of Core on purpose
 LTR.Cli                        Headless verification of everything below the UI (§2.12). One class per
                                command under Commands/ states its options and action; Program is
                                composition only. A command touching the database goes through
-                               CatalogueCommandRunner, so probing a panel creates no database file
+                               CatalogueCommandRunner, so probing a panel creates no database file. It has a
+                               test project now, covering the failure wording only — the rest prints straight
+                               to the console and cannot be reached until that has a seam
 LTR.Player.Wpf                 The only project that references WPF. MainViewModel composes the four
                                catalogue sections, the guide and the on-screen controls, and is the
                                sections' ISourceCoordinator; the sections never reference each other.
@@ -392,7 +400,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **757 tests pass on this branch; 739 on `main` before it.** A refactor should not move that number.
+- **765 tests pass on this branch; 739 on `main` before it.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.

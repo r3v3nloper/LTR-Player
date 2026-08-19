@@ -3,6 +3,7 @@
     <Project Path="src/LTR.Catalogue.Abstractions/LTR.Catalogue.Abstractions.csproj" />
     <Project Path="src/LTR.Catalogue.Tests/LTR.Catalogue.Tests.csproj" />
     <Project Path="src/LTR.Catalogue/LTR.Catalogue.csproj" />
+    <Project Path="src/LTR.Cli.Tests/LTR.Cli.Tests.csproj" />
     <Project Path="src/LTR.Cli/LTR.Cli.csproj" />
     <Project Path="src/LTR.Core.Abstractions/LTR.Core.Abstractions.csproj" />
     <Project Path="src/LTR.Core.Tests/LTR.Core.Tests.csproj" />
