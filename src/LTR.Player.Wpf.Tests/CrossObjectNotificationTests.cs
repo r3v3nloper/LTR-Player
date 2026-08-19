@@ -35,7 +35,7 @@ public sealed class CrossObjectNotificationTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         var announcements = 0;
-        viewModel.RestartMovieCommand.CanExecuteChanged += (_, _) => announcements++;
+        viewModel.PlaybackCommands.RestartMovieCommand.CanExecuteChanged += (_, _) => announcements++;
 
         // Act
         viewModel.Movies.SelectedMovie = viewModel.Movies.Movies[0];
@@ -61,7 +61,7 @@ public sealed class CrossObjectNotificationTests
         viewModel.Movies.SelectedMovie = viewModel.Movies.Movies[0];
 
         var announcements = 0;
-        viewModel.RestartMovieCommand.CanExecuteChanged += (_, _) => announcements++;
+        viewModel.PlaybackCommands.RestartMovieCommand.CanExecuteChanged += (_, _) => announcements++;
 
         // Act
         context.VodDetail.Gate.SetResult();
@@ -88,7 +88,7 @@ public sealed class CrossObjectNotificationTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         var announcements = 0;
-        viewModel.ResumeEntryCommand.CanExecuteChanged += (_, _) => announcements++;
+        viewModel.PlaybackCommands.ResumeEntryCommand.CanExecuteChanged += (_, _) => announcements++;
 
         // Act
         viewModel.ContinueWatching.SelectedEntry = viewModel.ContinueWatching.Entries[0];
@@ -152,7 +152,7 @@ public sealed class CrossObjectNotificationTests
         };
 
         // Act
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
 
         // Assert
         announcements.ShouldBeGreaterThan(0);
@@ -202,7 +202,7 @@ public sealed class CrossObjectNotificationTests
         viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         var announcements = 0;
-        viewModel.PlaySelectedCommand.CanExecuteChanged += (_, _) => announcements++;
+        viewModel.PlaybackCommands.PlaySelectedCommand.CanExecuteChanged += (_, _) => announcements++;
 
         // Act
         viewModel.SourceManagement.SelectedSource = viewModel.SourceManagement.Sources[1];
@@ -242,24 +242,24 @@ public sealed class CrossObjectNotificationTests
 
         var next = 0;
         var previous = 0;
-        viewModel.PlayNextCommand.CanExecuteChanged += (_, _) => next++;
-        viewModel.PlayPreviousCommand.CanExecuteChanged += (_, _) => previous++;
+        viewModel.PlaybackCommands.PlayNextCommand.CanExecuteChanged += (_, _) => next++;
+        viewModel.PlaybackCommands.PlayPreviousCommand.CanExecuteChanged += (_, _) => previous++;
 
         // Act
-        await viewModel.PlayMovieCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlayMovieCommand.ExecuteAsync(null);
 
         // Assert
         next.ShouldBeGreaterThan(0);
         previous.ShouldBeGreaterThan(0);
-        viewModel.PlayNextCommand.CanExecute(null).ShouldBeFalse("a film has no neighbour");
+        viewModel.PlaybackCommands.PlayNextCommand.CanExecute(null).ShouldBeFalse("a film has no neighbour");
 
         // Act: and the other direction, which a one-way forward would not announce.
         next = 0;
-        await viewModel.StopCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.StopCommand.ExecuteAsync(null);
 
         // Assert
         next.ShouldBeGreaterThan(0);
-        viewModel.PlayNextCommand.CanExecute(null).ShouldBeTrue("next means the next channel again");
+        viewModel.PlaybackCommands.PlayNextCommand.CanExecute(null).ShouldBeTrue("next means the next channel again");
     }
 
     private static XtreamSource CreateSource(int id = 1)

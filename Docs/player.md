@@ -176,9 +176,9 @@ declarative. Neither half of the decision is in the handler: `PlayerKeyMap` says
 `PlayerActions` says what each action does. Both are testable without a window, which is the other reason for
 the split.
 
-`PlayerActions` splits again along the line this document opened with. Four actions — stop, previous, next and
-the guide — come back to the shell as delegates, because they decide *what* plays or what the window shows.
-Every other action works on a stream already open, so it goes to the overlay.
+`PlayerActions` splits again along the line this document opened with. Four actions come back as delegates,
+because they decide *what* plays or what the window shows: stop, previous and next from `PlaybackCommands`, the
+guide from the shell. Every other action works on a stream already open, so it goes to the overlay.
 
 | Key | Action |
 |---|---|
@@ -216,7 +216,9 @@ kind*.
 A film has no neighbour worth having. It is one item, and the film list's order is a search result rather than a
 sequence anybody watches through, so `CanPlayAdjacent` closes the commands instead of guessing.
 
-Three pieces, in three places, and the division is the point:
+Four pieces, in four places, and the division is the point. The commands themselves are
+`PlaybackCommands` — the class the ten play commands moved into when the shell was split, and the one the markup
+binds them through.
 
 - **`PlaybackCoordinator.NowPlayingItem`** records what the last playback request was for — the kind, and the
   episode itself when it is one. Recorded where the stream is opened rather than read back from the engine, for

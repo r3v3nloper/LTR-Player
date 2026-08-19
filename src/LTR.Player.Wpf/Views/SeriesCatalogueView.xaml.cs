@@ -29,9 +29,9 @@ public partial class SeriesCatalogueView : UserControl
             return;
         }
 
-        if (viewModel.PlayEpisodeCommand.CanExecute(episode))
+        if (viewModel.PlaybackCommands.PlayEpisodeCommand.CanExecute(episode))
         {
-            viewModel.PlayEpisodeCommand.Execute(episode);
+            viewModel.PlaybackCommands.PlayEpisodeCommand.Execute(episode);
         }
     }
 }

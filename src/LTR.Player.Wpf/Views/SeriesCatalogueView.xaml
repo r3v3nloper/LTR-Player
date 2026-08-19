@@ -186,7 +186,7 @@
                       Margin="6,0,0,0"
                       Background="{StaticResource BorderBrush}"
                       ToolTip="Play this episode"
-                      Command="{Binding DataContext.PlayEpisodeCommand,
+                      Command="{Binding DataContext.PlaybackCommands.PlayEpisodeCommand,
                                         ElementName=SectionRoot}"
                       CommandParameter="{Binding}" />
             </Grid>

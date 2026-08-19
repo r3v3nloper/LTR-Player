@@ -22,9 +22,9 @@ public partial class MovieCatalogueView : UserControl
     /// </remarks>
     private void OnMovieActivated(object sender, MouseButtonEventArgs e)
     {
-        if (DataContext is MainViewModel viewModel && viewModel.PlayMovieCommand.CanExecute(null))
+        if (DataContext is MainViewModel viewModel && viewModel.PlaybackCommands.PlayMovieCommand.CanExecute(null))
         {
-            viewModel.PlayMovieCommand.Execute(null);
+            viewModel.PlaybackCommands.PlayMovieCommand.Execute(null);
         }
     }
 }

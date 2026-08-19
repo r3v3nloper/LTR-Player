@@ -40,19 +40,18 @@ See ranks 7 and 12 under Done in `Docs/refactoring-backlog.md`.
 
 ### Where to pick up
 
-**`Docs/refactoring-backlog.md` holds five open items** from the review of 19 August 2026, made after previous
-and next were fixed. Four are carried from the review of 18 August; six were new, and five of the ten were done
-in the same sitting — the CLI's two, the watch-progress partial, the duplicated test helpers, and the pair of
-records of what is playing. The fourteen ranks before those are done and kept there as the record of how —
-**one was dropped rather than built:** rank 11's store-side paging of the channel list, on a measurement that is
-written down there so it is not re-derived. **Ranks quoted in commit messages belong to whichever review was
-current when they were written**; that file carries every mapping, and there have been three renumberings, so
-say which review you mean.
+**`Docs/refactoring-backlog.md` holds four open items** from the review of 19 August 2026, made after previous
+and next were fixed. Four are carried from the review of 18 August; six were new, and six of the ten were done
+in the same sitting: the CLI's two, the watch-progress partial, the duplicated test helpers, the pair of
+records of what is playing, and the "what plays" group leaving the shell. The fourteen ranks before those are
+done and kept there as the record of how — **one was dropped rather than built:** rank 11's store-side paging
+of the channel list, on a measurement that is written down there so it is not re-derived. **Ranks quoted in
+commit messages belong to whichever review was current when they were written**; that file carries every
+mapping, and there have been three renumberings, so say which review you mean.
 
-Of what is open, rank 3 (a `CategoryPickerViewModel` both sections hold) supersedes the interface that
-18 August's rank 1 put in, and **rank 5 is the one to look at when a milestone starts:** `MainViewModel`
-growing again, at 469 code lines. It is also the only High left, and the estimate says why — the markup binds
-its commands on the window, so the notification table moves with them.
+**What is open is all Minor or Medium now.** Rank 3 (a `CategoryPickerViewModel` both sections hold) supersedes
+the interface 18 August's rank 1 put in and is the largest of the four; the rest are a code-behind split and two
+oversized test files.
 
 Read it before proposing a refactor here. Several entries record a *considered and rejected* design, and four
 record a rank whose own premise turned out to be half wrong once the code was read.
@@ -104,16 +103,18 @@ them:
   an input binding is offered the key before the focused element sees it, so declaring one for `A` would mean
   the search box could never contain that letter. `MainWindow` checks what has focus, which is the whole
   reason it cannot be declarative. Arrow keys are deliberately *not* mapped to zapping — they belong to the
-  channel list. `PlayerActions` splits where the design already does: four actions come back to the shell
-  because they decide *what* plays, and the rest go to the overlay because they act on an open stream.
+  channel list. `PlayerActions` splits where the design already does: four actions come back as delegates
+  because they decide *what* plays or what the window shows — two of them from `PlaybackCommands` and two from
+  the shell — and the rest go to the overlay because they act on an open stream.
 - **`MainViewModel` regrows, every milestone, by the same mechanism** — it is the only place that can reach
-  everything. 395 lines at the M4 merge, 483 after M5, 439 after extracting the key dispatch, 466 by the end
-  of M6, 438 after the notification forwarding moved into a table, 476 after previous and next were made to
-  follow what plays, 469 once what they act on moved to the coordinator. (Code lines: comments and blanks
-  excluded, which is why `wc -l` reads nearly twice that.)
-  Check it at the start of a milestone, not the end — and note how little that last extraction bought: a
-  declarative registration costs nearly what the handler it replaces did, so size is the wrong reason to reach
-  for one.
+  everything, so anything needing two of them lands there. 395 lines at the M4 merge, 483 after M5, 439 after
+  extracting the key dispatch, 466 by the end of M6, 438 after the notification forwarding moved into a table,
+  476 after previous and next were made to follow what plays, 469 once what they act on moved to the
+  coordinator, **280 once `PlaybackCommands` took the ten play commands.** (Code lines: comments and blanks
+  excluded, which is why `wc -l` reads nearly twice that.) Expect a fourth regrowth. Two lessons from the
+  ones so far: a declarative registration costs nearly what the handler it replaces did, so **size is the
+  wrong reason** to reach for one — and what worked was asking of each method whether it needs the *window*
+  (a section, the panes and the lifetime token at once) or only a section and playback.
 - **`LiveNetworkCachingMilliseconds` defaults to 600 ms and is a guess, not a measurement.** It is the only
   part of a zap that can be shortened; the stop that precedes it is required by the connection limit. Raise
   it if channels stutter in their first seconds — that symptom is this value being too low. `PlaybackSession`
@@ -170,12 +171,15 @@ LTR.Cli                        Headless verification of everything below the UI 
                                decides whether credentials are printed, and ConnectionReleaseCheck, which
                                decides whether teardown was clean — take an injected TextWriter and are
                                tested; the listing handlers still write to Console directly
-LTR.Player.Wpf                 The only project that references WPF. MainViewModel composes the four
-                               catalogue sections, the guide and the on-screen controls, and is the
-                               sections' ISourceCoordinator; the sections never reference each other.
-                               Views/ holds one UserControl per section and per overlay, so
-                               MainWindow.xaml is composition only. CategoryPickerView is the one view
-                               used by three sections at once — it names none of them and binds to
+LTR.Player.Wpf                 The only project that references WPF. Three classes hold what one used to:
+                               PlaybackCoordinator opens a stream and remembers where it got to,
+                               PlaybackCommands turns a selection into a playback request (the markup binds
+                               its commands through MainViewModel.PlaybackCommands), and MainViewModel
+                               composes the four catalogue sections, the guide, the panes and the on-screen
+                               controls, and is the sections' ISourceCoordinator; the sections never
+                               reference each other. Views/ holds one UserControl per section and per
+                               overlay, so MainWindow.xaml is composition only. CategoryPickerView is the
+                               one view used by three sections at once — it names none of them and binds to
                                whichever it is placed in
 ```
 

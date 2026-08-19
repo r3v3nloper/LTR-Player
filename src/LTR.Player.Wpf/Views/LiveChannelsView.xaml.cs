@@ -15,9 +15,9 @@ public partial class LiveChannelsView : UserControl
 
     private void OnChannelActivated(object sender, MouseButtonEventArgs e)
     {
-        if (DataContext is MainViewModel viewModel && viewModel.PlaySelectedCommand.CanExecute(null))
+        if (DataContext is MainViewModel viewModel && viewModel.PlaybackCommands.PlaySelectedCommand.CanExecute(null))
         {
-            viewModel.PlaySelectedCommand.Execute(null);
+            viewModel.PlaybackCommands.PlaySelectedCommand.Execute(null);
         }
     }
 }

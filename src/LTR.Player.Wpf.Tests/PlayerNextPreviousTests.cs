@@ -68,7 +68,7 @@ public sealed class PlayerNextPreviousTests
         var entry = viewModel.ContinueWatching.Entries.ShouldHaveSingleItem();
 
         viewModel.SelectedSection = CatalogueSection.ContinueWatching;
-        await viewModel.ResumeEntryCommand.ExecuteAsync(entry);
+        await viewModel.PlaybackCommands.ResumeEntryCommand.ExecuteAsync(entry);
 
         // Act
         await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
@@ -145,15 +145,15 @@ public sealed class PlayerNextPreviousTests
         var viewModel = await WithThreeChannelsAndAFilmAsync(context);
 
         var notified = 0;
-        viewModel.PlayNextCommand.CanExecuteChanged += (_, _) => notified++;
+        viewModel.PlaybackCommands.PlayNextCommand.CanExecuteChanged += (_, _) => notified++;
 
         // Act
-        await viewModel.PlayMovieCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlayMovieCommand.ExecuteAsync(null);
         await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         notified.ShouldBeGreaterThan(0);
-        viewModel.PlayNextCommand.CanExecute(null).ShouldBeFalse();
+        viewModel.PlaybackCommands.PlayNextCommand.CanExecute(null).ShouldBeFalse();
         context.Session.Started.ShouldHaveSingleItem().DisplayName.ShouldBe("Arrival");
     }
 
@@ -169,7 +169,7 @@ public sealed class PlayerNextPreviousTests
 
         viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
 
         // Act
         await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
@@ -189,14 +189,14 @@ public sealed class PlayerNextPreviousTests
         var context = new MainViewModelHarness();
         var viewModel = await WithThreeChannelsAndAFilmAsync(context);
 
-        await viewModel.PlayMovieCommand.ExecuteAsync(null);
-        viewModel.PlayNextCommand.CanExecute(null).ShouldBeFalse();
+        await viewModel.PlaybackCommands.PlayMovieCommand.ExecuteAsync(null);
+        viewModel.PlaybackCommands.PlayNextCommand.CanExecute(null).ShouldBeFalse();
 
         // Act
-        await viewModel.StopCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.StopCommand.ExecuteAsync(null);
 
         // Assert
-        viewModel.PlayNextCommand.CanExecute(null).ShouldBeTrue();
+        viewModel.PlaybackCommands.PlayNextCommand.CanExecute(null).ShouldBeTrue();
     }
 
     /// <summary>
@@ -261,7 +261,7 @@ public sealed class PlayerNextPreviousTests
         var row = viewModel.SeriesCatalogue.Episodes
             .Single(episode => episode.Id == EpisodeId(seasonNumber, episodeNumber));
 
-        await viewModel.PlayEpisodeCommand.ExecuteAsync(row);
+        await viewModel.PlaybackCommands.PlayEpisodeCommand.ExecuteAsync(row);
 
         return viewModel;
     }

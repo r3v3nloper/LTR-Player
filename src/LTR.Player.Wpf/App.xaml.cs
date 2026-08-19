@@ -123,6 +123,11 @@ public partial class App : Application
         services.AddSingleton<GuideImportCoordinator>();
         services.AddSingleton<PlaybackCoordinator>();
 
+        // Before MainViewModel deliberately, though the container would order it anyway: it registers the
+        // forwards for its own command guards in its constructor, and those have to be subscribed before the
+        // shell's reaction handlers, so that a guard is notified before work that may change it begins.
+        services.AddSingleton<PlaybackCommands>();
+
         // Takes the TimeProvider the catalogue registered, as the channel list and the guide already do:
         // a view model that reads the clock is given one rather than reaching for the static property.
         services.AddSingleton<PlayerOverlayViewModel>();

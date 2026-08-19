@@ -17,9 +17,9 @@ public partial class ContinueWatchingView : UserControl
     {
         if (DataContext is MainViewModel viewModel
             && viewModel.ContinueWatching.SelectedEntry is { } entry
-            && viewModel.ResumeEntryCommand.CanExecute(entry))
+            && viewModel.PlaybackCommands.ResumeEntryCommand.CanExecute(entry))
         {
-            viewModel.ResumeEntryCommand.Execute(entry);
+            viewModel.PlaybackCommands.ResumeEntryCommand.Execute(entry);
         }
     }
 }

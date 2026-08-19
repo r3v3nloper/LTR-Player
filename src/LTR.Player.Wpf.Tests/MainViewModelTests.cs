@@ -106,7 +106,7 @@ public sealed class MainViewModelTests
 
         var playAnnouncements = 0;
         var favouriteAnnouncements = 0;
-        viewModel.PlaySelectedCommand.CanExecuteChanged += (_, _) => playAnnouncements++;
+        viewModel.PlaybackCommands.PlaySelectedCommand.CanExecuteChanged += (_, _) => playAnnouncements++;
         viewModel.Channels.ToggleFavoriteCommand.CanExecuteChanged += (_, _) => favouriteAnnouncements++;
 
         // Act
@@ -479,7 +479,7 @@ public sealed class MainViewModelTests
         viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         // Act
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
 
         // Assert
         context.Session.Started.ShouldHaveSingleItem().DisplayName.ShouldBe("Erste");
@@ -501,7 +501,7 @@ public sealed class MainViewModelTests
         viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         // Act
-        var act = async () => await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        var act = async () => await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
 
         // Assert
         await act.ShouldNotThrowAsync();

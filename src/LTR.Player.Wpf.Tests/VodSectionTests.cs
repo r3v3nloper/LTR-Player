@@ -201,7 +201,7 @@ public sealed class VodSectionTests
         var viewModel = await OpenFilmAsync(context);
 
         // Act
-        await viewModel.PlayMovieCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlayMovieCommand.ExecuteAsync(null);
 
         // Assert
         var request = context.Session.Started.ShouldHaveSingleItem();
@@ -223,7 +223,7 @@ public sealed class VodSectionTests
         var viewModel = await OpenFilmAsync(context);
 
         // Act
-        await viewModel.RestartMovieCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.RestartMovieCommand.ExecuteAsync(null);
 
         // Assert
         context.Session.Started.ShouldHaveSingleItem().StartAt.ShouldBeNull();
@@ -237,7 +237,7 @@ public sealed class VodSectionTests
         var viewModel = context.Build();
 
         // Act & Assert
-        viewModel.RestartMovieCommand.CanExecute(null).ShouldBeFalse();
+        viewModel.PlaybackCommands.RestartMovieCommand.CanExecute(null).ShouldBeFalse();
     }
 
     /// <remarks>
@@ -256,7 +256,7 @@ public sealed class VodSectionTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         var announcements = 0;
-        viewModel.PlayMovieCommand.CanExecuteChanged += (_, _) => announcements++;
+        viewModel.PlaybackCommands.PlayMovieCommand.CanExecuteChanged += (_, _) => announcements++;
 
         // Act
         viewModel.Movies.SelectedMovie = viewModel.Movies.Movies[0];
@@ -274,7 +274,7 @@ public sealed class VodSectionTests
         context.Store.Movies.Add(Movie(1, "Arrival"));
 
         var viewModel = await OpenFilmAsync(context);
-        await viewModel.PlayMovieCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlayMovieCommand.ExecuteAsync(null);
 
         // The engine is playing and reports a position, which the window's timer samples.
         context.Session.Position = TimeSpan.FromMinutes(40);
@@ -282,7 +282,7 @@ public sealed class VodSectionTests
         await viewModel.SamplePlaybackAsync();
 
         // Act
-        await viewModel.StopCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.StopCommand.ExecuteAsync(null);
 
         // Assert
         var write = context.Store.ProgressWrites.ShouldHaveSingleItem();
@@ -305,7 +305,7 @@ public sealed class VodSectionTests
         context.Store.Movies.Add(Movie(1, "Arrival"));
 
         var viewModel = await OpenFilmAsync(context);
-        await viewModel.PlayMovieCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlayMovieCommand.ExecuteAsync(null);
 
         context.Session.Position = TimeSpan.FromMinutes(30);
         context.Session.Duration = FilmLength;
@@ -313,7 +313,7 @@ public sealed class VodSectionTests
 
         // The engine loses both the moment the stream goes, exactly as the fake does on StopAsync.
         // Act
-        await viewModel.StopCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.StopCommand.ExecuteAsync(null);
 
         // Assert
         context.Store.ProgressWrites.ShouldHaveSingleItem().Position.ShouldBe(TimeSpan.FromMinutes(30));
@@ -329,7 +329,7 @@ public sealed class VodSectionTests
         context.Store.Movies.Add(Movie(1, "Arrival"));
 
         var viewModel = await OpenFilmAsync(context);
-        await viewModel.PlayMovieCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlayMovieCommand.ExecuteAsync(null);
 
         context.Session.Position = TimeSpan.FromMinutes(12);
         context.Session.Duration = FilmLength;
@@ -351,7 +351,7 @@ public sealed class VodSectionTests
         context.Store.Channels.Add(new Channel { Id = 5, SourceId = 1, ExternalId = "101", Name = "Erste" });
 
         var viewModel = await OpenFilmAsync(context);
-        await viewModel.PlayMovieCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlayMovieCommand.ExecuteAsync(null);
 
         context.Session.Position = TimeSpan.FromMinutes(20);
         context.Session.Duration = FilmLength;
@@ -359,7 +359,7 @@ public sealed class VodSectionTests
 
         // Act
         viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
 
         // Assert
         context.Store.ProgressWrites.ShouldHaveSingleItem().Position.ShouldBe(TimeSpan.FromMinutes(20));
@@ -379,8 +379,8 @@ public sealed class VodSectionTests
         viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         // Act
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
-        await viewModel.StopCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.StopCommand.ExecuteAsync(null);
 
         // Assert
         context.Store.ProgressWrites.ShouldBeEmpty();
@@ -401,8 +401,8 @@ public sealed class VodSectionTests
             new MediaRequest(new Uri("http://x/1.mp4"), "agent", StreamFormat.ProgressiveFile, "Arrival"));
 
         // Act
-        await viewModel.PlayMovieCommand.ExecuteAsync(null);
-        await viewModel.StopCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlayMovieCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.StopCommand.ExecuteAsync(null);
 
         // Assert
         context.Store.ProgressWrites.ShouldBeEmpty();
@@ -430,7 +430,8 @@ public sealed class VodSectionTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Act
-        await viewModel.PlayEpisodeCommand.ExecuteAsync(new EpisodeItemViewModel(episode, seasonNumber: 1));
+        await viewModel.PlaybackCommands.PlayEpisodeCommand
+            .ExecuteAsync(new EpisodeItemViewModel(episode, seasonNumber: 1));
 
         // Assert
         var request = context.Session.Started.ShouldHaveSingleItem();
@@ -462,7 +463,7 @@ public sealed class VodSectionTests
 
         // Act: what the list box's selection and the view's double-click handler do between them.
         viewModel.SeriesCatalogue.SelectedEpisode = viewModel.SeriesCatalogue.Episodes[0];
-        await viewModel.PlayEpisodeCommand.ExecuteAsync(viewModel.SeriesCatalogue.SelectedEpisode);
+        await viewModel.PlaybackCommands.PlayEpisodeCommand.ExecuteAsync(viewModel.SeriesCatalogue.SelectedEpisode);
 
         // Assert
         context.Session.Started.ShouldHaveSingleItem().Url.AbsoluteUri.ShouldContain("/series/1001");
@@ -531,7 +532,7 @@ public sealed class VodSectionTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Act
-        await viewModel.ResumeEntryCommand.ExecuteAsync(entry);
+        await viewModel.PlaybackCommands.ResumeEntryCommand.ExecuteAsync(entry);
 
         // Assert
         var request = context.Session.Started.ShouldHaveSingleItem();
@@ -565,7 +566,7 @@ public sealed class VodSectionTests
         viewModel.ContinueWatching.Entries.ShouldHaveSingleItem();
 
         // Act
-        await viewModel.ForgetEntryCommand.ExecuteAsync(entry);
+        await viewModel.PlaybackCommands.ForgetEntryCommand.ExecuteAsync(entry);
 
         // Assert
         var forgotten = context.Store.ForgottenEntries.ShouldHaveSingleItem();
@@ -599,7 +600,7 @@ public sealed class VodSectionTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Act
-        await viewModel.ForgetEntryCommand.ExecuteAsync(entry);
+        await viewModel.PlaybackCommands.ForgetEntryCommand.ExecuteAsync(entry);
 
         // Assert
         var forgotten = context.Store.ForgottenEntries.ShouldHaveSingleItem();
@@ -621,7 +622,7 @@ public sealed class VodSectionTests
         context.Store.Movies.Add(Movie(1, "Arrival"));
 
         var viewModel = await OpenFilmAsync(context);
-        await viewModel.PlayMovieCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlayMovieCommand.ExecuteAsync(null);
 
         context.Session.Position = TimeSpan.FromMinutes(20);
         context.Session.Duration = FilmLength;
@@ -638,8 +639,8 @@ public sealed class VodSectionTests
             LastWatchedUtc: MainViewModelHarness.Now);
 
         // Act
-        await viewModel.ForgetEntryCommand.ExecuteAsync(entry);
-        await viewModel.StopCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.ForgetEntryCommand.ExecuteAsync(entry);
+        await viewModel.PlaybackCommands.StopCommand.ExecuteAsync(null);
 
         // Assert: sharper than it could be before forgetting became its own operation. The write-back this
         // guards against would now appear as a progress write of its own rather than as a second one that
@@ -669,7 +670,7 @@ public sealed class VodSectionTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Act
-        await viewModel.ResumeEntryCommand.ExecuteAsync(entry);
+        await viewModel.PlaybackCommands.ResumeEntryCommand.ExecuteAsync(entry);
 
         // Assert
         context.Session.Started.ShouldBeEmpty();

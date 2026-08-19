@@ -214,7 +214,7 @@ public sealed class PlayerControlTests
 
         // Act
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
         viewModel.PlayerOverlay.Sample();
 
         // Assert
@@ -276,7 +276,7 @@ public sealed class PlayerControlTests
         // Act: zapping to a channel, which stops the film — the same Stopped state, a different reason.
         viewModel.SelectedSection = CatalogueSection.Live;
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
         await viewModel.SamplePlaybackAsync();
 
         // Assert
@@ -308,7 +308,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
 
         // Act
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
 
         // Assert
         context.Failures.Asked.ShouldHaveSingleItem().Name.ShouldBe("Source 1");
@@ -336,7 +336,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
 
         // Act
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
 
         // Assert
         viewModel.Status.Text.ShouldContain("expired");
@@ -358,7 +358,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
 
         // Act
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
 
         // Assert
         context.Failures.Asked.ShouldBeEmpty();
@@ -389,7 +389,7 @@ public sealed class PlayerControlTests
         viewModel.Movies.SelectedMovie = viewModel.Movies.Movies[0];
         await viewModel.WaitForIdleAsync();
 
-        await viewModel.PlayMovieCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlayMovieCommand.ExecuteAsync(null);
 
         return viewModel;
     }
