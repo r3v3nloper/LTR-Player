@@ -43,6 +43,32 @@ public sealed partial class PlaybackCoordinator : ObservableObject
     private string _nowPlaying = string.Empty;
 
     /// <summary>
+    /// What the last request was for, which is what previous and next act on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Here because this is the only thing that opens a stream, so it is the only place that can record what
+    /// one is *for* without a second party being told to keep in step. It was assigned by the shell in five
+    /// places until 19 August 2026, alongside <see cref="WatchProgressRecorder.Track"/> being called here — two
+    /// records of the same event, and a sixth play path updating only one of them would have left previous and
+    /// next acting on the wrong thing, silently.
+    /// </para>
+    /// <para>
+    /// The two records still differ in *shape*, and deliberately: the recorder needs an identifier to write a
+    /// row and lives in the catalogue layer, while the transport needs the episode entity and is a fact about
+    /// this window. What has gone is their being maintained apart.
+    /// </para>
+    /// <para>
+    /// Assigned before the open rather than after it, so a second press reads the new item rather than the
+    /// previous one — three quick presses of next must advance three episodes. Deliberately *not* cleared when
+    /// an open fails: nothing is playing, but the episode is still what the viewer is in the middle of, and a
+    /// failed episode that reset next to meaning the next channel is the surprise this whole pair was fixed for.
+    /// </para>
+    /// </remarks>
+    [ObservableProperty]
+    private PlayingItem? _nowPlayingItem;
+
+    /// <summary>
     /// Set when the engine reports a stream having run out on its own, cleared when that is acted on.
     /// </summary>
     /// <remarks>
@@ -144,6 +170,8 @@ public sealed partial class PlaybackCoordinator : ObservableObject
         // film was open.
         await RecordProgressAsync(cancellationToken).ConfigureAwait(true);
 
+        NowPlayingItem = new PlayingItem(ContentKind.Live);
+
         var request = _providers.GetStreamUrlResolver(source).ResolveLive(source, channel);
         await StartAsync(source, request, displayName, cancellationToken).ConfigureAwait(true);
     }
@@ -160,6 +188,8 @@ public sealed partial class PlaybackCoordinator : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(movie);
+
+        NowPlayingItem = new PlayingItem(ContentKind.Movie);
 
         var request = _providers.GetStreamUrlResolver(source).ResolveMovie(source, movie, startAt);
 
@@ -187,6 +217,8 @@ public sealed partial class PlaybackCoordinator : ObservableObject
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(episode);
 
+        NowPlayingItem = new PlayingItem(ContentKind.Series, episode);
+
         var request = _providers.GetStreamUrlResolver(source).ResolveEpisode(source, episode, startAt);
 
         await PlayResumableAsync(
@@ -203,10 +235,16 @@ public sealed partial class PlaybackCoordinator : ObservableObject
     /// <summary>
     /// Releases the stream, and writes down where it got to.
     /// </summary>
+    /// <remarks>
+    /// Clears <see cref="NowPlayingItem"/> as well, which is what makes next mean the next channel again — the
+    /// default with nothing playing. Every route to a full stop comes through here: the stop button, the source
+    /// being switched away from, a film reaching its own end, and the window closing.
+    /// </remarks>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         await _session.StopAsync(cancellationToken).ConfigureAwait(true);
         NowPlaying = string.Empty;
+        NowPlayingItem = null;
 
         await RecordProgressAsync(cancellationToken).ConfigureAwait(true);
     }

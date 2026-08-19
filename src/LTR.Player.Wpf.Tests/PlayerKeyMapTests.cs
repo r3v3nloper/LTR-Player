@@ -14,8 +14,8 @@ public sealed class PlayerKeyMapTests
 {
     [Theory]
     [InlineData(Key.Space, PlayerAction.TogglePause)]
-    [InlineData(Key.PageDown, PlayerAction.ZapNext)]
-    [InlineData(Key.PageUp, PlayerAction.ZapPrevious)]
+    [InlineData(Key.PageDown, PlayerAction.PlayNext)]
+    [InlineData(Key.PageUp, PlayerAction.PlayPrevious)]
     [InlineData(Key.OemPlus, PlayerAction.VolumeUp)]
     [InlineData(Key.OemMinus, PlayerAction.VolumeDown)]
     [InlineData(Key.M, PlayerAction.ToggleMute)]

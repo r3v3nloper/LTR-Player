@@ -232,6 +232,11 @@ making, in the order that finds problems fastest:
    the window even when a button has already dealt with it, so this is the case that regressed once.
 4. **Zap with Page Up and Page Down.** Each press changes channel once. Then narrow the list with the search
    box and zap again — it must walk only what the list is showing.
+   Then, with an episode playing, press Page Down: it must play the **next episode**, not a live channel, and
+   must not switch the left pane to Live. Do it twice more from the last episode of a season — the second
+   crossing must land on the next season's first, and the end of the series must say so and change nothing.
+   Repeat the whole thing having started the episode from **Continue**, which is the route it was reported
+   from and the one where no series is open. Finally, with a *film* playing, both buttons must be greyed out.
 5. **Type in the search box.** `a`, `f`, `g`, `i` and `m` must reach the box rather than the player. This is
    the one that fails if the keyboard is ever moved into markup.
 6. **Press F, then Escape.** The panel goes and comes back at the width you left it, not at 360 pixels.

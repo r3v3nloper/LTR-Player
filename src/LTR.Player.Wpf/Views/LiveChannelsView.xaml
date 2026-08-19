@@ -12,7 +12,7 @@
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
-    <views:CategoryPickerView Grid.Row="0" DataContext="{Binding Channels}" />
+    <views:CategoryPickerView Grid.Row="0" DataContext="{Binding Channels.Picker}" />
 
     <TextBox Grid.Row="1"
              Text="{Binding Channels.ChannelFilterText, UpdateSourceTrigger=PropertyChanged, Delay=200}"

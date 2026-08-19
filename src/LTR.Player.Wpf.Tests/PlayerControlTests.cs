@@ -27,7 +27,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
 
         // Act
-        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         viewModel.Channels.SelectedChannel.ShouldNotBeNull();
@@ -45,7 +45,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 2);
 
         // Act
-        await viewModel.PerformAsync(PlayerAction.ZapPrevious, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayPrevious, TestContext.Current.CancellationToken);
 
         // Assert
         context.Session.Started.ShouldHaveSingleItem().DisplayName.ShouldBe("Zweite");
@@ -61,7 +61,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = null;
 
         // Act
-        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         context.Session.Started.ShouldHaveSingleItem().DisplayName.ShouldBe("Erste");
@@ -82,7 +82,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 2);
 
         // Act
-        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         context.Session.Started.ShouldBeEmpty("there is nothing after the last channel");
@@ -108,7 +108,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel.Name.ShouldBe("Erste");
 
         // Act
-        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         viewModel.Channels.SelectedChannel.ShouldNotBeNull();
@@ -131,7 +131,7 @@ public sealed class PlayerControlTests
         viewModel.SelectedSection = CatalogueSection.ContinueWatching;
 
         // Act
-        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         viewModel.SelectedSection.ShouldBe(CatalogueSection.Live);
@@ -148,14 +148,14 @@ public sealed class PlayerControlTests
 
         viewModel.Channels.ChannelFilterText = "te";
 
-        viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().Select(row => row.Name)
+        viewModel.VisibleChannels().Select(row => row.Name)
             .ShouldBe(["Erste", "Zweite", "Dritte"], "every fixture name matches, so narrow it further");
 
         viewModel.Channels.ChannelFilterText = "Zwei";
 
         // Act: from the only admitted channel, so a walk over the unfiltered list would show up here.
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
-        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         context.Session.Started.ShouldBeEmpty();
@@ -214,7 +214,7 @@ public sealed class PlayerControlTests
 
         // Act
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
         viewModel.PlayerOverlay.Sample();
 
         // Assert
@@ -276,7 +276,7 @@ public sealed class PlayerControlTests
         // Act: zapping to a channel, which stops the film — the same Stopped state, a different reason.
         viewModel.SelectedSection = CatalogueSection.Live;
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
         await viewModel.SamplePlaybackAsync();
 
         // Assert
@@ -308,7 +308,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
 
         // Act
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
 
         // Assert
         context.Failures.Asked.ShouldHaveSingleItem().Name.ShouldBe("Source 1");
@@ -336,7 +336,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
 
         // Act
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
 
         // Assert
         viewModel.Status.Text.ShouldContain("expired");
@@ -358,7 +358,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
 
         // Act
-        await viewModel.PlaySelectedCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlaySelectedCommand.ExecuteAsync(null);
 
         // Assert
         context.Failures.Asked.ShouldBeEmpty();
@@ -387,25 +387,17 @@ public sealed class PlayerControlTests
 
         viewModel.SelectedSection = CatalogueSection.Movies;
         viewModel.Movies.SelectedMovie = viewModel.Movies.Movies[0];
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
-        await viewModel.PlayMovieCommand.ExecuteAsync(null);
+        await viewModel.PlaybackCommands.PlayMovieCommand.ExecuteAsync(null);
 
         return viewModel;
     }
 
-    /// <summary>Waits for the shell to finish reacting to the last selection.</summary>
-    private static async Task WaitForIdleAsync(MainViewModel viewModel)
-    {
-        while (!viewModel.SectionWorkCompletion.IsCompleted)
-        {
-            await viewModel.SectionWorkCompletion;
-        }
-    }
 
     private static ChannelItemViewModel Row(MainViewModel viewModel, int index)
     {
-        return viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().ElementAt(index);
+        return viewModel.VisibleChannels()[index];
     }
 
     private static XtreamSource CreateSource()

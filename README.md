@@ -41,7 +41,7 @@ source, because Xtream panels are divergent forks with no specification between 
 | | |
 |---|---|
 | `Space` | play / pause |
-| `PageUp` / `PageDown` | previous / next channel |
+| `PageUp` / `PageDown` | previous / next episode, or channel |
 | `←` / `→` | skip back / forward |
 | `+` / `−` / `M` | volume up / down / mute |
 | `F` or `F11` / `Esc` | fullscreen / leave fullscreen |
@@ -50,6 +50,9 @@ source, because Xtream panels are divergent forks with no specification between 
 The arrow keys skip rather than zap: the channel list needs them to move a selection through seventeen
 thousand entries without opening every one on the way. Shortcuts are ignored while you are typing into a
 search box.
+
+Previous and next follow what is playing. Watching a series, they move through its episodes and carry on into
+the next season; watching live, they change channel. A film has neither, so they are unavailable.
 
 ## Install
 

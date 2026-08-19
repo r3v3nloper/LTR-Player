@@ -51,9 +51,9 @@ public sealed class CategoryPickerViewTests
             // Every section the picker is placed in by the three section views.
             return new[]
             {
-                Inspect("live", viewModel.Channels),
-                Inspect("films", viewModel.Movies),
-                Inspect("series", viewModel.SeriesCatalogue),
+                Inspect("live", viewModel.Channels.Picker),
+                Inspect("films", viewModel.Movies.Picker),
+                Inspect("series", viewModel.SeriesCatalogue.Picker),
             };
         });
 
@@ -75,7 +75,7 @@ public sealed class CategoryPickerViewTests
     /// </remarks>
     private static (string Section, bool Items, bool Selection, bool Command) Inspect(
         string section,
-        ICategoryPickerSection subject)
+        CategoryPickerViewModel subject)
     {
         var view = new CategoryPickerView { DataContext = subject };
 

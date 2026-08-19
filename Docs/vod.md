@@ -122,6 +122,28 @@ viewer who resumes at forty minutes and closes the player before the first sampl
 have their place reset to the beginning. The same file was observed to reach `00:05:04` within eight seconds
 when asked for five minutes, and to report nothing at all after ten seconds when asked for ten.
 
+## Moving to the next episode
+
+`EpisodeSequence` in the core states the order — seasons by number, episodes by number within a season — and
+answers what lies either side of one episode. `IVodCatalogue.GetSeriesForEpisodeAsync` is what feeds it, and it
+starts at the *episode* rather than at the series because while one plays the episode is all that is known: a
+continue-watching row is resumed by episode identifier with nothing about its series loaded.
+
+Three things about it are load-bearing:
+
+- **The order is imposed, not assumed.** A panel appends a season fetched later rather than inserting it, and
+  lists a season's episodes in whatever order its map enumerated. Trusting the stored order would make season
+  three's opener the successor of season one's last.
+- **Neither end wraps.** The episode after the finale is nothing, said in the status line. A series that
+  restarted itself would read as the button having done something else entirely.
+- **The store is asked every time, rather than the episode rows being walked.** The rows hold one season of one
+  series and only while it is open — so they can answer neither across a season boundary nor at all for an
+  episode started from Continue. `Docs/player.md` has why that mattered: previous and next used to change the
+  live channel instead.
+- **The answer is scoped to the selected source.** Switching subscription does not stop what is playing, so the
+  episode of the source just left is still what next refers to. Unscoped, its successor's identifier would go
+  into an address carrying the other account's credentials.
+
 ## Leaving the list
 
 An entry can be taken off the continue-watching list, because a film that did not hold the viewer's

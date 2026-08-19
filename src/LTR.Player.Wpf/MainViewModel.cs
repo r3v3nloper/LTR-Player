@@ -19,11 +19,16 @@ namespace LTR.Player.Wpf;
 /// things source management has to trigger.
 /// </para>
 /// <para>
-/// Deliberately thin now. Opening a stream and remembering a position belong to
-/// <see cref="PlaybackCoordinator"/>, running a guide import to <see cref="GuideImportCoordinator"/>; what is
-/// left here is composition, the section selection, and commands that are two lines each. It had grown to
-/// four responsibilities twice, and both times the same way — by being the only place that could reach
-/// everything.
+/// What it does *not* do is now the shorter list. Opening a stream and remembering a position belong to
+/// <see cref="PlaybackCoordinator"/>, deciding which item to play to <see cref="PlaybackCommands"/>, running a
+/// guide import to <see cref="GuideImportCoordinator"/>. What is left is composition, the section selection and
+/// its availability rules, the guide, the settings pane, the window's lifetime, and the keystroke dispatch.
+/// </para>
+/// <para>
+/// It regrew past its own size three times, always the same way: being the only class that can reach
+/// everything, so anything needing two of them lands here. Expect a fourth. The question to ask of a new
+/// method is not how long this file is but whether it needs the *window* — a section, the panes and the
+/// lifetime token at once — or only a section and playback, which is <see cref="PlaybackCommands"/>'.
 /// </para>
 /// </remarks>
 public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator, IAsyncDisposable
@@ -74,6 +79,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         PlayerOverlayViewModel playerOverlay,
         SettingsViewModel settings,
         GuideImportCoordinator guideImport,
+        PlaybackCommands playbackCommands,
         ILogger<MainViewModel> logger)
     {
         SourceManagement = sources;
@@ -85,28 +91,36 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         Status = status;
         PlayerOverlay = playerOverlay;
         Settings = settings;
+        PlaybackCommands = playbackCommands;
 
         _playback = playback;
         _guideImport = guideImport;
         _logger = logger;
 
+        // The section selection is this class's, so the zap that needs it asks for it rather than holding it.
+        PlaybackCommands.ShowChannelList = () => SelectedSection = CatalogueSection.Live;
+
         _notifications = new CrossObjectNotifications(OnPropertyChanged);
         RegisterNotificationForwards();
 
-        // After the forwards, deliberately: a section raises one event and both run in subscription order,
-        // so a command whose guard the work below may change is notified first — the order the single
-        // hand-written handler per section used to guarantee.
+        // After the forwards, deliberately: a section raises one event and every subscriber runs in
+        // subscription order, so a command whose guard the work below may change is notified first. That order
+        // now depends on construction order too — PlaybackCommands registers its own forwards in its
+        // constructor, which the container runs before this one, so its guards are notified before these
+        // handlers start anything. Constructing it by hand *after* this point would silently reverse that.
         Movies.PropertyChanged += OnMovieListChanged;
         SeriesCatalogue.PropertyChanged += OnSeriesChanged;
         _playback.PropertyChanged += OnPlaybackChanged;
 
         SourceManagement.Coordinator = this;
 
-        // The coordinator writes positions; the three lists that display one are known only here.
-        _playback.ProgressRecorded = RefreshWhatShowsProgressAsync;
-
-        // Built here rather than injected, because the three operations it needs are this class's own.
-        _playerActions = new PlayerActions(PlayerOverlay, StopAsync, ZapAsync, ToggleGuideAsync);
+        // Built here rather than injected, because the operations it needs are this class's own and the
+        // commands' are PlaybackCommands'.
+        _playerActions = new PlayerActions(
+            PlayerOverlay,
+            PlaybackCommands.StopAsync,
+            PlaybackCommands.PlayAdjacentAsync,
+            ToggleGuideAsync);
     }
 
     public SourceManagementViewModel SourceManagement { get; }
@@ -128,6 +142,15 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
     /// <summary>The settings pane, which owns whether it is open.</summary>
     public SettingsViewModel Settings { get; }
+
+    /// <summary>
+    /// What the viewer can ask to be played, which the markup binds through this rather than through here.
+    /// </summary>
+    /// <remarks>
+    /// Exposed rather than forwarded command by command: ten pass-through properties would be ten more places
+    /// to forget a notification, which is the defect class this window has shipped three times.
+    /// </remarks>
+    public PlaybackCommands PlaybackCommands { get; }
 
     /// <summary>
     /// Whether the catalogue is what the left pane is showing, rather than a form.
@@ -305,6 +328,13 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         }
     }
 
+    /// <remarks>
+    /// The stop also forgets what was playing, in the coordinator: the episode belonged to the source being
+    /// deleted, and next would otherwise look up its successor and open it against whichever source is selected
+    /// next. Switching between configured sources does not come through here and does not stop playback, which
+    /// is why <see cref="SeriesCatalogueViewModel.FindAdjacentEpisodeAsync"/> also scopes its answer to the
+    /// selected source.
+    /// </remarks>
     Task ISourceCoordinator.ReleasePlaybackAsync(CancellationToken cancellationToken)
     {
         return _playback.StopAsync(cancellationToken);
@@ -313,199 +343,6 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     void ISourceCoordinator.CatalogueImported(PlaylistSource source)
     {
         StartGuideImport(source, onlyWhenStale: true);
-    }
-
-    /// <remarks>
-    /// Concurrent execution is allowed deliberately. The generated command would otherwise report
-    /// CanExecute as false while a stream is still opening, so zapping away from a slow channel would
-    /// be silently ignored — and the playback session's supersession handling, which exists precisely
-    /// to make rapid channel changes safe, would never be reachable from the UI.
-    /// </remarks>
-    [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(HasSelectedChannel))]
-    private async Task PlaySelectedAsync(CancellationToken cancellationToken)
-    {
-        if (Channels.SelectedChannel is not { } item || SourceManagement.SelectedSource is not { } source)
-        {
-            return;
-        }
-
-        await _playback.PlayChannelAsync(source, item.Channel, item.Name, cancellationToken)
-            .ConfigureAwait(true);
-    }
-
-    private bool HasSelectedChannel()
-    {
-        return Channels.SelectedChannel is not null;
-    }
-
-    /// <summary>
-    /// Moves to the next channel and plays it.
-    /// </summary>
-    /// <remarks>
-    /// Concurrent execution allowed for the same reason <see cref="PlaySelectedAsync"/> allows it: holding
-    /// the command closed while a stream opens is what makes zapping past a slow channel impossible, and
-    /// the session's supersession handling exists precisely so that repeated presses are safe.
-    /// </remarks>
-    [RelayCommand(AllowConcurrentExecutions = true)]
-    private Task ZapNextAsync(CancellationToken cancellationToken)
-    {
-        return ZapAsync(offset: 1, cancellationToken);
-    }
-
-    [RelayCommand(AllowConcurrentExecutions = true)]
-    private Task ZapPreviousAsync(CancellationToken cancellationToken)
-    {
-        return ZapAsync(offset: -1, cancellationToken);
-    }
-
-    /// <remarks>
-    /// Zapping only makes sense in the channel list, so it switches back to it — pressing next-channel while
-    /// looking at the film catalogue and having the picture change but the list not is disorienting. Nothing
-    /// is played when the selection could not move, which is what makes the ends of the list quiet rather
-    /// than reopening the same channel.
-    /// </remarks>
-    private async Task ZapAsync(int offset, CancellationToken cancellationToken)
-    {
-        SelectedSection = CatalogueSection.Live;
-
-        if (!Channels.SelectAdjacent(offset))
-        {
-            return;
-        }
-
-        await PlaySelectedAsync(cancellationToken).ConfigureAwait(true);
-    }
-
-    /// <summary>Plays the selected film, picking up where it was left if it was started before.</summary>
-    [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(HasSelectedMovie))]
-    private Task PlayMovieAsync(CancellationToken cancellationToken)
-    {
-        return PlaySelectedMovieAsync(fromStart: false, cancellationToken);
-    }
-
-    /// <summary>Plays the selected film from the beginning, ignoring its resume point.</summary>
-    [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(CanRestartMovie))]
-    private Task RestartMovieAsync(CancellationToken cancellationToken)
-    {
-        return PlaySelectedMovieAsync(fromStart: true, cancellationToken);
-    }
-
-    private bool HasSelectedMovie()
-    {
-        return Movies.SelectedMovie is not null;
-    }
-
-    private bool CanRestartMovie()
-    {
-        return CurrentMovie()?.HasResumePoint ?? false;
-    }
-
-    [RelayCommand(AllowConcurrentExecutions = true)]
-    private async Task PlayEpisodeAsync(EpisodeItemViewModel? episode, CancellationToken cancellationToken)
-    {
-        if (episode is null || SourceManagement.SelectedSource is not { } source)
-        {
-            return;
-        }
-
-        await _playback
-            .PlayEpisodeAsync(
-                source,
-                episode.Episode,
-                ResumeFrom(episode.Episode.ResumePositionSeconds),
-                $"{OpenSeriesName()}{episode.Label} · {episode.Title}",
-                cancellationToken)
-            .ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// Resumes a continue-watching entry, whichever kind it is.
-    /// </summary>
-    /// <remarks>
-    /// The entry holds the identity of a film or of an episode, never of a series, so the item it refers to
-    /// is loaded and played directly. Nothing about its series or season is needed.
-    /// </remarks>
-    [RelayCommand(AllowConcurrentExecutions = true)]
-    private async Task ResumeEntryAsync(ContinueWatchingEntry? entry, CancellationToken cancellationToken)
-    {
-        if (entry is null || SourceManagement.SelectedSource is not { } source)
-        {
-            return;
-        }
-
-        var startAt = ResumePolicy.StartFrom(entry.Position);
-
-        if (entry.Kind == ContentKind.Movie)
-        {
-            var movie = await ContinueWatching.FindMovieAsync(entry.ItemId, cancellationToken)
-                .ConfigureAwait(true);
-
-            if (movie is null)
-            {
-                Status.Text = "That film is no longer in the catalogue.";
-                return;
-            }
-
-            await _playback.PlayMovieAsync(source, movie, startAt, movie.Name, cancellationToken)
-                .ConfigureAwait(true);
-
-            return;
-        }
-
-        var episode = await ContinueWatching.FindEpisodeAsync(entry.ItemId, cancellationToken)
-            .ConfigureAwait(true);
-
-        if (episode is null)
-        {
-            Status.Text = "That episode is no longer in the catalogue.";
-            return;
-        }
-
-        await _playback
-            .PlayEpisodeAsync(source, episode, startAt, $"{entry.Title} · {entry.Subtitle}", cancellationToken)
-            .ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// Takes an entry off the continue-watching list.
-    /// </summary>
-    /// <remarks>
-    /// Here rather than on the section alone, because the resume point it forgets is shown in two more
-    /// places: the film row's "Resume at" line and the episode list's. Forgetting it in one and leaving it in
-    /// the others is the kind of disagreement that reads as the removal not having worked.
-    /// </remarks>
-    [RelayCommand]
-    private async Task ForgetEntryAsync(ContinueWatchingEntry? entry, CancellationToken cancellationToken)
-    {
-        if (entry is null)
-        {
-            return;
-        }
-
-        // Anything being followed has to stop being followed, or stopping playback afterwards would write
-        // the position straight back.
-        _playback.StopFollowing();
-
-        try
-        {
-            await ContinueWatching.ForgetAsync(entry, cancellationToken).ConfigureAwait(true);
-            await RefreshWhatShowsProgressAsync(cancellationToken).ConfigureAwait(true);
-        }
-        catch (OperationCanceledException)
-        {
-            // The window is closing.
-        }
-        catch (Exception exception)
-        {
-            PlayerLog.ProgressNotRecorded(_logger, exception, entry.Kind.ToString(), entry.ItemId);
-            Status.Text = "That could not be taken off the list. Details are in the log.";
-        }
-    }
-
-    [RelayCommand]
-    private Task StopAsync(CancellationToken cancellationToken)
-    {
-        return _playback.StopAsync(cancellationToken);
     }
 
     /// <summary>
@@ -581,53 +418,6 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         }
     }
 
-    private async Task PlaySelectedMovieAsync(bool fromStart, CancellationToken cancellationToken)
-    {
-        if (CurrentMovie() is not { } row || SourceManagement.SelectedSource is not { } source)
-        {
-            return;
-        }
-
-        var startAt = fromStart ? null : ResumeFrom(row.Movie.ResumePositionSeconds);
-
-        await _playback.PlayMovieAsync(source, row.Movie, startAt, row.Name, cancellationToken)
-            .ConfigureAwait(true);
-    }
-
-    /// <summary>
-    /// The film whose detail is on screen, falling back to the selected row while it is still loading.
-    /// </summary>
-    private MovieItemViewModel? CurrentMovie()
-    {
-        return Movies.DetailedMovie ?? Movies.SelectedMovie;
-    }
-
-    private string OpenSeriesName()
-    {
-        return SeriesCatalogue.OpenSeries is { } series ? $"{series.Name} · " : string.Empty;
-    }
-
-    private static TimeSpan? ResumeFrom(int? resumePositionSeconds)
-    {
-        return resumePositionSeconds is { } seconds and > 0
-            ? ResumePolicy.StartFrom(TimeSpan.FromSeconds(seconds))
-            : null;
-    }
-
-    /// <summary>
-    /// Rereads the three places a stored position is displayed.
-    /// </summary>
-    /// <remarks>
-    /// A resume point appears on a film row, on an episode row and as a continue-watching entry. Any change
-    /// to one has to reach all three, or the same position is offered in one place and gone from another.
-    /// </remarks>
-    private async Task RefreshWhatShowsProgressAsync(CancellationToken cancellationToken)
-    {
-        await Movies.RefreshSelectedAsync(cancellationToken).ConfigureAwait(true);
-        await SeriesCatalogue.RefreshOpenSeriesAsync(cancellationToken).ConfigureAwait(true);
-        await ContinueWatching.ReloadAsync(cancellationToken).ConfigureAwait(true);
-    }
-
     private bool IsSectionAvailable(CatalogueSection section)
     {
         return section switch
@@ -664,14 +454,8 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     /// </remarks>
     private void RegisterNotificationForwards()
     {
-        _notifications.When(Channels, nameof(ChannelListViewModel.SelectedChannel))
-            .Notifies(PlaySelectedCommand);
-
         _notifications.When(SourceManagement, nameof(SourceManagementViewModel.SelectedSource))
             .Notifies(ImportGuideCommand);
-
-        _notifications.When(ContinueWatching, nameof(ContinueWatchingViewModel.SelectedEntry))
-            .Notifies(ResumeEntryCommand);
 
         // Both panes take the left-hand side over, and IsShowingCatalogue is computed here from both.
         _notifications
@@ -679,14 +463,6 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             .Raises(nameof(IsShowingCatalogue));
 
         _notifications.When(Settings, nameof(SettingsViewModel.IsOpen)).Raises(nameof(IsShowingCatalogue));
-
-        _notifications
-            .When(Movies, nameof(MovieListViewModel.SelectedMovie))
-            .Notifies(PlayMovieCommand)
-            .Notifies(RestartMovieCommand);
-
-        // A second, separate reason: the guard reads the resume position, which only the detail carries.
-        _notifications.When(Movies, nameof(MovieListViewModel.DetailedMovie)).Notifies(RestartMovieCommand);
 
         _notifications
             .When(_guideImport, nameof(GuideImportCoordinator.IsImporting))
@@ -714,7 +490,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
                 Run(Movies.LoadSelectedDetailAsync);
                 break;
 
-            case nameof(MovieListViewModel.SearchText) or nameof(MovieListViewModel.SelectedCategory):
+            case nameof(MovieListViewModel.Criteria):
                 Run(Movies.SearchAsync);
                 break;
 
@@ -731,8 +507,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
                 Run(SeriesCatalogue.LoadSelectedAsync);
                 break;
 
-            case nameof(SeriesCatalogueViewModel.SearchText)
-                or nameof(SeriesCatalogueViewModel.SelectedCategory):
+            case nameof(SeriesCatalogueViewModel.Criteria):
                 Run(SeriesCatalogue.SearchAsync);
                 break;
 

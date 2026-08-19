@@ -28,7 +28,7 @@ public sealed class GuideViewModelTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        var row = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
+        var row = viewModel.VisibleChannels()[0];
         row.NowTitle.ShouldBe("Running");
         row.NextTitle.ShouldBe("then Next");
         row.NowProgress.ShouldBe(0.5, tolerance: 0.01);
@@ -58,7 +58,7 @@ public sealed class GuideViewModelTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        var row = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>()
+        var row = viewModel.VisibleChannels()
             .Single(item => item.Name == "Unmatched");
 
         row.NowTitle.ShouldBeEmpty();
@@ -330,7 +330,7 @@ public sealed class GuideViewModelTests
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
-        var row = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
+        var row = viewModel.VisibleChannels()[0];
         row.NowTitle.ShouldBeEmpty("nothing has been imported yet");
 
         // Act: the import lands, and only then does the store have programmes in it.

@@ -29,6 +29,10 @@ Since 0.7.0, and not from the plan: the on-screen controls can be woken by the p
 could not, in fullscreen not at all — and a category can be pinned to the top of its picker. `Docs/player.md`
 and `Docs/categories.md` carry both.
 
+Since then, from a bug report: **previous and next follow what is playing.** They were wired straight to channel
+zapping, so ⏭ during an episode tuned a live channel. They now move through the series' episodes, across the
+season boundary, and are unavailable for a film. `Docs/player.md` has the design and `Docs/vod.md` the ordering.
+
 Both of M3's stated limits are gone: the timeline's channel names used to scroll away with the programme
 blocks, and it drew only the first 200 channels. It now pins the names and **pages** along the channel axis,
 200 at a time, by command — the same way it has always moved along the time axis, and for the same reason.
@@ -36,18 +40,22 @@ See ranks 7 and 12 under Done in `Docs/refactoring-backlog.md`.
 
 ### Where to pick up
 
-**`Docs/refactoring-backlog.md` holds five open items** from the review of 18 August 2026, made after pinned
-categories shipped. Three of that review's eight were done in the same sitting. The fourteen ranks before it
-are done and kept there as the record of how — **one was dropped rather than built:** rank 11's store-side
-paging of the channel list, on a measurement that is written down there so it is not re-derived. **Ranks
-quoted in commit messages belong to whichever scheme was current when they were written**; that file carries
-all three mappings.
+**`Docs/refactoring-backlog.md` holds one open item** from the review of 19 August 2026, made after previous and
+next were fixed. Four were carried from the review of 18 August; six were new, and **nine of the ten were done in
+the same sitting** — the tenth is recorded there as deliberately deferred, with its reason. The fourteen ranks
+before those are done and kept there as the record of how — **one was dropped rather than built:** rank 11's
+store-side paging of the channel list, on a measurement that is written down there so it is not re-derived.
+**Ranks quoted in commit messages belong to whichever review was current when they were written**; that file
+carries every mapping, and there have been three renumberings, so say which review you mean.
 
-Of what is open, rank 3 (a `CategoryPickerViewModel` both sections hold) supersedes the interface that rank 1
-put in, and rank 4 is `MainViewModel` growing again — the one to look at when a milestone starts.
+**The ranked work is done.** What is left is one Minor item that was deferred on purpose — splitting
+`IVodCatalogue` into a film face and a series face, worth doing only if a third consumer appears. The next thing
+here is whatever the plan says, not this file; a fresh review is the other option, and the last two were made
+after a change shipped rather than on a schedule.
 
-Read it before proposing a refactor here. Several entries record a *considered and rejected* design, and three
-record a rank whose own premise turned out to be half wrong once the code was read.
+Read it before proposing a refactor here. Several entries record a *considered and rejected* design, four record
+a rank whose own premise turned out to be half wrong once the code was read, and one records two untested
+behaviours that a mutation check found while the change was being made.
 
 Two things are outstanding that are *not* refactors, because only the person with the subscription can do
 them:
@@ -77,17 +85,37 @@ them:
 - **A film reaching its own end is flagged, not acted on.** `PlaybackCoordinator` sets a flag from the engine
   thread and `SampleAsync` closes the stream off on the next tick, because what follows is a database write
   and three lists rereading themselves.
+- **Previous and next mean "the next thing of the kind that is playing".** `PlaybackCoordinator.NowPlayingItem`
+  records what the last request was for, assigned where the stream is opened and never read back from the engine
+  — an engine asked what is playing answers with the *previous* item until the next stream arrives, so three
+  quick presses would all land on the same episode. It lives beside `WatchProgressRecorder.Track`, which records
+  the same event in the shape the catalogue layer needs; the two types stay separate because merging them would
+  put a WPF type in `LTR.Catalogue`, but they are assigned in one place so a new play path cannot update one and
+  forget the other. It is **not** cleared when an open fails: nothing is playing, but the viewer is still in the
+  middle of that episode. The shell's two commands guard on it across an object boundary, so the forward is in
+  `RegisterNotificationForwards` — and it has to notify *both*, since a film closes the buttons and a stop
+  reopens them. The neighbour is looked up in the store
+  (`GetSeriesForEpisodeAsync` → `EpisodeSequence.Neighbour`) and not in the episode rows on screen, because
+  those hold one season of one series and only while it is open. That is not a nicety: resuming from Continue
+  has an episode identifier and nothing else, and is where the bug was reported from. The lookup is scoped to
+  the selected source, because switching subscription does *not* stop what is playing — unscoped, the next
+  episode's identifier would be built into an address against the other account's credentials.
 - **Keys are resolved by `PlayerKeyMap` and carried out by `PlayerActions`.** Not `KeyBinding`s in markup:
   an input binding is offered the key before the focused element sees it, so declaring one for `A` would mean
   the search box could never contain that letter. `MainWindow` checks what has focus, which is the whole
   reason it cannot be declarative. Arrow keys are deliberately *not* mapped to zapping — they belong to the
-  channel list. `PlayerActions` splits where the design already does: four actions come back to the shell
-  because they decide *what* plays, and the rest go to the overlay because they act on an open stream.
+  channel list. `PlayerActions` splits where the design already does: four actions come back as delegates
+  because they decide *what* plays or what the window shows — two of them from `PlaybackCommands` and two from
+  the shell — and the rest go to the overlay because they act on an open stream.
 - **`MainViewModel` regrows, every milestone, by the same mechanism** — it is the only place that can reach
-  everything. 395 lines at the M4 merge, 483 after M5, 439 after extracting the key dispatch, 466 by the end
-  of M6, 438 after the notification forwarding moved into a table. Check it at the start of a milestone, not
-  the end — and note how little that last extraction bought: a declarative registration costs nearly what the
-  handler it replaces did, so size is the wrong reason to reach for one.
+  everything, so anything needing two of them lands there. 395 lines at the M4 merge, 483 after M5, 439 after
+  extracting the key dispatch, 466 by the end of M6, 438 after the notification forwarding moved into a table,
+  476 after previous and next were made to follow what plays, 469 once what they act on moved to the
+  coordinator, **280 once `PlaybackCommands` took the ten play commands.** (Code lines: comments and blanks
+  excluded, which is why `wc -l` reads nearly twice that.) Expect a fourth regrowth. Two lessons from the
+  ones so far: a declarative registration costs nearly what the handler it replaces did, so **size is the
+  wrong reason** to reach for one — and what worked was asking of each method whether it needs the *window*
+  (a section, the panes and the lifetime token at once) or only a section and playback.
 - **`LiveNetworkCachingMilliseconds` defaults to 600 ms and is a guess, not a measurement.** It is the only
   part of a zap that can be shortened; the stop that precedes it is required by the connection limit. Raise
   it if channels stutter in their first seconds — that symptom is this value being too low. `PlaybackSession`
@@ -100,7 +128,9 @@ them:
 
 - **A failed stream asks the provider why.** `StreamFailureReason` classifies in Core,
   `IStreamFailureExplainer` does the asking in LTR.Catalogue, and each front end words it — the split
-  `SourceImportStage` established, with a test that every reason has wording of its own. A playlist source is
+  `SourceImportStage` established, with a test **in each front end** that every reason has wording of its own.
+  That was true of the window from M6 and of the CLI only from 19 August 2026; add a reason and both fail,
+  which is the point of the guard and is worth re-checking by mutation rather than trusting. A playlist source is
   never asked (no account, and asking re-downloads the document), and a superseded open is not a failure, so
   zapping does not interrogate the panel once per key press.
 - **Settings are `settings.json` beside the database, not a table in it.** The catalogue is a cache that gets
@@ -128,21 +158,30 @@ LTR.Catalogue[.Abstractions]   Application layer: import orchestration and catal
                               IGuideCatalogue, IVodCatalogue, IWatchProgressStore — so a consumer
                               declares the face it uses. Take the narrowest that fits
 LTR.Epg.Xmltv                  XMLTV reader. No dependencies at all — not even on Core
-LTR.Persistence                LtrDbContext. All database logic lives here (§3.3.2)
+LTR.Persistence                LtrDbContext, one partial per subject: Live, Guide, Vod, WatchProgress. All
+                               database logic lives here (§3.3.2). The WatchProgress partial exists because
+                               a position is the one thing in the catalogue a refresh must never touch
 LTR.Playback[.Abstractions]    Engine-neutral playback policy
 LTR.Playback.LibVlc            LibVLC engine
 LTR.Security.Dpapi             Windows credential protection, kept out of Core on purpose
 LTR.Cli                        Headless verification of everything below the UI (§2.12). One class per
                                command under Commands/ states its options and action; Program is
                                composition only. A command touching the database goes through
-                               CatalogueCommandRunner, so probing a panel creates no database file
-LTR.Player.Wpf                 The only project that references WPF. MainViewModel composes the four
-                               catalogue sections, the guide and the on-screen controls, and is the
-                               sections' ISourceCoordinator; the sections never reference each other.
-                               Views/ holds one UserControl per section and per overlay, so
-                               MainWindow.xaml is composition only. CategoryPickerView is the one view
-                               used by three sections at once — it names none of them and binds to
-                               whichever it is placed in
+                               CatalogueCommandRunner, so probing a panel creates no database file. The two
+                               collaborators whose *output is the result* — ResolvedAddressReport, which
+                               decides whether credentials are printed, and ConnectionReleaseCheck, which
+                               decides whether teardown was clean — take an injected TextWriter and are
+                               tested; the listing handlers still write to Console directly
+LTR.Player.Wpf                 The only project that references WPF. Three classes hold what one used to:
+                               PlaybackCoordinator opens a stream and remembers where it got to,
+                               PlaybackCommands turns a selection into a playback request (the markup binds
+                               its commands through MainViewModel.PlaybackCommands), and MainViewModel
+                               composes the four catalogue sections, the guide, the panes and the on-screen
+                               controls, and is the sections' ISourceCoordinator; the sections never
+                               reference each other. Views/ holds one UserControl per section and per
+                               overlay, so MainWindow.xaml is composition only. CategoryPickerView is the
+                               one view used by three sections at once — it names none of them and binds to
+                               the CategoryPickerViewModel each of them holds
 ```
 
 Dependency direction: apps → Catalogue/Providers/Playback → *.Abstractions → Core. Core knows nobody.
@@ -180,7 +219,9 @@ sanitised *every* query value goes and only the names stay. Its **path** is reda
 the one place the credentials are on record: the query of the source's own playlist and guide addresses. Only
 where such a value is a **whole path segment**, because `output=ts` would otherwise take the extension off
 every channel. What is left uncovered is a playlist held as a file that declares no `x-tvg-url` either — then
-nothing reveals them, and the CLI says so rather than claiming a masking it did not perform. `user:password@host` is removed for every protocol by `SensitiveUrlSanitizer<TSource>`,
+nothing reveals them, and the CLI says so rather than claiming a masking it did not perform; that self-report,
+and the `--reveal` gate it sits under, are held by `ResolvedAddressReportTests` since 19 August 2026 and were
+mutation-checked. `user:password@host` is removed for every protocol by `SensitiveUrlSanitizer<TSource>`,
 which is the only form that needs no protocol knowledge. A failure that wants to carry an address throws
 `ProviderRequestException` (`XtreamApiException` derives from it) and puts the *sanitised* address on
 `SanitizedUrl` — the CLI prints it, and catching a protocol's own type there is what left playlist failures
@@ -221,9 +262,9 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
   it. Add a case there for every migration that alters an existing table.
 - **A category carries the viewer's pin, and the store is what sorts by it.** `Category.IsFavorite` is user
   data exactly as a favourite channel is, so `AdoptProviderFields` leaves it alone. `GetCategoriesAsync`
-  orders pinned first — stated there because three pickers and the CLI read it, and restated once in
-  `CategoryPicker` because a pin has to move an entry without refilling the bound collection. `Docs/categories.md`
-  has the rest.
+  orders pinned first — stated there because the pickers and the CLI read it, and restated once in
+  `CategoryPickerViewModel` because a pin has to move an entry without refilling the bound collection.
+  `Docs/categories.md` has the rest.
 - **A panel numbers its category identifiers per section,** so `58` is a live category and a film category
   at once. Category reconciliation is therefore scoped to the *kinds* an import covers, not to the source —
   scoped to the source, a live refresh deletes every film category — and its lookup is keyed by
@@ -253,14 +294,15 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
 - **Overlays belong inside `VideoView.Content`**, not beside it. `VideoView` hosts a separate native
   window over the WPF tree; a sibling element is invisible behind the video. That hosting has a second
   consequence found in M5: input over the overlay does not reach the shell window's handlers either, which is
-  why `PlayerOverlayView` handles its own pointer events while the keyboard stays with the window. It handles
-  them **on the window it is hosted in** — found on `Loaded`, since that window is `VideoView`'s to create —
-  and not on the control. `PlayerOverlayViewTests` states it.
+  why the overlay handles its own pointer events while the keyboard stays with the window. `PicturePointer` does
+  it, **on the window the content is hosted in** — found on `Loaded`, since that window is `VideoView`'s to
+  create — and not on the control. It also owns what a double-click was aimed at, because that fact comes from
+  one of the same subscriptions. `PlayerOverlayViewTests` states both.
 - **`MouseDoubleClick` reaches a handler a button has already dealt with, and does not say what was
   clicked.** WPF raises it from a class handler registered for handled events too, and it is a *direct*
   event, so its source is the element the handler sits on. Two quick clicks on the overlay's skip button
   went fullscreen. What was aimed at is recorded from the tunnelling `PreviewMouseLeftButtonDown` and
-  checked there — `PlayerOverlayView.OnPictureDoubleClicked`.
+  checked there — `PicturePointer.OnDoubleClicked`.
 - **`Background="Transparent"` over the video is not hit at all.** That window is *layered*, and Windows
   hit-tests a layered window by its alpha: `#00FFFFFF` passes the pointer through to the video underneath, so
   the controls saw clicks on their own opaque bar and nothing whatever over the picture — the bar could not be
@@ -284,11 +326,14 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
 - **`Progress<T>` and `ICollectionView.Refresh` both matter:** a refresh resets the collection and the
   list box drops its selection, so it has to be restored.
 - **Fill a bound collection before selecting in it.** Emptying one makes a `ComboBox` write a null selection
-  back through the binding, so a selection assigned first is discarded. Both new pickers rendered blank while
-  their lists looked perfectly correct, because the filter read the same null as "every category". The same
-  null is why **`SelectedCategory` is nullable** in both view models: a reader declared against a non-null
-  property compiles and then dereferences null during that instant — which is how a command guard added for
-  pinned categories crashed the window on startup, long after the trap had been written down here.
+  back through the binding, so a selection assigned first is discarded. Both pickers rendered blank while their
+  lists looked perfectly correct, because the filter read the same null as "every category". The same null is
+  why **`SelectedCategory` is nullable**: a reader declared against a non-null property compiles and then
+  dereferences null during that instant — which is how a command guard added for pinned categories crashed the
+  window on startup, long after the trap had been written down here. **For the category pickers this is now
+  structural** — `CategoryPickerViewModel.ShowAsync` fills and selects as one operation, so no caller states the
+  order. No test can see it either way: a test has no ComboBox to write the null. Anything *new* that binds a
+  collection still owns the rule.
 - **Dispose the DI container asynchronously.** It holds `IAsyncDisposable` singletons; the synchronous
   `Dispose` throws and `PlaybackSession` never releases its stream.
 - **A view model that reads the clock must be given a `TimeProvider`.** `DateTimeOffset.UtcNow` in
@@ -375,9 +420,19 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **739 tests pass on `main`.** A refactor should not move that number.
+- **781 tests pass on this branch; 739 on `main`, verified by checking main out and running it.** A refactor
+  should not move that number. Counted by summing the per-project figures — the totals quoted in this
+  branch's first three commit messages (757, 765, 774) are each four low, an arithmetic slip carried forward;
+  the figures here are the measured ones.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.
+- **The WPF tests reach a shell through `MainViewModelHarness` and `ShellUnderTest`.** The harness builds the
+  composed view model over fakes; the two extension methods are `WaitForIdleAsync` (await before asserting on
+  anything a selection triggers) and `VisibleChannels` (a snapshot of the filtered list). Do not re-copy either
+  into a test class — three copies of the first is what earned them a home.
+- **A blanket `sed` over `*.cs` includes the file you are writing.** Sweeping
+  `ChannelView.Cast<ChannelItemViewModel>()` into `VisibleChannels()` rewrote that helper's own body into a
+  self-call; the suite reported a stack overflow rather than a failure. Exclude the new file, or read the diff.
 
 `Docs/refactoring-backlog.md` holds the reviewed, ranked work that remains.

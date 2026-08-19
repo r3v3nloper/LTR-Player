@@ -283,6 +283,17 @@ internal sealed class FakeCatalogueStore
         return Task.FromResult(Episodes.FirstOrDefault(episode => episode.Id == episodeId));
     }
 
+    /// <remarks>
+    /// Found by walking the seeded catalogue, as the real query joins: a test seeds a series with its seasons
+    /// and this answers from those, so nothing here has to agree separately about the order.
+    /// </remarks>
+    public Task<Series?> GetSeriesForEpisodeAsync(int episodeId, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(SeriesCatalogue.FirstOrDefault(series => series.Seasons
+            .SelectMany(season => season.Episodes)
+            .Any(episode => episode.Id == episodeId)));
+    }
+
     public Task<IReadOnlyList<ContinueWatchingEntry>> GetContinueWatchingAsync(
         int sourceId,
         int limit,

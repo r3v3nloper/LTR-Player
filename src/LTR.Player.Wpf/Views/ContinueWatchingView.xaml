@@ -69,7 +69,7 @@
                       Margin="6,0,0,0"
                       Background="{StaticResource BorderBrush}"
                       ToolTip="Carry on watching"
-                      Command="{Binding DataContext.ResumeEntryCommand,
+                      Command="{Binding DataContext.PlaybackCommands.ResumeEntryCommand,
                                         ElementName=SectionRoot}"
                       CommandParameter="{Binding}" />
 
@@ -82,7 +82,7 @@
                       Margin="4,0,0,0"
                       Background="{StaticResource BorderBrush}"
                       ToolTip="Take this off the list"
-                      Command="{Binding DataContext.ForgetEntryCommand,
+                      Command="{Binding DataContext.PlaybackCommands.ForgetEntryCommand,
                                         ElementName=SectionRoot}"
                       CommandParameter="{Binding}" />
             </StackPanel>

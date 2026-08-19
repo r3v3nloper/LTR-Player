@@ -88,6 +88,9 @@ not in the shell's window, so the shell's `PreviewMouseMove` never sees it. The 
 window they are hosted in**, found on `Loaded` and let go on `Unloaded` because that window is created and
 replaced by `VideoView` rather than by anything here.
 
+`PicturePointer` holds that, and holds the next point with it. The two are one subject rather than two pieces of
+glue: which window to watch, and — from one of the same subscriptions — what the pointer was last aimed at.
+
 Two details follow from that:
 
 - **The move is taken as the tunnelling event**, so the window sees every one regardless of what lies
@@ -176,14 +179,14 @@ declarative. Neither half of the decision is in the handler: `PlayerKeyMap` says
 `PlayerActions` says what each action does. Both are testable without a window, which is the other reason for
 the split.
 
-`PlayerActions` splits again along the line this document opened with. Four actions — stop, the two zaps and
-the guide — come back to the shell as delegates, because they decide *what* plays or what the window shows.
-Every other action works on a stream already open, so it goes to the overlay.
+`PlayerActions` splits again along the line this document opened with. Four actions come back as delegates,
+because they decide *what* plays or what the window shows: stop, previous and next from `PlaybackCommands`, the
+guide from the shell. Every other action works on a stream already open, so it goes to the overlay.
 
 | Key | Action |
 |---|---|
 | Space | pause or resume |
-| Page Up / Page Down | previous / next channel |
+| Page Up / Page Down | previous / next — see below |
 | `+` / `−` | volume |
 | `M` | mute |
 | Left / Right | back / forward ten seconds |
@@ -200,6 +203,55 @@ from the list's own paging, which is a smaller loss — the list still has arrow
 Zapping stops at the ends of the list rather than wrapping. A wrap is indistinguishable from a zap that did
 nothing except by watching the picture, and an unwanted one costs a stream open, which costs the
 subscription's one connection.
+
+## Previous and next follow what is playing
+
+Reported as a bug, and it was one: ⏭ and Page Down were wired straight to channel zapping, so pressing next
+during an episode switched the left pane to Live and tuned a channel. They now mean *the next thing of the same
+kind*.
+
+| Playing | What next does |
+|---|---|
+| A live channel, or nothing yet | the next channel in the list, as before |
+| An episode | the next episode of that series, across the season boundary |
+| A film | nothing — the buttons grey out |
+
+A film has no neighbour worth having. It is one item, and the film list's order is a search result rather than a
+sequence anybody watches through, so `CanPlayAdjacent` closes the commands instead of guessing.
+
+Four pieces, in four places, and the division is the point. The commands themselves are
+`PlaybackCommands` — the class the ten play commands moved into when the shell was split, and the one the markup
+binds them through.
+
+- **`PlaybackCoordinator.NowPlayingItem`** records what the last playback request was for — the kind, and the
+  episode itself when it is one. Recorded where the stream is opened rather than read back from the engine, for
+  two reasons: a stream opens asynchronously, so an engine asked what is playing answers with the *previous*
+  item until the next one arrives, and three quick presses of next would then all land on the same episode; and
+  an open that failed still leaves the viewer in the middle of that episode. It is cleared by `StopAsync`, which
+  is what makes next mean the next channel again — and every full stop passes through there, including a film
+  reaching its own end and a source being deleted.
+
+  It sits here rather than on the shell, where it began, because this is the only class that opens a stream and
+  it was already recording the same event for `WatchProgressRecorder`. The two records keep different shapes on
+  purpose — the recorder needs an identifier and lives in the catalogue layer, this needs the entity and is a
+  fact about the window — but they are assigned in one place, so a new play path cannot update one and forget
+  the other. The shell's two commands guard on it across an object boundary, so the forward is registered in
+  `CrossObjectNotifications`, and it notifies **both**: a film closes the buttons and a stop reopens them.
+- **`SeriesCatalogueViewModel.FindAdjacentEpisodeAsync`** asks the store, not the episode rows on screen. The
+  rows hold one season of one series and only while it is open, so a walk over them could answer neither across
+  a season boundary nor at all for an episode resumed from the continue-watching list — and the second is the
+  case the bug was reported from. `IVodCatalogue.GetSeriesForEpisodeAsync` starts at the episode, because while
+  one plays the episode is all that is known. The answer is scoped to the **selected source**: switching
+  subscription does not stop what is playing, so unscoped it would build the next episode's identifier into an
+  address against the other account's credentials — which comes back as a dead stream and reads as a broken
+  episode.
+- **`EpisodeSequence`** in Core states the order: seasons by number, episodes by number within a season, and
+  nothing at either end rather than a wrap. The order is imposed rather than assumed — a panel appends a season
+  fetched later instead of inserting it, so a walk that trusted the stored order would call season three's
+  opener the successor of season one's last.
+
+Running out of episodes says so in the status line, where running out of channels does not: the channel list
+shows its own ends, and an episode list showing one season cannot.
 
 ## Fullscreen is stated by the view model and applied by the window
 

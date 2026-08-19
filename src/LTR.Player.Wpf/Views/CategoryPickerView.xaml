@@ -5,9 +5,10 @@
   <!--
     The category picker, and the star that pins one to the top of it.
 
-    Used by all three sections. Its data context is whichever section it sits in, which is why nothing here
-    names one: the channel list and the two catalogue sections offer the same three members, and a picker
-    that spelled out `Channels.` could not be the same file for `Movies.`.
+    Used by all three sections, and its data context is the CategoryPickerViewModel each of them holds — so
+    nothing here names a section and the three bindings below resolve against one class rather than against
+    whatever shape the section it was dropped into happens to have. That is what replaced ICategoryPickerSection:
+    an interface stated the shape, this needs no shape stated because there is only one.
 
     A panel lists a couple of hundred categories in whatever order it holds them, and the two or three
     somebody watches are as likely to be at the bottom as anywhere. Pinned ones sort above the rest, in both

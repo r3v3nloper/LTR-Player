@@ -64,6 +64,12 @@ internal sealed class MainViewModelHarness
     /// one object here exactly as they are one object in the container. The repetition is the point: it shows
     /// which parts of the catalogue each view model actually reaches for.
     /// </remarks>
+    /// <remarks>
+    /// Named locals rather than one nested call, since <see cref="PlaybackCommands"/> arrived: it and the shell
+    /// have to be handed the *same* section objects, as the container's singletons are. Two instances of a
+    /// section would leave one of them notifying command guards while the window read the other, which is a
+    /// defect no assertion in these tests would find.
+    /// </remarks>
     public MainViewModel Build()
     {
         // One status line for all of them, exactly as the container hands it out.
@@ -71,26 +77,59 @@ internal sealed class MainViewModelHarness
 
         Progress = new WatchProgressRecorder(Store, NullLogger<WatchProgressRecorder>.Instance);
 
-        return new MainViewModel(
-            new SourceManagementViewModel(Store, Import, status, NullLogger<SourceManagementViewModel>.Instance),
-            new ChannelListViewModel(Store, Store, Store, Clock, status, NullLogger<ChannelListViewModel>.Instance),
-            new GuideViewModel(Store, Clock),
-            new MovieListViewModel(Store, Store, VodDetail, NullLogger<MovieListViewModel>.Instance),
-            new SeriesCatalogueViewModel(
-                Store,
-                Store,
-                VodDetail,
-                NullLogger<SeriesCatalogueViewModel>.Instance),
-            new ContinueWatchingViewModel(Store, Store),
+        var sources = new SourceManagementViewModel(
+            Store,
+            Import,
             status,
-            new PlaybackCoordinator(
-                new StubProviderRegistry(),
-                Session,
-                Session,
-                Progress,
-                Failures,
-                status,
-                NullLogger<PlaybackCoordinator>.Instance),
+            NullLogger<SourceManagementViewModel>.Instance);
+
+        var channels = new ChannelListViewModel(
+            Store,
+            Store,
+            Store,
+            Clock,
+            status,
+            NullLogger<ChannelListViewModel>.Instance);
+
+        var movies = new MovieListViewModel(Store, Store, VodDetail, NullLogger<MovieListViewModel>.Instance);
+
+        var series = new SeriesCatalogueViewModel(
+            Store,
+            Store,
+            VodDetail,
+            NullLogger<SeriesCatalogueViewModel>.Instance);
+
+        var continueWatching = new ContinueWatchingViewModel(Store, Store);
+
+        var playback = new PlaybackCoordinator(
+            new StubProviderRegistry(),
+            Session,
+            Session,
+            Progress,
+            Failures,
+            status,
+            NullLogger<PlaybackCoordinator>.Instance);
+
+        // Before the shell, as the container builds it: its forwards have to be subscribed first.
+        var commands = new PlaybackCommands(
+            sources,
+            channels,
+            movies,
+            series,
+            continueWatching,
+            playback,
+            status,
+            NullLogger<PlaybackCommands>.Instance);
+
+        return new MainViewModel(
+            sources,
+            channels,
+            new GuideViewModel(Store, Clock),
+            movies,
+            series,
+            continueWatching,
+            status,
+            playback,
             new PlayerOverlayViewModel(Session, Settings, Clock),
             new SettingsViewModel(
                 _settingsStore,
@@ -99,6 +138,7 @@ internal sealed class MainViewModelHarness
                 status,
                 NullLogger<SettingsViewModel>.Instance),
             new GuideImportCoordinator(GuideImport, status, NullLogger<GuideImportCoordinator>.Instance),
+            commands,
             NullLogger<MainViewModel>.Instance);
     }
 }

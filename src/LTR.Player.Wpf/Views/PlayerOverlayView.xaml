@@ -122,7 +122,7 @@
             <Button Style="{StaticResource OverlayButton}"
                     Content="■"
                     ToolTip="Stop and release the connection"
-                    Command="{Binding DataContext.StopCommand,
+                    Command="{Binding DataContext.PlaybackCommands.StopCommand,
                                       RelativeSource={RelativeSource AncestorType=Window}}" />
 
             <Button Style="{StaticResource OverlayButton}"
@@ -137,17 +137,19 @@
                     Command="{Binding SkipForwardCommand}"
                     Visibility="{Binding IsSeekable, Converter={StaticResource BooleanToVisibility}}" />
 
+            <!-- Previous and next follow what is playing: episodes of the series being watched, channels
+                 when watching live. They grey out for a film, which has neither. -->
             <Button Style="{StaticResource OverlayButton}"
                     Content="⏮"
                     Margin="8,0,0,0"
-                    ToolTip="Previous channel  ·  Page Up"
-                    Command="{Binding DataContext.ZapPreviousCommand,
+                    ToolTip="Previous episode or channel  ·  Page Up"
+                    Command="{Binding DataContext.PlaybackCommands.PlayPreviousCommand,
                                       RelativeSource={RelativeSource AncestorType=Window}}" />
 
             <Button Style="{StaticResource OverlayButton}"
                     Content="⏭"
-                    ToolTip="Next channel  ·  Page Down"
-                    Command="{Binding DataContext.ZapNextCommand,
+                    ToolTip="Next episode or channel  ·  Page Down"
+                    Command="{Binding DataContext.PlaybackCommands.PlayNextCommand,
                                       RelativeSource={RelativeSource AncestorType=Window}}" />
           </StackPanel>
 

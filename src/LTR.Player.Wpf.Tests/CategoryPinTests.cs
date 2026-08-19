@@ -30,18 +30,18 @@ public sealed class CategoryPinTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         var channels = viewModel.Channels;
-        var watched = channels.Categories.Single(choice => choice.Name == "DE Deutschland");
-        channels.SelectedCategory = watched;
+        var watched = channels.Picker.Categories.Single(choice => choice.Name == "DE Deutschland");
+        channels.Picker.SelectedCategory = watched;
 
         // Act
-        await channels.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
+        await channels.Picker.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
 
         // Assert: first after the unrestricted entry, still the selection, and still the same object —
         // an entry replaced by a copy is a different item to the picker, and the filter goes with it.
-        channels.Categories.Select(choice => choice.Name)
+        channels.Picker.Categories.Select(choice => choice.Name)
             .ShouldBe(["All categories", "DE Deutschland", "AR Arabic", "FR France"]);
 
-        channels.SelectedCategory.ShouldBeSameAs(watched);
+        channels.Picker.SelectedCategory.ShouldBeSameAs(watched);
         watched.IsFavorite.ShouldBeTrue();
 
         context.Store.CategoryFavoriteWrites.ShouldBe([(3, true)]);
@@ -59,20 +59,20 @@ public sealed class CategoryPinTests
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
-        viewModel.Channels.SelectedCategory =
-            viewModel.Channels.Categories.Single(choice => choice.Name == "DE Deutschland");
+        viewModel.Channels.Picker.SelectedCategory =
+            viewModel.Channels.Picker.Categories.Single(choice => choice.Name == "DE Deutschland");
 
-        await viewModel.Channels.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
+        await viewModel.Channels.Picker.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
 
         // Act: a second window over the same catalogue.
         var reopened = context.Build();
         await reopened.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        reopened.Channels.Categories.Select(choice => choice.Name)
+        reopened.Channels.Picker.Categories.Select(choice => choice.Name)
             .ShouldBe(["All categories", "DE Deutschland", "AR Arabic"]);
 
-        reopened.Channels.Categories[1].IsFavorite.ShouldBeTrue("the star has to be on it as well");
+        reopened.Channels.Picker.Categories[1].IsFavorite.ShouldBeTrue("the star has to be on it as well");
     }
 
     [Fact]
@@ -89,14 +89,14 @@ public sealed class CategoryPinTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         var channels = viewModel.Channels;
-        channels.SelectedCategory = channels.Categories.Single(choice => choice.Name == "DE Deutschland");
-        await channels.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
+        channels.Picker.SelectedCategory = channels.Picker.Categories.Single(choice => choice.Name == "DE Deutschland");
+        await channels.Picker.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
 
         // Act
-        await channels.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
+        await channels.Picker.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
 
         // Assert
-        channels.Categories.Select(choice => choice.Name)
+        channels.Picker.Categories.Select(choice => choice.Name)
             .ShouldBe(["All categories", "AR Arabic", "FR France", "DE Deutschland"]);
 
         context.Store.CategoryFavoriteWrites.ShouldBe([(3, true), (3, false)]);
@@ -119,14 +119,14 @@ public sealed class CategoryPinTests
         var channels = viewModel.Channels;
 
         // Act: the lower one first, so a stack would put it above the other.
-        channels.SelectedCategory = channels.Categories.Single(choice => choice.Name == "DE Deutschland");
-        await channels.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
+        channels.Picker.SelectedCategory = channels.Picker.Categories.Single(choice => choice.Name == "DE Deutschland");
+        await channels.Picker.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
 
-        channels.SelectedCategory = channels.Categories.Single(choice => choice.Name == "FR France");
-        await channels.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
+        channels.Picker.SelectedCategory = channels.Picker.Categories.Single(choice => choice.Name == "FR France");
+        await channels.Picker.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
 
         // Assert
-        channels.Categories.Select(choice => choice.Name)
+        channels.Picker.Categories.Select(choice => choice.Name)
             .ShouldBe(["All categories", "FR France", "DE Deutschland", "AR Arabic"]);
     }
 
@@ -142,19 +142,19 @@ public sealed class CategoryPinTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        viewModel.Channels.SelectedCategory.ShouldBe(CategoryChoice.All);
-        viewModel.Channels.ToggleCategoryFavoriteCommand.CanExecute(null).ShouldBeFalse();
+        viewModel.Channels.Picker.SelectedCategory.ShouldBe(CategoryChoice.All);
+        viewModel.Channels.Picker.ToggleCategoryFavoriteCommand.CanExecute(null).ShouldBeFalse();
 
         // Act: and choosing a real one offers the star — asserted through the notification rather than the
         // guard, because a guard read directly answers correctly even when nothing announced the change.
         var announced = false;
-        viewModel.Channels.ToggleCategoryFavoriteCommand.CanExecuteChanged += (_, _) => announced = true;
+        viewModel.Channels.Picker.ToggleCategoryFavoriteCommand.CanExecuteChanged += (_, _) => announced = true;
 
-        viewModel.Channels.SelectedCategory = viewModel.Channels.Categories[1];
+        viewModel.Channels.Picker.SelectedCategory = viewModel.Channels.Picker.Categories[1];
 
         // Assert
         announced.ShouldBeTrue("the button stays greyed out until something tells it otherwise");
-        viewModel.Channels.ToggleCategoryFavoriteCommand.CanExecute(null).ShouldBeTrue();
+        viewModel.Channels.Picker.ToggleCategoryFavoriteCommand.CanExecute(null).ShouldBeTrue();
     }
 
     /// <remarks>
@@ -177,18 +177,18 @@ public sealed class CategoryPinTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Act: what the control does while the list under it is replaced.
-        var live = () => viewModel.Channels.SelectedCategory = null;
-        var films = () => viewModel.Movies.SelectedCategory = null;
+        var live = () => viewModel.Channels.Picker.SelectedCategory = null;
+        var films = () => viewModel.Movies.Picker.SelectedCategory = null;
 
         // Assert
         live.ShouldNotThrow();
         films.ShouldNotThrow();
 
-        viewModel.Channels.ToggleCategoryFavoriteCommand.CanExecute(null).ShouldBeFalse();
-        viewModel.Movies.ToggleCategoryFavoriteCommand.CanExecute(null).ShouldBeFalse();
+        viewModel.Channels.Picker.ToggleCategoryFavoriteCommand.CanExecute(null).ShouldBeFalse();
+        viewModel.Movies.Picker.ToggleCategoryFavoriteCommand.CanExecute(null).ShouldBeFalse();
 
         // And pressing it anyway — as a button already enabled would — writes nothing.
-        await viewModel.Channels.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
+        await viewModel.Channels.Picker.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
         context.Store.CategoryFavoriteWrites.ShouldBeEmpty();
     }
 
@@ -206,8 +206,8 @@ public sealed class CategoryPinTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         // Act
-        viewModel.Movies.SelectedCategory = viewModel.Movies.Categories.Single(c => c.Name == "Action");
-        await viewModel.Movies.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
+        viewModel.Movies.Picker.SelectedCategory = viewModel.Movies.Picker.Categories.Single(c => c.Name == "Action");
+        await viewModel.Movies.Picker.ToggleCategoryFavoriteCommand.ExecuteAsync(parameter: null);
 
         // Assert
         context.Store.CategoryFavoriteWrites.ShouldBe([(7, true)]);

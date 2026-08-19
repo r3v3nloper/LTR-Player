@@ -38,7 +38,7 @@ public sealed partial class MovieListViewModel : CatalogueSectionViewModel<Movie
         IVodCatalogue catalogue,
         IVodDetailService detail,
         ILogger<MovieListViewModel> logger)
-        : base(sources, catalogue)
+        : base(sources, catalogue, ContentKind.Movie)
     {
         _detail = detail;
         _logger = logger;
@@ -50,7 +50,6 @@ public sealed partial class MovieListViewModel : CatalogueSectionViewModel<Movie
     /// </summary>
     public IReadOnlyList<MovieItemViewModel> Movies => Rows;
 
-    protected override ContentKind CategoryKind => ContentKind.Movie;
 
     protected override string EntryNoun => "films";
 
