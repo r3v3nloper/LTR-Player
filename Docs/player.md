@@ -88,6 +88,9 @@ not in the shell's window, so the shell's `PreviewMouseMove` never sees it. The 
 window they are hosted in**, found on `Loaded` and let go on `Unloaded` because that window is created and
 replaced by `VideoView` rather than by anything here.
 
+`PicturePointer` holds that, and holds the next point with it. The two are one subject rather than two pieces of
+glue: which window to watch, and — from one of the same subscriptions — what the pointer was last aimed at.
+
 Two details follow from that:
 
 - **The move is taken as the tunnelling event**, so the window sees every one regardless of what lies

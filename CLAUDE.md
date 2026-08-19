@@ -40,19 +40,18 @@ See ranks 7 and 12 under Done in `Docs/refactoring-backlog.md`.
 
 ### Where to pick up
 
-**`Docs/refactoring-backlog.md` holds three open items** from the review of 19 August 2026, made after previous
-and next were fixed. Four are carried from the review of 18 August; six were new, and **seven of the ten were
-done in the same sitting**: the CLI's two, the watch-progress partial, the duplicated test helpers, the pair of
-records of what is playing, the "what plays" group leaving the shell, and the category picker becoming an object.
-The fourteen ranks before those are done and kept there as the record of how — **one was dropped rather than
-built:** rank 11's store-side paging of the channel list, on a measurement that is written down there so it is
-not re-derived. **Ranks quoted in
-commit messages belong to whichever review was current when they were written**; that file carries every
-mapping, and there have been three renumberings, so say which review you mean.
+**`Docs/refactoring-backlog.md` holds one open item** from the review of 19 August 2026, made after previous and
+next were fixed. Four were carried from the review of 18 August; six were new, and **nine of the ten were done in
+the same sitting** — the tenth is recorded there as deliberately deferred, with its reason. The fourteen ranks
+before those are done and kept there as the record of how — **one was dropped rather than built:** rank 11's
+store-side paging of the channel list, on a measurement that is written down there so it is not re-derived.
+**Ranks quoted in commit messages belong to whichever review was current when they were written**; that file
+carries every mapping, and there have been three renumberings, so say which review you mean.
 
-**What is open is all Minor now:** splitting `PlayerOverlayView.xaml.cs`, splitting two oversized test files,
-and one item recorded as deliberately deferred with its reason. Nothing in the ranked work is urgent — the next
-thing here is whatever the plan says, not this file.
+**The ranked work is done.** What is left is one Minor item that was deferred on purpose — splitting
+`IVodCatalogue` into a film face and a series face, worth doing only if a third consumer appears. The next thing
+here is whatever the plan says, not this file; a fresh review is the other option, and the last two were made
+after a change shipped rather than on a schedule.
 
 Read it before proposing a refactor here. Several entries record a *considered and rejected* design, four record
 a rank whose own premise turned out to be half wrong once the code was read, and one records two untested
@@ -295,14 +294,15 @@ has two normalisers that must not be confused: `ToIdentityKey` keeps every disti
 - **Overlays belong inside `VideoView.Content`**, not beside it. `VideoView` hosts a separate native
   window over the WPF tree; a sibling element is invisible behind the video. That hosting has a second
   consequence found in M5: input over the overlay does not reach the shell window's handlers either, which is
-  why `PlayerOverlayView` handles its own pointer events while the keyboard stays with the window. It handles
-  them **on the window it is hosted in** — found on `Loaded`, since that window is `VideoView`'s to create —
-  and not on the control. `PlayerOverlayViewTests` states it.
+  why the overlay handles its own pointer events while the keyboard stays with the window. `PicturePointer` does
+  it, **on the window the content is hosted in** — found on `Loaded`, since that window is `VideoView`'s to
+  create — and not on the control. It also owns what a double-click was aimed at, because that fact comes from
+  one of the same subscriptions. `PlayerOverlayViewTests` states both.
 - **`MouseDoubleClick` reaches a handler a button has already dealt with, and does not say what was
   clicked.** WPF raises it from a class handler registered for handled events too, and it is a *direct*
   event, so its source is the element the handler sits on. Two quick clicks on the overlay's skip button
   went fullscreen. What was aimed at is recorded from the tunnelling `PreviewMouseLeftButtonDown` and
-  checked there — `PlayerOverlayView.OnPictureDoubleClicked`.
+  checked there — `PicturePointer.OnDoubleClicked`.
 - **`Background="Transparent"` over the video is not hit at all.** That window is *layered*, and Windows
   hit-tests a layered window by its alpha: `#00FFFFFF` passes the pointer through to the video underneath, so
   the controls saw clicks on their own opaque bar and nothing whatever over the picture — the bar could not be

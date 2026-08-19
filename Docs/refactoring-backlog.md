@@ -1,9 +1,9 @@
 # Refactoring backlog
 
-**Three items open, from the review of 19 August 2026**, which carries four of the previous review's five
-forward and adds six. Seven of its ten were done in the same sitting. The fourteen ranks before those are done
-and are kept below as the record of how — including one that was dropped rather than built, with the
-measurement that decided it.
+**One item open, from the review of 19 August 2026**, which carries four of the previous review's five
+forward and adds six. Nine of its ten were done in the same sitting; the tenth is recorded below as deliberately
+deferred, with its reason. The fourteen ranks before those are done and are kept below as the record of how —
+including one that was dropped rather than built, with the measurement that decided it.
 
 Numbers quoted in commit messages belong to whichever scheme was current when they were written; the older
 mappings are under [Done](#done), and each review numbers from 1 again. **This is the third renumbering** —
@@ -23,8 +23,8 @@ change. Criticality first, effort second, so rank 1 is the one worth doing on an
 | 5 | LTR.Player.Wpf | Maintainability | Carried from rank 4 of 18 August, and **worse**: `MainViewModel` is 476 code lines (was 438), with ten commands and eight helpers in the "what plays" group alone. The recurring growth `CLAUDE.md` warns about. | Extract that group beside `PlaybackCoordinator`. Note what the previous estimate did not: the markup binds `DataContext.PlayNextCommand` on the window, and `[NotifyCanExecuteChangedFor]` cannot cross an object, so the notification table moves with it. That is the High. | Moderate | High | **Done** |
 | 6 | LTR.Player.Wpf.Tests | Maintainability | `WaitForIdleAsync` is copied verbatim into three test classes and `Row` into two, all over the same `MainViewModelHarness` every one of them already holds. Rank 2 of 18 August moved the *source object* to `TestSupport` and left these behind. | Put `WaitForIdleAsync` and `Row` on the harness. Leave the per-class `Channel`/`Movie`/`SeriesEntry` factories where they are — they carry a value, which is the distinction that review already drew. | Minor | Low | **Done** |
 | 7 | LTR.Persistence | Maintainability | `LtrDbContext.Vod.cs` is 464 code lines holding three subjects: films, series, and watch progress. `IWatchProgressStore` is already its own interface, so the partial does not mirror the seam the abstractions draw — and the progress rules are the ones with the most reasoning per line. | A `LtrDbContext.WatchProgress.cs` partial. Pure move; no behaviour. | Minor | Low | **Done** |
-| 8 | LTR.Player.Wpf | Maintainability | Carried from rank 7 of 18 August. `PlayerOverlayView.xaml.cs` is 242 lines doing four things: attaching to the picture's window, recording what was pressed, timing the cursor, reporting a scrub. The first two are one subject. | A `PicturePointer` holding attachment and press bookkeeping; the code-behind forwards. | Minor | Medium | Open |
-| 9 | LTR.Player.Wpf.Tests, LTR.Persistence.Tests | Maintainability | Carried from rank 8 of 18 August. `VodSectionTests` (536) and `LtrDbContextVodTests` (819) each mix film and series cases, so the mirroring of SUT files (§3.5.2) does not hold there. The second is now the largest file in the repository. | Split each into a film file and a series file. Rank 7 gives the persistence one its third seam. | Minor | Medium | Open |
+| 8 | LTR.Player.Wpf | Maintainability | Carried from rank 7 of 18 August. `PlayerOverlayView.xaml.cs` is 242 lines doing four things: attaching to the picture's window, recording what was pressed, timing the cursor, reporting a scrub. The first two are one subject. | A `PicturePointer` holding attachment and press bookkeeping; the code-behind forwards. | Minor | Medium | **Done** |
+| 9 | LTR.Player.Wpf.Tests, LTR.Persistence.Tests | Maintainability | Carried from rank 8 of 18 August. `VodSectionTests` (536) and `LtrDbContextVodTests` (819) each mix film and series cases, so the mirroring of SUT files (§3.5.2) does not hold there. The second is now the largest file in the repository. | Split each into a film file and a series file. Rank 7 gives the persistence one its third seam. | Minor | Medium | **Done** |
 | 10 | LTR.Catalogue.Abstractions | Maintainability | `IVodCatalogue` is seven members over two unrelated entities, and both sections take the whole face where `CLAUDE.md`'s rule is to take the narrowest that fits. | Split into a film face and a series face. **Deferred deliberately** — this is the weakest item here, and §2.16 is the reason: the split costs an edit in the store, the container, two fakes and the CLI, and buys a narrower declaration nobody has been misled by. Do it if a third consumer appears. | Minor | Medium | Open |
 
 **No security finding, for the second review running.** The URL sanitisers, `PlaybackSession` and the
@@ -35,7 +35,7 @@ Two things this review changed on the spot rather than ranking: rank 6 of 18 Aug
 `MainViewModel`'s size is counted) is **done** — the note now states that comments and blanks are excluded, and
 carries the new figure.
 
-### What the seven finished ones changed
+### What the nine finished ones changed
 
 - **Rank 1 — the CLI has a test project, and both wordings were mutation-checked together.**
   `LTR.Cli.Tests`, over `InternalsVisibleTo` as the other seven test projects do. Eight tests: the
@@ -181,6 +181,38 @@ carries the new figure.
   `<see cref="IWatchProgressStore"/>`, and `LTR.Persistence` references only `LTR.Core` — the interface lives
   in the application layer above it. A dangling cref, silent because `GenerateDocumentationFile` is false.
   Both mentions now name it in `<c>` and say why they cannot reference it.
+
+- **Rank 8 — `PicturePointer`, and the pair really is one subject.** The rank said the first two of the code
+  behind's four jobs were one, and reading them confirmed why: following the pointer has to be done on the
+  *window* the picture is drawn in, and telling a double-click on the picture from one on a button can only be
+  done by remembering the press — which is one of the events that subscription already takes. Split apart they
+  read as unrelated glue. `PlayerOverlayView.xaml.cs` is 89 code lines from 148; what is left is the cursor's
+  timing, the two handlers the markup wires, and the seek bar's drag.
+
+  **Mutation-checked, because this is the file every shipped WPF defect came from.** Making the double-click
+  ignore what was pressed fails one test; making the detach on unload do nothing fails one. The view's markup
+  and its test were left untouched, so the four behaviours the test states are the same four.
+
+- **Rank 9 — four files and three, and the seams are the SUT's rather than "film and series".** The rank said
+  split each into a film file and a series file; what each actually held was more than two subjects.
+
+  `VodSectionTests` (844 lines) became **`CatalogueSectionTests`** (the shared base: availability, the picker,
+  answering a search), **`MovieSectionTests`**, **`SeriesSectionTests`** and **`ContinueWatchingTests`** — four
+  real SUTs rather than two halves. The continue-watching list is not a film subject or a series one: mixing the
+  two *is* what it does, so a file of its own is the honest home rather than dividing its cases by kind.
+
+  `LtrDbContextVodTests` (1,063 lines) became itself plus **`LtrDbContextWatchProgressTests`**, mirroring the
+  partial rank 7 created. It was **not** split further into films and series, and that is deliberate: the
+  reconciliation covers both in one call, so a `ReconcileVodCatalogueAsync` test asserts what happened to a film
+  *and* to a series, and halving it would make two tests out of one whose point is that one call did both.
+
+  **Two shared fixture files came out of it**, `VodSectionFixtures` and `VodFixtures`, reached through
+  `using static` so call sites read as they did in the file they came from. That is the opposite of rank 6's
+  ruling, for a stated reason: these helpers seed the *same* subscription for every new file, so a copy each
+  would be four places to add a field to. Rank 6's factories differed per class; these do not.
+
+  Nothing else moved — 230 and 73 tests before, 230 and 73 after — and the compiler found the eight `using`
+  directives the split made unnecessary.
 
 ## Review of 18 August 2026
 

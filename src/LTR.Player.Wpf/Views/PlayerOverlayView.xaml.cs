@@ -11,28 +11,36 @@ namespace LTR.Player.Wpf.Views;
 /// The on-screen controls, drawn over the video.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Holds the glue that XAML cannot express, and no decisions. Most of it exists because of the same thing:
 /// WPF reports a drag as a pair of events and gives a view model no way to observe them, and the pointer
 /// being alive — or resting on the controls — is not something a binding can state.
+/// </para>
+/// <para>
+/// Following the pointer over the picture is <see cref="PicturePointer"/>'s, because it is a subject of its own
+/// and the largest one here: which window to watch, and what a double-click was aimed at. What is left is the
+/// cursor's timing, the two handlers the markup wires for the pointer resting on the bar, and the seek bar's
+/// drag — three small things that only make sense against this control.
+/// </para>
 /// </remarks>
 public partial class PlayerOverlayView : UserControl
 {
-    /// <summary>
-    /// The window this content is hosted in, which is not the shell's. See <see cref="AttachTo"/>.
-    /// </summary>
-    private Window? _pictureWindow;
+    private readonly PicturePointer _pointer;
 
     /// <summary>
     /// The view model being watched for the one thing the cursor cannot be told by a binding alone.
     /// </summary>
     private PlayerOverlayViewModel? _watched;
 
-    /// <summary>What the last press was aimed at, which is what decides whose double-click it is.</summary>
-    private object? _pressedOn;
-
     public PlayerOverlayView()
     {
         InitializeComponent();
+
+        // After InitializeComponent, which is what creates the surface it compares a press against.
+        _pointer = new PicturePointer(
+            PictureSurface,
+            () => Overlay?.Reveal(),
+            () => Overlay?.ToggleFullscreenCommand.Execute(parameter: null));
 
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -49,62 +57,15 @@ public partial class PlayerOverlayView : UserControl
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        AttachTo(Window.GetWindow(this));
+        // The hosting window is VideoView's to create, so it is only knowable once this is in the tree.
+        _pointer.AttachTo(Window.GetWindow(this));
         WatchForCursorChanges(Overlay);
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        AttachTo(null);
+        _pointer.AttachTo(null);
         WatchForCursorChanges(null);
-    }
-
-    /// <summary>
-    /// Follows the pointer over the whole picture, by way of the window the picture is drawn in.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <c>VideoView</c> hosts this content in a window of its own over the native video surface, so a pointer
-    /// move over the picture never reaches the shell window's handlers — which is why waking the controls
-    /// cannot be left to the shell, and why the mouse and the keyboard are handled in two different places:
-    /// focus stays with the shell, the pointer does not.
-    /// </para>
-    /// <para>
-    /// Taken from that window rather than from this control, and as the tunnelling event, so that nothing
-    /// between the two can decide whether the controls come back. A slider being dragged marks the moves it
-    /// consumes as handled, and hit-testing over a native video surface is not something this file should be
-    /// relying on to be exactly right; the window sees every move regardless of both.
-    /// </para>
-    /// <para>
-    /// Re-attached rather than assumed once, because the hosting window is created and replaced by
-    /// <c>VideoView</c> rather than by anything here, and this content is moved between windows as that
-    /// happens.
-    /// </para>
-    /// </remarks>
-    private void AttachTo(Window? window)
-    {
-        if (ReferenceEquals(window, _pictureWindow))
-        {
-            return;
-        }
-
-        if (_pictureWindow is not null)
-        {
-            _pictureWindow.PreviewMouseMove -= OnPointerActivity;
-            _pictureWindow.PreviewMouseLeftButtonDown -= OnPointerPressed;
-            _pictureWindow.MouseDoubleClick -= OnPictureDoubleClicked;
-        }
-
-        _pictureWindow = window;
-
-        if (_pictureWindow is null)
-        {
-            return;
-        }
-
-        _pictureWindow.PreviewMouseMove += OnPointerActivity;
-        _pictureWindow.PreviewMouseLeftButtonDown += OnPointerPressed;
-        _pictureWindow.MouseDoubleClick += OnPictureDoubleClicked;
     }
 
     /// <summary>
@@ -156,46 +117,6 @@ public partial class PlayerOverlayView : UserControl
         }
 
         _ = Dispatcher.BeginInvoke(DispatcherPriority.Render, () => Mouse.UpdateCursor());
-    }
-
-    private void OnPointerActivity(object sender, MouseEventArgs e)
-    {
-        Overlay?.Reveal();
-    }
-
-    /// <summary>
-    /// Remembers what the pointer was actually aimed at, which the double-click itself cannot say.
-    /// </summary>
-    /// <remarks>
-    /// Taken as the tunnelling event, so a control that deals with its own clicks — every button and both
-    /// sliders — is still recorded as what was pressed.
-    /// </remarks>
-    private void OnPointerPressed(object sender, MouseButtonEventArgs e)
-    {
-        _pressedOn = e.OriginalSource;
-    }
-
-    /// <summary>
-    /// A double-click on the picture goes fullscreen — and one aimed at anything else does not.
-    /// </summary>
-    /// <remarks>
-    /// What was aimed at has to be checked against the press, because neither marking a click handled nor
-    /// this event's own source will say. WPF raises <c>MouseDoubleClick</c> from a class handler registered
-    /// for handled events too, so a button that has already dealt with the click still lets it reach here;
-    /// and the event is *direct*, so it arrives naming the window rather than what was under the pointer.
-    /// Two quick clicks on skip-forward, or into the volume bar, therefore went fullscreen and back.
-    ///
-    /// Only the picture's own surface counts, which also keeps a double-click in the programme guide —
-    /// drawn over this one — from doing it.
-    /// </remarks>
-    private void OnPictureDoubleClicked(object sender, MouseButtonEventArgs e)
-    {
-        if (!ReferenceEquals(_pressedOn, PictureSurface))
-        {
-            return;
-        }
-
-        Overlay?.ToggleFullscreenCommand.Execute(parameter: null);
     }
 
     /// <summary>
