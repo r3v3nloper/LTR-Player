@@ -261,7 +261,7 @@ Not refactoring, and unchanged by this review:
 
 Kept because it applies to any change in this repository, not only to a ranked one:
 
-- `dotnet test LTR-Player.slnx` — 779 tests, all passing. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 781 tests, all passing on `main`. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.

@@ -29,9 +29,15 @@ Since 0.7.0, and not from the plan: the on-screen controls can be woken by the p
 could not, in fullscreen not at all — and a category can be pinned to the top of its picker. `Docs/player.md`
 and `Docs/categories.md` carry both.
 
-Since then, from a bug report: **previous and next follow what is playing.** They were wired straight to channel
-zapping, so ⏭ during an episode tuned a live channel. They now move through the series' episodes, across the
-season boundary, and are unavailable for a film. `Docs/player.md` has the design and `Docs/vod.md` the ordering.
+Since then, from a bug report and **merged into `main` on 19 August 2026**: **previous and next follow what is
+playing.** They were wired straight to channel zapping, so ⏭ during an episode tuned a live channel. They now
+move through the series' episodes, across the season boundary, and are unavailable for a film. `Docs/player.md`
+has the design and `Docs/vod.md` the ordering.
+
+That merge also carries the review it prompted — nine of its ten items — which is why the WPF project now has
+three classes where `MainViewModel` used to have everything, and why the CLI has a test project. It has **not**
+been released: 0.8.0 is still the version, and the next bump wants the by-hand check below done first, since the
+reported bug is exactly what only a person at the screen can confirm is gone.
 
 Both of M3's stated limits are gone: the timeline's channel names used to scroll away with the programme
 blocks, and it drew only the first 200 channels. It now pins the names and **pages** along the channel axis,
@@ -420,10 +426,9 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **781 tests pass on this branch; 739 on `main`, verified by checking main out and running it.** A refactor
-  should not move that number. Counted by summing the per-project figures — the totals quoted in this
-  branch's first three commit messages (757, 765, 774) are each four low, an arithmetic slip carried forward;
-  the figures here are the measured ones.
+- **781 tests pass on `main`,** up from 739 before the 19 August merge. A refactor should not move that number.
+  Counted by summing the per-project figures, and worth doing that way: three commit messages in that merge
+  quote totals four low (757, 765, 774), an arithmetic slip carried forward and corrected in the fourth.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.
