@@ -40,21 +40,21 @@ See ranks 7 and 12 under Done in `Docs/refactoring-backlog.md`.
 
 ### Where to pick up
 
-**`Docs/refactoring-backlog.md` holds six open items** from the review of 19 August 2026, made after previous
-and next were fixed. Four are carried from the review of 18 August; six were new, and four of the ten were
-done in the same sitting — the CLI's two, the watch-progress partial and the duplicated test helpers. The
-fourteen ranks before those are done and kept there as the record of how — **one was dropped rather than
-built:** rank 11's store-side paging of the channel list, on a measurement that is written down there so it is
-not re-derived. **Ranks quoted in commit
-messages belong to whichever review was current when they were written**; that file carries every mapping, and
-there have been three renumberings, so say which review you mean.
+**`Docs/refactoring-backlog.md` holds five open items** from the review of 19 August 2026, made after previous
+and next were fixed. Four are carried from the review of 18 August; six were new, and five of the ten were done
+in the same sitting — the CLI's two, the watch-progress partial, the duplicated test helpers, and the pair of
+records of what is playing. The fourteen ranks before those are done and kept there as the record of how —
+**one was dropped rather than built:** rank 11's store-side paging of the channel list, on a measurement that is
+written down there so it is not re-derived. **Ranks quoted in commit messages belong to whichever review was
+current when they were written**; that file carries every mapping, and there have been three renumberings, so
+say which review you mean.
 
 Of what is open, rank 3 (a `CategoryPickerViewModel` both sections hold) supersedes the interface that
-18 August's rank 1 put in, and rank 5 is `MainViewModel` growing again — the one to look at when a milestone
-starts, and it grew again on 19 August. Rank 4 is the pair of records of what is playing, which that same
-change introduced.
+18 August's rank 1 put in, and **rank 5 is the one to look at when a milestone starts:** `MainViewModel`
+growing again, at 469 code lines. It is also the only High left, and the estimate says why — the markup binds
+its commands on the window, so the notification table moves with them.
 
-Read it before proposing a refactor here. Several entries record a *considered and rejected* design, and three
+Read it before proposing a refactor here. Several entries record a *considered and rejected* design, and four
 record a rank whose own premise turned out to be half wrong once the code was read.
 
 Two things are outstanding that are *not* refactors, because only the person with the subscription can do
@@ -85,10 +85,16 @@ them:
 - **A film reaching its own end is flagged, not acted on.** `PlaybackCoordinator` sets a flag from the engine
   thread and `SampleAsync` closes the stream off on the next tick, because what follows is a database write
   and three lists rereading themselves.
-- **Previous and next mean "the next thing of the kind that is playing".** `MainViewModel.NowPlayingItem`
-  records what the last request was for, assigned as the request is made and never read back from the engine —
-  an engine asked what is playing answers with the *previous* item until the next stream arrives, so three quick
-  presses would all land on the same episode. The neighbour is looked up in the store
+- **Previous and next mean "the next thing of the kind that is playing".** `PlaybackCoordinator.NowPlayingItem`
+  records what the last request was for, assigned where the stream is opened and never read back from the engine
+  — an engine asked what is playing answers with the *previous* item until the next stream arrives, so three
+  quick presses would all land on the same episode. It lives beside `WatchProgressRecorder.Track`, which records
+  the same event in the shape the catalogue layer needs; the two types stay separate because merging them would
+  put a WPF type in `LTR.Catalogue`, but they are assigned in one place so a new play path cannot update one and
+  forget the other. It is **not** cleared when an open fails: nothing is playing, but the viewer is still in the
+  middle of that episode. The shell's two commands guard on it across an object boundary, so the forward is in
+  `RegisterNotificationForwards` — and it has to notify *both*, since a film closes the buttons and a stop
+  reopens them. The neighbour is looked up in the store
   (`GetSeriesForEpisodeAsync` → `EpisodeSequence.Neighbour`) and not in the episode rows on screen, because
   those hold one season of one series and only while it is open. That is not a nicety: resuming from Continue
   has an episode identifier and nothing else, and is where the bug was reported from. The lookup is scoped to
@@ -102,8 +108,9 @@ them:
   because they decide *what* plays, and the rest go to the overlay because they act on an open stream.
 - **`MainViewModel` regrows, every milestone, by the same mechanism** — it is the only place that can reach
   everything. 395 lines at the M4 merge, 483 after M5, 439 after extracting the key dispatch, 466 by the end
-  of M6, 438 after the notification forwarding moved into a table, 475 after previous and next were made to
-  follow what plays. (Code lines: comments and blanks excluded, which is why `wc -l` reads nearly twice that.)
+  of M6, 438 after the notification forwarding moved into a table, 476 after previous and next were made to
+  follow what plays, 469 once what they act on moved to the coordinator. (Code lines: comments and blanks
+  excluded, which is why `wc -l` reads nearly twice that.)
   Check it at the start of a milestone, not the end — and note how little that last extraction bought: a
   declarative registration costs nearly what the handler it replaces did, so size is the wrong reason to reach
   for one.
@@ -404,7 +411,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **778 tests pass on this branch; 739 on `main`, verified by checking main out and running it.** A refactor
+- **779 tests pass on this branch; 739 on `main`, verified by checking main out and running it.** A refactor
   should not move that number. Counted by summing the per-project figures — the totals quoted in this
   branch's first three commit messages (757, 765, 774) are each four low, an arithmetic slip carried forward;
   the figures here are the measured ones.

@@ -216,6 +216,52 @@ public sealed class CrossObjectNotificationTests
         announcements.ShouldBeGreaterThan(0);
     }
 
+    /// <summary>
+    /// The forward added when what previous and next act on moved to the coordinator.
+    /// </summary>
+    /// <remarks>
+    /// Their guard reads <see cref="PlaybackCoordinator.NowPlayingItem"/>, so the same crossing applies as for
+    /// every other entry here — and it applies in both directions. Starting a film has to close the buttons and
+    /// stopping it has to reopen them, which is the case a forward registered for only one of the two would
+    /// pass.
+    /// </remarks>
+    [Fact]
+    public async Task PreviousAndNext_AnnounceTheirGuard_WhenWhatIsPlayingChanges()
+    {
+        // Arrange
+        var context = new MainViewModelHarness();
+        context.Store.Sources.Add(CreateSource());
+        context.Store.Movies.Add(Movie(1, "Arrival"));
+
+        var viewModel = context.Build();
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        viewModel.SelectedSection = CatalogueSection.Movies;
+        viewModel.Movies.SelectedMovie = viewModel.Movies.Movies[0];
+        await viewModel.WaitForIdleAsync();
+
+        var next = 0;
+        var previous = 0;
+        viewModel.PlayNextCommand.CanExecuteChanged += (_, _) => next++;
+        viewModel.PlayPreviousCommand.CanExecuteChanged += (_, _) => previous++;
+
+        // Act
+        await viewModel.PlayMovieCommand.ExecuteAsync(null);
+
+        // Assert
+        next.ShouldBeGreaterThan(0);
+        previous.ShouldBeGreaterThan(0);
+        viewModel.PlayNextCommand.CanExecute(null).ShouldBeFalse("a film has no neighbour");
+
+        // Act: and the other direction, which a one-way forward would not announce.
+        next = 0;
+        await viewModel.StopCommand.ExecuteAsync(null);
+
+        // Assert
+        next.ShouldBeGreaterThan(0);
+        viewModel.PlayNextCommand.CanExecute(null).ShouldBeTrue("next means the next channel again");
+    }
+
     private static XtreamSource CreateSource(int id = 1)
     {
         return new XtreamSourceBuilder()

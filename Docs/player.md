@@ -218,12 +218,20 @@ sequence anybody watches through, so `CanPlayAdjacent` closes the commands inste
 
 Three pieces, in three places, and the division is the point:
 
-- **`MainViewModel.NowPlayingItem`** records what the last playback request was for — the kind, and the episode
-  itself when it is one. Recorded by the shell as it starts something rather than read back from the engine, for
+- **`PlaybackCoordinator.NowPlayingItem`** records what the last playback request was for — the kind, and the
+  episode itself when it is one. Recorded where the stream is opened rather than read back from the engine, for
   two reasons: a stream opens asynchronously, so an engine asked what is playing answers with the *previous*
   item until the next one arrives, and three quick presses of next would then all land on the same episode; and
-  a film that has run to its end is still what the buttons refer to. It is cleared by a stop, which is what
-  makes next mean the next channel again.
+  an open that failed still leaves the viewer in the middle of that episode. It is cleared by `StopAsync`, which
+  is what makes next mean the next channel again — and every full stop passes through there, including a film
+  reaching its own end and a source being deleted.
+
+  It sits here rather than on the shell, where it began, because this is the only class that opens a stream and
+  it was already recording the same event for `WatchProgressRecorder`. The two records keep different shapes on
+  purpose — the recorder needs an identifier and lives in the catalogue layer, this needs the entity and is a
+  fact about the window — but they are assigned in one place, so a new play path cannot update one and forget
+  the other. The shell's two commands guard on it across an object boundary, so the forward is registered in
+  `CrossObjectNotifications`, and it notifies **both**: a film closes the buttons and a stop reopens them.
 - **`SeriesCatalogueViewModel.FindAdjacentEpisodeAsync`** asks the store, not the episode rows on screen. The
   rows hold one season of one series and only while it is open, so a walk over them could answer neither across
   a season boundary nor at all for an episode resumed from the continue-watching list — and the second is the

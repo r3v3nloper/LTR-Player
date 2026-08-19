@@ -1,7 +1,7 @@
 # Refactoring backlog
 
-**Six items open, from the review of 19 August 2026**, which carries four of the previous review's five
-forward and adds six. Four of its ten were done in the same sitting. The fourteen ranks before those are done
+**Five items open, from the review of 19 August 2026**, which carries four of the previous review's five
+forward and adds six. Five of its ten were done in the same sitting. The fourteen ranks before those are done
 and are kept below as the record of how — including one that was dropped rather than built, with the
 measurement that decided it.
 
@@ -19,7 +19,7 @@ change. Criticality first, effort second, so rank 1 is the one worth doing on an
 | 1 | LTR.Cli | Maintainability | `StreamFailureNotes.Describe` has no guard that every reason worth wording has wording of its own. Its window counterpart does, and `CLAUDE.md` records that test as part of what established the split — but the CLI has no test project, so the front end that exists *for diagnosing* is the one where a reason added later silently reads as the fallback. That is the defect the import stages already shipped once ("Working..."). | An `LTR.Cli.Tests` project, and the `EveryReason_HasWordingOfItsOwn` theory from `StreamFailureTextTests` pointed at `StreamFailureNotes`. Needs `InternalsVisibleTo`, or the class made public. | Moderate | Low | **Done** |
 | 2 | LTR.Cli | Security | `ResolvedAddressReport` decides whether a paid subscription's credentials reach the console, and `ConnectionReleaseCheck` decides whether teardown is reported clean — the one thing `CLAUDE.md` calls the actual proof. Both write straight to `Console`, so neither decision can be tested. The masking is currently right (read and confirmed: `--reveal` is the only path to a verbatim address anywhere in the tree), and nothing holds it there. | Have both return their lines, or take a writer; the command prints. Then test the gate and the three release verdicts. | Moderate | Low | **Done** |
 | 3 | LTR.Player.Wpf | Maintainability | Carried from rank 3 of 18 August, re-verified. Both view models hold the picker's collection, selection, guard and command in identical ~25 lines. `CategoryPicker.Fill` still requires the caller to set the selection *afterwards* — the unwritten protocol whose violation crashed the window on startup. | A `CategoryPickerViewModel` both sections hold, owning state and command together; the markup binds it directly. Supersedes `ICategoryPickerSection`. | Moderate | Medium | Open |
-| 4 | LTR.Player.Wpf | Maintainability | Two records of what is playing. `MainViewModel.NowPlayingItem` carries the kind and the episode for the transport; `WatchProgressRecorder` privately carries the kind and the item id for progress. They are *not* the same fact — the recorder deliberately ignores a live channel — but both are maintained by the same four play methods, and a fifth play path that updates only one would leave previous and next acting on the wrong thing, silently. | Move `NowPlayingItem` onto `PlaybackCoordinator`, which already owns the recorder and is the only thing that opens a stream. The guard notification then crosses an object boundary, so it goes in `CrossObjectNotifications` — the mechanism that exists for it. | Moderate | Medium | Open |
+| 4 | LTR.Player.Wpf | Maintainability | Two records of what is playing. `MainViewModel.NowPlayingItem` carries the kind and the episode for the transport; `WatchProgressRecorder` privately carries the kind and the item id for progress. They are *not* the same fact — the recorder deliberately ignores a live channel — but both are maintained by the same four play methods, and a fifth play path that updates only one would leave previous and next acting on the wrong thing, silently. | Move `NowPlayingItem` onto `PlaybackCoordinator`, which already owns the recorder and is the only thing that opens a stream. The guard notification then crosses an object boundary, so it goes in `CrossObjectNotifications` — the mechanism that exists for it. | Moderate | Medium | **Done** |
 | 5 | LTR.Player.Wpf | Maintainability | Carried from rank 4 of 18 August, and **worse**: `MainViewModel` is 476 code lines (was 438), with ten commands and eight helpers in the "what plays" group alone. The recurring growth `CLAUDE.md` warns about. | Extract that group beside `PlaybackCoordinator`. Note what the previous estimate did not: the markup binds `DataContext.PlayNextCommand` on the window, and `[NotifyCanExecuteChangedFor]` cannot cross an object, so the notification table moves with it. That is the High. | Moderate | High | Open |
 | 6 | LTR.Player.Wpf.Tests | Maintainability | `WaitForIdleAsync` is copied verbatim into three test classes and `Row` into two, all over the same `MainViewModelHarness` every one of them already holds. Rank 2 of 18 August moved the *source object* to `TestSupport` and left these behind. | Put `WaitForIdleAsync` and `Row` on the harness. Leave the per-class `Channel`/`Movie`/`SeriesEntry` factories where they are — they carry a value, which is the distinction that review already drew. | Minor | Low | **Done** |
 | 7 | LTR.Persistence | Maintainability | `LtrDbContext.Vod.cs` is 464 code lines holding three subjects: films, series, and watch progress. `IWatchProgressStore` is already its own interface, so the partial does not mirror the seam the abstractions draw — and the progress rules are the ones with the most reasoning per line. | A `LtrDbContext.WatchProgress.cs` partial. Pure move; no behaviour. | Minor | Low | **Done** |
@@ -35,7 +35,7 @@ Two things this review changed on the spot rather than ranking: rank 6 of 18 Aug
 `MainViewModel`'s size is counted) is **done** — the note now states that comments and blanks are excluded, and
 carries the new figure.
 
-### What the four finished ones changed
+### What the five finished ones changed
 
 - **Rank 1 — the CLI has a test project, and both wordings were mutation-checked together.**
   `LTR.Cli.Tests`, over `InternalsVisibleTo` as the other seven test projects do. Eight tests: the
@@ -77,6 +77,26 @@ carries the new figure.
   What is **not** done: the other eleven handlers still call `Console.WriteLine` for their listings. That was
   never this rank — the two here are the ones whose output is a decision rather than a report — but the seam is
   now registered, so a handler that wants it can take a `TextWriter`.
+
+- **Rank 4 — what previous and next act on belongs to the thing that opens streams.** `NowPlayingItem` moved
+  from `MainViewModel` to `PlaybackCoordinator`, which was already calling `WatchProgressRecorder.Track` for
+  the same event. Five assignments in the shell became three in the coordinator, at the three places a stream
+  is actually opened, and the clear happens in its `StopAsync` — through which every full stop already passes:
+  the stop button, a source being deleted, a film reaching its own end, and the window closing.
+
+  **The two records still differ in shape, and that is the honest limit of this.** The recorder needs an
+  identifier to write a row and lives in the catalogue layer; the transport needs the `Episode` entity and is a
+  fact about this window, so merging the types would push a WPF type into `LTR.Catalogue`. What has gone is
+  their being *maintained apart* — a sixth play path now cannot update one and forget the other.
+
+  The guard's notification became a cross-object forward, registered in the table `CrossObjectNotifications`
+  exists for. **Three mutations, each caught:** dropping the forward fails one test, registering it for next
+  but not previous fails one, and omitting the clear on stop fails two. A new case in
+  `CrossObjectNotificationTests` asserts *both directions* — starting a film must close the buttons and
+  stopping it must reopen them — because a forward wired one way passes every other assertion here.
+
+  `MainViewModel` is 469 code lines, from 476. Barely a return, and worth stating plainly: this was cohesion,
+  not size. Rank 5 is still the size one.
 
 - **Rank 6 — `ShellUnderTest`, and the rank's own premise was half wrong.** `WaitForIdleAsync` was indeed
   copied verbatim into three classes and is now one extension method. But **`Row` was defined once, not twice**
@@ -155,7 +175,7 @@ Not refactoring, and unchanged by this review:
 
 Kept because it applies to any change in this repository, not only to a ranked one:
 
-- `dotnet test LTR-Player.slnx` — 778 tests, all passing. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 779 tests, all passing. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
