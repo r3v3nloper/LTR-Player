@@ -74,7 +74,7 @@ public sealed class VodSectionTests
 
         // Act
         viewModel.SourceManagement.SelectedSource = context.Store.Sources[1];
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         // Assert
         viewModel.SelectedSection.ShouldBe(CatalogueSection.Live);
@@ -122,7 +122,7 @@ public sealed class VodSectionTests
 
         // Act
         viewModel.Movies.SearchText = "matrix";
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         // Assert
         viewModel.Movies.Movies.ShouldHaveSingleItem().Name.ShouldBe("The Matrix");
@@ -145,7 +145,7 @@ public sealed class VodSectionTests
 
         // Act
         viewModel.Movies.SelectedMovie = viewModel.Movies.Movies[0];
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         // Assert
         context.VodDetail.Requests.ShouldContain("movie:1");
@@ -180,7 +180,7 @@ public sealed class VodSectionTests
         viewModel.Movies.SelectedMovie = viewModel.Movies.Movies[1];
 
         gate.SetResult();
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         // Assert
         viewModel.Movies.DetailedMovie!.Id.ShouldBe(2);
@@ -358,7 +358,7 @@ public sealed class VodSectionTests
         await viewModel.SamplePlaybackAsync();
 
         // Act
-        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
         await viewModel.PlaySelectedCommand.ExecuteAsync(null);
 
         // Assert
@@ -376,7 +376,7 @@ public sealed class VodSectionTests
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
-        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         // Act
         await viewModel.PlaySelectedCommand.ExecuteAsync(null);
@@ -458,7 +458,7 @@ public sealed class VodSectionTests
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
         viewModel.SeriesCatalogue.SelectedSeries = viewModel.SeriesCatalogue.Series[0];
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         // Act: what the list box's selection and the view's double-click handler do between them.
         viewModel.SeriesCatalogue.SelectedEpisode = viewModel.SeriesCatalogue.Episodes[0];
@@ -489,7 +489,7 @@ public sealed class VodSectionTests
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
         viewModel.SeriesCatalogue.SelectedSeries = viewModel.SeriesCatalogue.Series[0];
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         viewModel.SeriesCatalogue.SelectedEpisode = viewModel.SeriesCatalogue.Episodes[0];
 
@@ -698,7 +698,7 @@ public sealed class VodSectionTests
 
         // Act
         viewModel.SeriesCatalogue.SelectedSeries = viewModel.SeriesCatalogue.Series[0];
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         // Assert
         viewModel.SeriesCatalogue.Seasons.Count.ShouldBe(2);
@@ -726,7 +726,7 @@ public sealed class VodSectionTests
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
         viewModel.SeriesCatalogue.SelectedSeries = viewModel.SeriesCatalogue.Series[0];
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         // Act
         viewModel.SeriesCatalogue.SelectedSeason = viewModel.SeriesCatalogue.Seasons[1];
@@ -746,26 +746,9 @@ public sealed class VodSectionTests
 
         viewModel.SelectedSection = CatalogueSection.Movies;
         viewModel.Movies.SelectedMovie = viewModel.Movies.Movies[0];
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         return viewModel;
-    }
-
-    /// <summary>
-    /// Waits for the shell to finish reacting to the last selection or search.
-    /// </summary>
-    /// <remarks>
-    /// Deterministic, unlike the yield loop this replaced: it waits on the actual work rather than on enough
-    /// scheduler turns having passed. The loop is there because one reload can raise the property change that
-    /// starts the next — a selection clearing, then its detail loading — and it terminates because it only
-    /// goes round again while something is genuinely still running.
-    /// </remarks>
-    private static async Task WaitForIdleAsync(MainViewModel viewModel)
-    {
-        while (!viewModel.SectionWorkCompletion.IsCompleted)
-        {
-            await viewModel.SectionWorkCompletion;
-        }
     }
 
     private static XtreamSource CreateSource(

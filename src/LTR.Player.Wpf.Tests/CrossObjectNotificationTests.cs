@@ -140,7 +140,7 @@ public sealed class CrossObjectNotificationTests
 
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
-        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         var announcements = 0;
         viewModel.PropertyChanged += (_, e) =>
@@ -199,7 +199,7 @@ public sealed class CrossObjectNotificationTests
 
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
-        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         var announcements = 0;
         viewModel.PlaySelectedCommand.CanExecuteChanged += (_, _) => announcements++;

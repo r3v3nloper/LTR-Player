@@ -148,7 +148,7 @@ public sealed class PlayerControlTests
 
         viewModel.Channels.ChannelFilterText = "te";
 
-        viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().Select(row => row.Name)
+        viewModel.VisibleChannels().Select(row => row.Name)
             .ShouldBe(["Erste", "Zweite", "Dritte"], "every fixture name matches, so narrow it further");
 
         viewModel.Channels.ChannelFilterText = "Zwei";
@@ -387,25 +387,17 @@ public sealed class PlayerControlTests
 
         viewModel.SelectedSection = CatalogueSection.Movies;
         viewModel.Movies.SelectedMovie = viewModel.Movies.Movies[0];
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         await viewModel.PlayMovieCommand.ExecuteAsync(null);
 
         return viewModel;
     }
 
-    /// <summary>Waits for the shell to finish reacting to the last selection.</summary>
-    private static async Task WaitForIdleAsync(MainViewModel viewModel)
-    {
-        while (!viewModel.SectionWorkCompletion.IsCompleted)
-        {
-            await viewModel.SectionWorkCompletion;
-        }
-    }
 
     private static ChannelItemViewModel Row(MainViewModel viewModel, int index)
     {
-        return viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().ElementAt(index);
+        return viewModel.VisibleChannels()[index];
     }
 
     private static XtreamSource CreateSource()

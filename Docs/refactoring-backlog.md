@@ -1,7 +1,7 @@
 # Refactoring backlog
 
-**Seven items open, from the review of 19 August 2026**, which carries four of the previous review's five
-forward and adds six. Three of its ten were done in the same sitting. The fourteen ranks before those are done
+**Six items open, from the review of 19 August 2026**, which carries four of the previous review's five
+forward and adds six. Four of its ten were done in the same sitting. The fourteen ranks before those are done
 and are kept below as the record of how — including one that was dropped rather than built, with the
 measurement that decided it.
 
@@ -21,7 +21,7 @@ change. Criticality first, effort second, so rank 1 is the one worth doing on an
 | 3 | LTR.Player.Wpf | Maintainability | Carried from rank 3 of 18 August, re-verified. Both view models hold the picker's collection, selection, guard and command in identical ~25 lines. `CategoryPicker.Fill` still requires the caller to set the selection *afterwards* — the unwritten protocol whose violation crashed the window on startup. | A `CategoryPickerViewModel` both sections hold, owning state and command together; the markup binds it directly. Supersedes `ICategoryPickerSection`. | Moderate | Medium | Open |
 | 4 | LTR.Player.Wpf | Maintainability | Two records of what is playing. `MainViewModel.NowPlayingItem` carries the kind and the episode for the transport; `WatchProgressRecorder` privately carries the kind and the item id for progress. They are *not* the same fact — the recorder deliberately ignores a live channel — but both are maintained by the same four play methods, and a fifth play path that updates only one would leave previous and next acting on the wrong thing, silently. | Move `NowPlayingItem` onto `PlaybackCoordinator`, which already owns the recorder and is the only thing that opens a stream. The guard notification then crosses an object boundary, so it goes in `CrossObjectNotifications` — the mechanism that exists for it. | Moderate | Medium | Open |
 | 5 | LTR.Player.Wpf | Maintainability | Carried from rank 4 of 18 August, and **worse**: `MainViewModel` is 476 code lines (was 438), with ten commands and eight helpers in the "what plays" group alone. The recurring growth `CLAUDE.md` warns about. | Extract that group beside `PlaybackCoordinator`. Note what the previous estimate did not: the markup binds `DataContext.PlayNextCommand` on the window, and `[NotifyCanExecuteChangedFor]` cannot cross an object, so the notification table moves with it. That is the High. | Moderate | High | Open |
-| 6 | LTR.Player.Wpf.Tests | Maintainability | `WaitForIdleAsync` is copied verbatim into three test classes and `Row` into two, all over the same `MainViewModelHarness` every one of them already holds. Rank 2 of 18 August moved the *source object* to `TestSupport` and left these behind. | Put `WaitForIdleAsync` and `Row` on the harness. Leave the per-class `Channel`/`Movie`/`SeriesEntry` factories where they are — they carry a value, which is the distinction that review already drew. | Minor | Low | Open |
+| 6 | LTR.Player.Wpf.Tests | Maintainability | `WaitForIdleAsync` is copied verbatim into three test classes and `Row` into two, all over the same `MainViewModelHarness` every one of them already holds. Rank 2 of 18 August moved the *source object* to `TestSupport` and left these behind. | Put `WaitForIdleAsync` and `Row` on the harness. Leave the per-class `Channel`/`Movie`/`SeriesEntry` factories where they are — they carry a value, which is the distinction that review already drew. | Minor | Low | **Done** |
 | 7 | LTR.Persistence | Maintainability | `LtrDbContext.Vod.cs` is 464 code lines holding three subjects: films, series, and watch progress. `IWatchProgressStore` is already its own interface, so the partial does not mirror the seam the abstractions draw — and the progress rules are the ones with the most reasoning per line. | A `LtrDbContext.WatchProgress.cs` partial. Pure move; no behaviour. | Minor | Low | **Done** |
 | 8 | LTR.Player.Wpf | Maintainability | Carried from rank 7 of 18 August. `PlayerOverlayView.xaml.cs` is 242 lines doing four things: attaching to the picture's window, recording what was pressed, timing the cursor, reporting a scrub. The first two are one subject. | A `PicturePointer` holding attachment and press bookkeeping; the code-behind forwards. | Minor | Medium | Open |
 | 9 | LTR.Player.Wpf.Tests, LTR.Persistence.Tests | Maintainability | Carried from rank 8 of 18 August. `VodSectionTests` (536) and `LtrDbContextVodTests` (819) each mix film and series cases, so the mirroring of SUT files (§3.5.2) does not hold there. The second is now the largest file in the repository. | Split each into a film file and a series file. Rank 7 gives the persistence one its third seam. | Minor | Medium | Open |
@@ -35,7 +35,7 @@ Two things this review changed on the spot rather than ranking: rank 6 of 18 Aug
 `MainViewModel`'s size is counted) is **done** — the note now states that comments and blanks are excluded, and
 carries the new figure.
 
-### What the three finished ones changed
+### What the four finished ones changed
 
 - **Rank 1 — the CLI has a test project, and both wordings were mutation-checked together.**
   `LTR.Cli.Tests`, over `InternalsVisibleTo` as the other seven test projects do. Eight tests: the
@@ -77,6 +77,25 @@ carries the new figure.
   What is **not** done: the other eleven handlers still call `Console.WriteLine` for their listings. That was
   never this rank — the two here are the ones whose output is a decision rather than a report — but the seam is
   now registered, so a handler that wants it can take a `TextWriter`.
+
+- **Rank 6 — `ShellUnderTest`, and the rank's own premise was half wrong.** `WaitForIdleAsync` was indeed
+  copied verbatim into three classes and is now one extension method. But **`Row` was defined once, not twice**
+  — that count came from a grep matching four patterns per file. The real duplication was the expression those
+  helpers wrapped: `viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>()`, **22 times across 7 files**,
+  which is `VisibleChannels()` now.
+
+  Extension methods rather than members of `MainViewModelHarness`, which is what the rank proposed. Both read
+  the *view model*, not the fakes — and `CategoryPinTests` builds two shells from one harness, to prove a pin
+  survives the window reopening, so a harness holding "the" view model would have to pick one of them.
+
+  Two things worth carrying forward. The best version of the comment was on the copy in `VodSectionTests`, not
+  on the two identical ones — it is the one that says why the loop terminates, and it is the one that was kept.
+  And **the blanket `sed` rewrote the new helper's own body into a self-call**, which the suite caught as a
+  stack overflow at 18,993 frames deep. A sweep over `*.cs` includes the file being written.
+
+  `Row(viewModel, index)` stayed as a local one-liner over `VisibleChannels()[index]`: eight call sites read
+  better for it, and it carries a value rather than being a pass-through — the distinction 18 August's rank 5
+  drew.
 
 - **Rank 7 — `LtrDbContext.WatchProgress.cs`, and the move is provably verbatim.** 464 code lines became 349
   plus 122. All 73 persistence tests pass with **no assertion touched**, which is the same proof rank 10 of
@@ -136,7 +155,7 @@ Not refactoring, and unchanged by this review:
 
 Kept because it applies to any change in this repository, not only to a ranked one:
 
-- `dotnet test LTR-Player.slnx` — 774 tests, all passing. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 778 tests, all passing. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.

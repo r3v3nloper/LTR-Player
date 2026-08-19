@@ -167,9 +167,7 @@ public sealed class PlayerNextPreviousTests
         var context = new MainViewModelHarness();
         var viewModel = await WithThreeChannelsAndAFilmAsync(context);
 
-        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView
-            .Cast<ChannelItemViewModel>()
-            .First();
+        viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         await viewModel.PlaySelectedCommand.ExecuteAsync(null);
 
@@ -220,7 +218,7 @@ public sealed class PlayerNextPreviousTests
 
         // Act
         viewModel.SourceManagement.SelectedSource = context.Store.Sources[1];
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
@@ -255,7 +253,7 @@ public sealed class PlayerNextPreviousTests
 
         viewModel.SelectedSection = CatalogueSection.Series;
         viewModel.SeriesCatalogue.SelectedSeries = viewModel.SeriesCatalogue.Series[0];
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         viewModel.SeriesCatalogue.SelectedSeason = viewModel.SeriesCatalogue.Seasons
             .Single(season => season.Number == seasonNumber);
@@ -312,18 +310,11 @@ public sealed class PlayerNextPreviousTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         viewModel.Movies.SelectedMovie = viewModel.Movies.Movies[0];
-        await WaitForIdleAsync(viewModel);
+        await viewModel.WaitForIdleAsync();
 
         return viewModel;
     }
 
-    private static async Task WaitForIdleAsync(MainViewModel viewModel)
-    {
-        while (!viewModel.SectionWorkCompletion.IsCompleted)
-        {
-            await viewModel.SectionWorkCompletion;
-        }
-    }
 
     private static Series SeriesWithTwoSeasons()
     {

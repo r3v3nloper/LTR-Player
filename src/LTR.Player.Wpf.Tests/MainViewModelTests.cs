@@ -110,7 +110,7 @@ public sealed class MainViewModelTests
         viewModel.Channels.ToggleFavoriteCommand.CanExecuteChanged += (_, _) => favouriteAnnouncements++;
 
         // Act
-        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         // Assert
         playAnnouncements.ShouldBeGreaterThan(0);
@@ -231,7 +231,7 @@ public sealed class MainViewModelTests
 
         // Assert
         viewModel.SourceManagement.IsAddingSource.ShouldBeFalse();
-        viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().Count().ShouldBe(1);
+        viewModel.VisibleChannels().Count.ShouldBe(1);
         viewModel.Channels.Categories.Count.ShouldBe(2, "the all-categories entry plus the stored one");
     }
 
@@ -248,7 +248,7 @@ public sealed class MainViewModelTests
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
-        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>()
+        viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()
             .Single(channel => channel.Name == "FR: TF1 HD");
 
         // Act
@@ -270,13 +270,13 @@ public sealed class MainViewModelTests
 
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
-        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         // Act
         viewModel.Channels.ChannelFilterText = "zdf";
 
         // Assert
-        viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().ShouldBeEmpty();
+        viewModel.VisibleChannels().ShouldBeEmpty();
     }
 
     [Fact]
@@ -299,7 +299,7 @@ public sealed class MainViewModelTests
         viewModel.Channels.ChannelFilterText = "tf1";
 
         // Assert
-        var visible = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().ToList();
+        var visible = viewModel.VisibleChannels();
         visible.ShouldHaveSingleItem().Name.ShouldBe("FR: TF1 HD");
     }
 
@@ -313,7 +313,7 @@ public sealed class MainViewModelTests
 
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
-        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         // Act
         await viewModel.Channels.ToggleFavoriteCommand.ExecuteAsync(null);
@@ -339,7 +339,7 @@ public sealed class MainViewModelTests
         viewModel.Channels.ShowFavoritesOnly = true;
 
         // Assert
-        viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>()
+        viewModel.VisibleChannels()
             .ShouldHaveSingleItem()
             .Name.ShouldBe("Favourite");
     }
@@ -362,14 +362,14 @@ public sealed class MainViewModelTests
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
         viewModel.Channels.ShowFavoritesOnly = true;
-        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>()
+        viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()
             .Single(row => row.Name == "Favourite");
 
         // Act
         await viewModel.Channels.ToggleFavoriteCommand.ExecuteAsync(null);
 
         // Assert
-        viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>()
+        viewModel.VisibleChannels()
             .ShouldHaveSingleItem()
             .Name.ShouldBe("Also favourite");
 
@@ -476,7 +476,7 @@ public sealed class MainViewModelTests
 
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
-        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         // Act
         await viewModel.PlaySelectedCommand.ExecuteAsync(null);
@@ -498,7 +498,7 @@ public sealed class MainViewModelTests
 
         var viewModel = context.Build();
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
-        viewModel.Channels.SelectedChannel = viewModel.Channels.ChannelView.Cast<ChannelItemViewModel>().First();
+        viewModel.Channels.SelectedChannel = viewModel.VisibleChannels()[0];
 
         // Act
         var act = async () => await viewModel.PlaySelectedCommand.ExecuteAsync(null);

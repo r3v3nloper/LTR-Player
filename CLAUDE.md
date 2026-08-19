@@ -40,11 +40,12 @@ See ranks 7 and 12 under Done in `Docs/refactoring-backlog.md`.
 
 ### Where to pick up
 
-**`Docs/refactoring-backlog.md` holds seven open items** from the review of 19 August 2026, made after previous
-and next were fixed. Four are carried from the review of 18 August; six were new, and three of the ten were
-done in the same sitting — the CLI's two, and the watch-progress partial. The fourteen ranks before those are
-done and kept there as the record of how — **one was dropped rather than built:** rank 11's store-side paging of
-the channel list, on a measurement that is written down there so it is not re-derived. **Ranks quoted in commit
+**`Docs/refactoring-backlog.md` holds six open items** from the review of 19 August 2026, made after previous
+and next were fixed. Four are carried from the review of 18 August; six were new, and four of the ten were
+done in the same sitting — the CLI's two, the watch-progress partial and the duplicated test helpers. The
+fourteen ranks before those are done and kept there as the record of how — **one was dropped rather than
+built:** rank 11's store-side paging of the channel list, on a measurement that is written down there so it is
+not re-derived. **Ranks quoted in commit
 messages belong to whichever review was current when they were written**; that file carries every mapping, and
 there have been three renumberings, so say which review you mean.
 
@@ -403,9 +404,19 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **774 tests pass on this branch; 739 on `main` before it.** A refactor should not move that number.
+- **778 tests pass on this branch; 739 on `main`, verified by checking main out and running it.** A refactor
+  should not move that number. Counted by summing the per-project figures — the totals quoted in this
+  branch's first three commit messages (757, 765, 774) are each four low, an arithmetic slip carried forward;
+  the figures here are the measured ones.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.
+- **The WPF tests reach a shell through `MainViewModelHarness` and `ShellUnderTest`.** The harness builds the
+  composed view model over fakes; the two extension methods are `WaitForIdleAsync` (await before asserting on
+  anything a selection triggers) and `VisibleChannels` (a snapshot of the filtered list). Do not re-copy either
+  into a test class — three copies of the first is what earned them a home.
+- **A blanket `sed` over `*.cs` includes the file you are writing.** Sweeping
+  `ChannelView.Cast<ChannelItemViewModel>()` into `VisibleChannels()` rewrote that helper's own body into a
+  self-call; the suite reported a stack overflow rather than a failure. Exclude the new file, or read the diff.
 
 `Docs/refactoring-backlog.md` holds the reviewed, ranked work that remains.
