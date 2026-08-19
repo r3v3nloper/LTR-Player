@@ -40,15 +40,17 @@ See ranks 7 and 12 under Done in `Docs/refactoring-backlog.md`.
 
 ### Where to pick up
 
-**`Docs/refactoring-backlog.md` holds five open items** from the review of 18 August 2026, made after pinned
-categories shipped. Three of that review's eight were done in the same sitting. The fourteen ranks before it
-are done and kept there as the record of how — **one was dropped rather than built:** rank 11's store-side
-paging of the channel list, on a measurement that is written down there so it is not re-derived. **Ranks
-quoted in commit messages belong to whichever scheme was current when they were written**; that file carries
-all three mappings.
+**`Docs/refactoring-backlog.md` holds ten open items** from the review of 19 August 2026, made after previous
+and next were fixed. Four are carried from the review of 18 August; six are new. The fourteen ranks before
+those are done and kept there as the record of how — **one was dropped rather than built:** rank 11's
+store-side paging of the channel list, on a measurement that is written down there so it is not re-derived.
+**Ranks quoted in commit messages belong to whichever review was current when they were written**; that file
+carries every mapping, and there have been three renumberings, so say which review you mean.
 
-Of what is open, rank 3 (a `CategoryPickerViewModel` both sections hold) supersedes the interface that rank 1
-put in, and rank 4 is `MainViewModel` growing again — the one to look at when a milestone starts.
+Of what is open: ranks 1 and 2 are the CLI having no test project, which leaves the diagnosing front end's
+failure wording unguarded and the credential-masking gate unheld — both cheap. Rank 3 (a
+`CategoryPickerViewModel` both sections hold) supersedes the interface that 18 August's rank 1 put in. Rank 5
+is `MainViewModel` growing again — the one to look at when a milestone starts, and it grew again on 19 August.
 
 Read it before proposing a refactor here. Several entries record a *considered and rejected* design, and three
 record a rank whose own premise turned out to be half wrong once the code was read.

@@ -1,11 +1,38 @@
 # Refactoring backlog
 
-**Five items open, from the review of 18 August 2026.** The fourteen ranks before them are done and are kept
-below as the record of how — including one that was dropped rather than built, with the measurement that
-decided it.
+**Ten items open, from the review of 19 August 2026**, which carries four of the previous review's five
+forward and adds six. The fourteen ranks before those are done and are kept below as the record of how —
+including one that was dropped rather than built, with the measurement that decided it.
 
-Numbers quoted in commit messages belong to whichever scheme was current when they were written; the two
-older mappings are under [Done](#done), and the review below numbers from 1 again.
+Numbers quoted in commit messages belong to whichever scheme was current when they were written; the older
+mappings are under [Done](#done), and each review numbers from 1 again. **This is the third renumbering** —
+say which review a rank belongs to when quoting one.
+
+## Review of 19 August 2026
+
+Made after previous-and-next were fixed to follow what is playing. Over the whole tree, not only over that
+change. Criticality first, effort second, so rank 1 is the one worth doing on any afternoon.
+
+| Rank | Project | Area | Issue | Proposed refactor | Criticality | Effort |
+|---|---|---|---|---|---|---|
+| 1 | LTR.Cli | Maintainability | `StreamFailureNotes.Describe` has no guard that every reason worth wording has wording of its own. Its window counterpart does, and `CLAUDE.md` records that test as part of what established the split — but the CLI has no test project, so the front end that exists *for diagnosing* is the one where a reason added later silently reads as the fallback. That is the defect the import stages already shipped once ("Working..."). | An `LTR.Cli.Tests` project, and the `EveryReason_HasWordingOfItsOwn` theory from `StreamFailureTextTests` pointed at `StreamFailureNotes`. Needs `InternalsVisibleTo`, or the class made public. | Moderate | Low |
+| 2 | LTR.Cli | Security | `ResolvedAddressReport` decides whether a paid subscription's credentials reach the console, and `ConnectionReleaseCheck` decides whether teardown is reported clean — the one thing `CLAUDE.md` calls the actual proof. Both write straight to `Console`, so neither decision can be tested. The masking is currently right (read and confirmed: `--reveal` is the only path to a verbatim address anywhere in the tree), and nothing holds it there. | Have both return their lines, or take a writer; the command prints. Then test the gate and the three release verdicts. | Moderate | Low |
+| 3 | LTR.Player.Wpf | Maintainability | Carried from rank 3 of 18 August, re-verified. Both view models hold the picker's collection, selection, guard and command in identical ~25 lines. `CategoryPicker.Fill` still requires the caller to set the selection *afterwards* — the unwritten protocol whose violation crashed the window on startup. | A `CategoryPickerViewModel` both sections hold, owning state and command together; the markup binds it directly. Supersedes `ICategoryPickerSection`. | Moderate | Medium |
+| 4 | LTR.Player.Wpf | Maintainability | Two records of what is playing. `MainViewModel.NowPlayingItem` carries the kind and the episode for the transport; `WatchProgressRecorder` privately carries the kind and the item id for progress. They are *not* the same fact — the recorder deliberately ignores a live channel — but both are maintained by the same four play methods, and a fifth play path that updates only one would leave previous and next acting on the wrong thing, silently. | Move `NowPlayingItem` onto `PlaybackCoordinator`, which already owns the recorder and is the only thing that opens a stream. The guard notification then crosses an object boundary, so it goes in `CrossObjectNotifications` — the mechanism that exists for it. | Moderate | Medium |
+| 5 | LTR.Player.Wpf | Maintainability | Carried from rank 4 of 18 August, and **worse**: `MainViewModel` is 476 code lines (was 438), with ten commands and eight helpers in the "what plays" group alone. The recurring growth `CLAUDE.md` warns about. | Extract that group beside `PlaybackCoordinator`. Note what the previous estimate did not: the markup binds `DataContext.PlayNextCommand` on the window, and `[NotifyCanExecuteChangedFor]` cannot cross an object, so the notification table moves with it. That is the High. | Moderate | High |
+| 6 | LTR.Player.Wpf.Tests | Maintainability | `WaitForIdleAsync` is copied verbatim into three test classes and `Row` into two, all over the same `MainViewModelHarness` every one of them already holds. Rank 2 of 18 August moved the *source object* to `TestSupport` and left these behind. | Put `WaitForIdleAsync` and `Row` on the harness. Leave the per-class `Channel`/`Movie`/`SeriesEntry` factories where they are — they carry a value, which is the distinction that review already drew. | Minor | Low |
+| 7 | LTR.Persistence | Maintainability | `LtrDbContext.Vod.cs` is 464 code lines holding three subjects: films, series, and watch progress. `IWatchProgressStore` is already its own interface, so the partial does not mirror the seam the abstractions draw — and the progress rules are the ones with the most reasoning per line. | A `LtrDbContext.WatchProgress.cs` partial. Pure move; no behaviour. | Minor | Low |
+| 8 | LTR.Player.Wpf | Maintainability | Carried from rank 7 of 18 August. `PlayerOverlayView.xaml.cs` is 242 lines doing four things: attaching to the picture's window, recording what was pressed, timing the cursor, reporting a scrub. The first two are one subject. | A `PicturePointer` holding attachment and press bookkeeping; the code-behind forwards. | Minor | Medium |
+| 9 | LTR.Player.Wpf.Tests, LTR.Persistence.Tests | Maintainability | Carried from rank 8 of 18 August. `VodSectionTests` (536) and `LtrDbContextVodTests` (819) each mix film and series cases, so the mirroring of SUT files (§3.5.2) does not hold there. The second is now the largest file in the repository. | Split each into a film file and a series file. Rank 7 gives the persistence one its third seam. | Minor | Medium |
+| 10 | LTR.Catalogue.Abstractions | Maintainability | `IVodCatalogue` is seven members over two unrelated entities, and both sections take the whole face where `CLAUDE.md`'s rule is to take the narrowest that fits. | Split into a film face and a series face. **Deferred deliberately** — this is the weakest item here, and §2.16 is the reason: the split costs an edit in the store, the container, two fakes and the CLI, and buys a narrower declaration nobody has been misled by. Do it if a third consumer appears. | Minor | Medium |
+
+**No security finding, for the second review running.** The URL sanitisers, `PlaybackSession` and the
+reconciliation rules were read and left alone; each carries its reasoning and its tests. Rank 2 above is not a
+defect — it is that the one security-adjacent rule in the CLI is correct without being held.
+
+Two things this review changed on the spot rather than ranking: rank 6 of 18 August (`CLAUDE.md` not saying how
+`MainViewModel`'s size is counted) is **done** — the note now states that comments and blanks are excluded, and
+carries the new figure.
 
 ## Review of 18 August 2026
 
@@ -16,12 +43,12 @@ criticality first and effort second, so rank 1 is the one worth doing on any aft
 |---|---|---|---|---|---|---|---|
 | 1 | LTR.Player.Wpf | Maintainability | `CategoryPickerView` binds `Categories`, `SelectedCategory` and `ToggleCategoryFavoriteCommand` against whatever data context it is given. That the two view models have that shape was known only to the markup, and a failed binding is reported to a trace listener rather than to the log or the compiler — so a rename would break one section silently. | State the shape as an interface both implement. | Moderate | Low | **Done** |
 | 2 | Test projects / TestSupport | Maintainability | Eleven test classes wrote an `XtreamSource` out by hand. A field added to a source meant eleven edits, and the forgotten one fails as a test that was never asking about the field. A builder existed, but only inside the Xtream test project. | Move the builder to `TestSupport` and use it everywhere. | Moderate | Low | **Done** |
-| 3 | LTR.Player.Wpf | Maintainability | Both view models hold the picker's collection, selection, guard and command in identical ~25 lines. `CategoryPicker.Fill` also requires the caller to set the selection *afterwards* — the unwritten protocol whose violation crashed the window on startup. | A `CategoryPickerViewModel` both sections hold, owning state and command together; the markup binds it directly. Supersedes rank 1. | Moderate | Medium | Open |
-| 4 | LTR.Player.Wpf | Maintainability | `MainViewModel` is 789 lines and 30 private methods — the recurring growth `CLAUDE.md` warns about. It holds four things: what plays, the guide import, the section switch, and the notification table. | Extract the "what plays" group (~150 lines, six commands) beside `PlaybackCoordinator`. | Moderate | High | Open |
+| 3 | LTR.Player.Wpf | Maintainability | Both view models hold the picker's collection, selection, guard and command in identical ~25 lines. `CategoryPicker.Fill` also requires the caller to set the selection *afterwards* — the unwritten protocol whose violation crashed the window on startup. | A `CategoryPickerViewModel` both sections hold, owning state and command together; the markup binds it directly. Supersedes rank 1. | Moderate | Medium | Carried to 19 Aug rank 3 |
+| 4 | LTR.Player.Wpf | Maintainability | `MainViewModel` is 789 lines and 30 private methods — the recurring growth `CLAUDE.md` warns about. It holds four things: what plays, the guide import, the section switch, and the notification table. | Extract the "what plays" group (~150 lines, six commands) beside `PlaybackCoordinator`. | Moderate | High | Carried to 19 Aug rank 5 |
 | 5 | LTR.Player.Wpf.Tests | Maintainability | `GuideOverlayViewTests` kept two methods that only forwarded to `VisualTreeHarness`, left behind when the harness was extracted. | Point the call sites at the harness; delete the wrappers. | Minor | Low | **Done** |
-| 6 | Docs | Maintainability | `CLAUDE.md` tracks `MainViewModel`'s size across milestones but does not say how the figure is counted. `wc -l` gives 789 where the note says 438, and both are defensible — which makes the rule "check it at the start of a milestone" unusable. | State the measure, or restate the series in `wc -l`. | Minor | Low | Open |
-| 7 | LTR.Player.Wpf | Maintainability | `PlayerOverlayView.xaml.cs` is 242 lines doing four things: attaching to the picture's window, recording what was pressed, timing the cursor, reporting a scrub. The first two are one subject. | A `PicturePointer` holding attachment and press bookkeeping; the code-behind forwards. | Minor | Medium | Open |
-| 8 | LTR.Player.Wpf.Tests, LTR.Persistence.Tests | Maintainability | `VodSectionTests` (825 lines) and `LtrDbContextVodTests` (987) each mix film and series cases, so the mirroring of SUT files (§3.5.2) no longer holds there. | Split each into a film file and a series file. | Minor | Medium | Open |
+| 6 | Docs | Maintainability | `CLAUDE.md` tracks `MainViewModel`'s size across milestones but does not say how the figure is counted. `wc -l` gives 789 where the note says 438, and both are defensible — which makes the rule "check it at the start of a milestone" unusable. | State the measure, or restate the series in `wc -l`. | Minor | Low | **Done** |
+| 7 | LTR.Player.Wpf | Maintainability | `PlayerOverlayView.xaml.cs` is 242 lines doing four things: attaching to the picture's window, recording what was pressed, timing the cursor, reporting a scrub. The first two are one subject. | A `PicturePointer` holding attachment and press bookkeeping; the code-behind forwards. | Minor | Medium | Carried to 19 Aug rank 8 |
+| 8 | LTR.Player.Wpf.Tests, LTR.Persistence.Tests | Maintainability | `VodSectionTests` (825 lines) and `LtrDbContextVodTests` (987) each mix film and series cases, so the mirroring of SUT files (§3.5.2) no longer holds there. | Split each into a film file and a series file. | Minor | Medium | Carried to 19 Aug rank 9 |
 
 **Nothing was found in the parts most likely to hurt.** URL sanitisation, `PlaybackSession` and the
 reconciliation rules were read and left alone: each carries its reasoning and its tests. No security finding.
@@ -54,7 +81,7 @@ Not refactoring, and unchanged by this review:
 
 Kept because it applies to any change in this repository, not only to a ranked one:
 
-- `dotnet test LTR-Player.slnx` — 739 tests, all passing on `main`. A refactor should not move that number;
+- `dotnet test LTR-Player.slnx` — 757 tests, all passing. A refactor should not move that number;
   if it does, either the change is not a refactor or a test was measuring the implementation.
 - **Close the player first.** MSBuild cannot replace locked DLLs and the error arrives *after* a successful
   compile, so it reads as a broken build. `build/publish.ps1` refuses outright.
