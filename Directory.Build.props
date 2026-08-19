@@ -2,10 +2,12 @@
 
   <PropertyGroup>
     <!--
-      One version for everything, so a log line, a file property and an issue report all agree. Bump it
-      here; nothing else states it.
+      One version for everything the build produces, so a log line, a file property and an issue report all
+      agree. This is the only place the build reads it from. README.md repeats it in prose for a reader who
+      has not cloned anything, and is the one other place to edit — checked when 0.8.1 was tagged, because
+      this comment used to claim nothing else stated it.
     -->
-    <Version>0.8.0</Version>
+    <Version>0.8.1</Version>
     <Product>LTR-Player</Product>
     <Company>LTR-Player</Company>
 

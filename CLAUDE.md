@@ -21,9 +21,13 @@ exists and not what was considered finished.
 | **M5** Player polish — OSD, fullscreen, keyboard, tracks | done | `Docs/player.md`; the live-caching value still wants measuring |
 | **M6** Hardening — error handling, settings, packaging | done | `Docs/packaging.md`; the quarantine had landed early, with M3 |
 
-**All six are merged into `main`.** Version 0.8.0 — bumped from 0.7.0 for pinned categories, on the same
-rule 0.7.0 was set by: a schema migration and a visible change in the window. `pwsh build/publish.ps1`
-produces a self-contained folder and a zip that runs on a machine with no .NET.
+**All six are merged into `main`.** Version **0.8.1**, tagged `v0.8.1`. `pwsh build/publish.ps1` produces a
+self-contained folder and a zip that runs on a machine with no .NET.
+
+**What each part of the version means here**, now that all three have been used: a *minor* bump wants a schema
+migration and a visible change in the window — that is what 0.7.0 and 0.8.0 were both set by. A *patch* wants
+neither: 0.8.1 is one reported bug fixed, plus a refactor nobody outside the repository can see. Nothing about
+the catalogue's schema changed, so an installation upgrades by unpacking over the old folder.
 
 Since 0.7.0, and not from the plan: the on-screen controls can be woken by the pointer again — which they
 could not, in fullscreen not at all — and a category can be pinned to the top of its picker. `Docs/player.md`

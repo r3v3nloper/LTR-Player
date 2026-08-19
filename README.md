@@ -6,7 +6,7 @@ series, in one window that keeps working when the provider does not.
 **You supply your own subscription.** No playlists, no credentials and no provider discovery ship with this
 application, and it neither finds nor hosts any content.
 
-> Version 0.8.0. Self-contained builds run on a machine with no .NET installed. The build is unsigned, so
+> Version 0.8.1. Self-contained builds run on a machine with no .NET installed. The build is unsigned, so
 > SmartScreen warns on first run.
 
 ---
@@ -179,6 +179,7 @@ streamed, and their first 512 bytes inspected, before anything tries to parse th
 | [`Docs/vod.md`](Docs/vod.md) | films and series, paging, and the two-pass season fetch |
 | [`Docs/categories.md`](Docs/categories.md) | pinned categories |
 | [`Docs/packaging.md`](Docs/packaging.md) | what a publish produces, and the LGPL obligations |
+| [`Docs/release-notes.md`](Docs/release-notes.md) | one entry per tag: what changed, and what is known and unchanged |
 | [`Docs/verification.md`](Docs/verification.md) | the full check sequence against a live panel |
 | [`Docs/refactoring-backlog.md`](Docs/refactoring-backlog.md) | reviewed, ranked work that remains — including what was rejected |
 | [`CLAUDE.md`](CLAUDE.md) | conventions, plus every trap this repository shipped a bug over once |
