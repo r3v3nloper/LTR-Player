@@ -45,4 +45,19 @@ public static class EpisodeNaming
 
         return trimmed.Equals(label, StringComparison.OrdinalIgnoreCase) ? label : $"{label} · {trimmed}";
     }
+
+    /// <summary>
+    /// The series, the label and the title, as the on-screen display names an episode.
+    /// </summary>
+    /// <remarks>
+    /// The series name leads, because the display is read with a picture already on screen and <c>S02E05</c>
+    /// alone does not say what is playing. Left out rather than left as an empty prefix when it is not known:
+    /// resuming a continue-watching row reaches an episode without loading its series.
+    /// </remarks>
+    public static string Describe(string? seriesName, int seasonNumber, int episodeNumber, string? title)
+    {
+        var described = Describe(seasonNumber, episodeNumber, title);
+
+        return string.IsNullOrWhiteSpace(seriesName) ? described : $"{seriesName.Trim()} · {described}";
+    }
 }

@@ -483,6 +483,69 @@ public sealed class LtrDbContextVodTests
         (await verifyContext.Episodes.CountAsync(cancellationToken)).ShouldBe(1);
     }
 
+    /// <summary>
+    /// Starting at an episode reaches the whole series, which is what "the next episode" is answered from.
+    /// </summary>
+    /// <remarks>
+    /// Against real SQLite because the lookup crosses two joins the player never states — episode to season to
+    /// series — and then leans on the ordering <see cref="LtrDbContext.GetSeriesDetailAsync"/> applies. An
+    /// in-memory fake would agree with whatever the seed happened to be in.
+    /// </remarks>
+    [Fact]
+    public async Task GetSeriesForEpisodeAsync_ReachesTheWholeSeriesInOrder()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTestDatabase.CreateAsync(cancellationToken: cancellationToken);
+        var sourceId = await AddSourceAsync(database, cancellationToken);
+        var seriesId = await StoreOneSeriesAsync(database, sourceId, SixPm, cancellationToken);
+
+        await using (var context = database.CreateContext())
+        {
+            await context.SaveSeriesDetailAsync(
+                seriesId,
+                new SeriesDetail(
+                    [
+                        SeasonWith(2, Episode("2001", "Seven Thirty-Seven", 1)),
+                        SeasonWith(1, Episode("1002", "Cat's in the Bag...", 2), Episode("1001", "Pilot", 1)),
+                    ]),
+                SixPm,
+                SixPm,
+                cancellationToken);
+        }
+
+        var pilotId = await EpisodeIdAsync(database, "1001", cancellationToken);
+
+        // Act
+        await using var verifyContext = database.CreateContext();
+        var series = await verifyContext.GetSeriesForEpisodeAsync(pilotId, cancellationToken);
+
+        // Assert
+        series.ShouldNotBeNull();
+        series.Id.ShouldBe(seriesId);
+        series.Seasons.Select(season => season.Number).ShouldBe([1, 2]);
+
+        EpisodeSequence
+            .Neighbour(series, pilotId, offset: 1)
+            .ShouldNotBeNull()
+            .Episode.ExternalId.ShouldBe("1002");
+    }
+
+    [Fact]
+    public async Task GetSeriesForEpisodeAsync_ForAnEpisodeThatHasGone_ReportsNothing()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTestDatabase.CreateAsync(cancellationToken: cancellationToken);
+        await using var context = database.CreateContext();
+
+        // Act
+        var series = await context.GetSeriesForEpisodeAsync(episodeId: 4242, cancellationToken);
+
+        // Assert
+        series.ShouldBeNull();
+    }
+
     [Fact]
     public async Task DeleteSourceAsync_TakesTheFilmsSeriesSeasonsAndEpisodesWithIt()
     {
@@ -913,6 +976,19 @@ public sealed class LtrDbContextVodTests
         return (
             withMovie ? movies.Single().Id : 0,
             withSeries ? stored.Single().Id : 0);
+    }
+
+    private static async Task<int> EpisodeIdAsync(
+        SqliteTestDatabase database,
+        string externalId,
+        CancellationToken cancellationToken)
+    {
+        await using var context = database.CreateContext();
+
+        return await context.Episodes
+            .Where(episode => episode.ExternalId == externalId)
+            .Select(episode => episode.Id)
+            .SingleAsync(cancellationToken);
     }
 
     private static async Task<int> SingleEpisodeIdAsync(

@@ -159,6 +159,11 @@ internal sealed class CatalogueStore
         return _database.RunAsync(context => context.GetEpisodeAsync(episodeId, cancellationToken));
     }
 
+    public Task<Series?> GetSeriesForEpisodeAsync(int episodeId, CancellationToken cancellationToken)
+    {
+        return _database.RunAsync(context => context.GetSeriesForEpisodeAsync(episodeId, cancellationToken));
+    }
+
     public Task<IReadOnlyList<ContinueWatchingEntry>> GetContinueWatchingAsync(
         int sourceId,
         int limit,

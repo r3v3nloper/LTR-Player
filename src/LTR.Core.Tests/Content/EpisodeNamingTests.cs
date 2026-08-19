@@ -48,4 +48,31 @@ public sealed class EpisodeNamingTests
         // Act & Assert
         described.ShouldBe("S02E05");
     }
+
+    [Fact]
+    public void Describe_WithTheSeriesName_LeadsWithIt()
+    {
+        // Arrange & Act
+        var described = EpisodeNaming.Describe("Breaking Bad", 2, 5, "Fly");
+
+        // Assert
+        described.ShouldBe("Breaking Bad · S02E05 · Fly");
+    }
+
+    /// <remarks>
+    /// Resuming a continue-watching row reaches an episode without loading its series, and a leading separator
+    /// with nothing before it reads as a missing name rather than as one that was never needed.
+    /// </remarks>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Describe_WithoutASeriesName_HasNoLeadingSeparator(string? seriesName)
+    {
+        // Arrange & Act
+        var described = EpisodeNaming.Describe(seriesName, 2, 5, "Fly");
+
+        // Assert
+        described.ShouldBe("S02E05 · Fly");
+    }
 }

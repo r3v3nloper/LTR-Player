@@ -20,24 +20,27 @@ internal sealed class PlayerActions
 {
     private readonly PlayerOverlayViewModel _overlay;
     private readonly Func<CancellationToken, Task> _stop;
-    private readonly Func<int, CancellationToken, Task> _zap;
+    private readonly Func<int, CancellationToken, Task> _playAdjacent;
     private readonly Func<CancellationToken, Task> _toggleGuide;
 
-    /// <param name="zap">Moves the given number of channels and plays what it lands on.</param>
+    /// <param name="playAdjacent">
+    /// Moves the given number of places through whatever is playing — episodes of a series, channels when
+    /// watching live — and plays what it lands on.
+    /// </param>
     public PlayerActions(
         PlayerOverlayViewModel overlay,
         Func<CancellationToken, Task> stop,
-        Func<int, CancellationToken, Task> zap,
+        Func<int, CancellationToken, Task> playAdjacent,
         Func<CancellationToken, Task> toggleGuide)
     {
         ArgumentNullException.ThrowIfNull(overlay);
         ArgumentNullException.ThrowIfNull(stop);
-        ArgumentNullException.ThrowIfNull(zap);
+        ArgumentNullException.ThrowIfNull(playAdjacent);
         ArgumentNullException.ThrowIfNull(toggleGuide);
 
         _overlay = overlay;
         _stop = stop;
-        _zap = zap;
+        _playAdjacent = playAdjacent;
         _toggleGuide = toggleGuide;
     }
 
@@ -46,8 +49,8 @@ internal sealed class PlayerActions
         return action switch
         {
             PlayerAction.Stop => _stop(cancellationToken),
-            PlayerAction.ZapNext => _zap(1, cancellationToken),
-            PlayerAction.ZapPrevious => _zap(-1, cancellationToken),
+            PlayerAction.PlayNext => _playAdjacent(1, cancellationToken),
+            PlayerAction.PlayPrevious => _playAdjacent(-1, cancellationToken),
             PlayerAction.ToggleGuide => _toggleGuide(cancellationToken),
             _ => PerformOnOverlay(action),
         };

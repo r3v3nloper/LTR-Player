@@ -62,6 +62,19 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     [ObservableProperty]
     private CatalogueSection _selectedSection = CatalogueSection.Live;
 
+    /// <summary>
+    /// What the last playback request was for, which is what previous and next act on.
+    /// </summary>
+    /// <remarks>
+    /// Assigned here as each request is made, and not asked of the coordinator, because it has to be current
+    /// the instant the button is pressed again — see <see cref="PlayingItem"/>. Null before anything has
+    /// played and after a stop, when next means the next channel by default.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(PlayNextCommand))]
+    [NotifyCanExecuteChangedFor(nameof(PlayPreviousCommand))]
+    private PlayingItem? _nowPlayingItem;
+
     public MainViewModel(
         SourceManagementViewModel sources,
         ChannelListViewModel channels,
@@ -106,7 +119,7 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         _playback.ProgressRecorded = RefreshWhatShowsProgressAsync;
 
         // Built here rather than injected, because the three operations it needs are this class's own.
-        _playerActions = new PlayerActions(PlayerOverlay, StopAsync, ZapAsync, ToggleGuideAsync);
+        _playerActions = new PlayerActions(PlayerOverlay, StopAsync, PlayAdjacentAsync, ToggleGuideAsync);
     }
 
     public SourceManagementViewModel SourceManagement { get; }
@@ -305,8 +318,14 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
         }
     }
 
+    /// <remarks>
+    /// Forgets what was playing as well as releasing it. The episode belonged to the source being left, and
+    /// next would otherwise look up its successor and try to open it against the newly selected subscription.
+    /// </remarks>
     Task ISourceCoordinator.ReleasePlaybackAsync(CancellationToken cancellationToken)
     {
+        NowPlayingItem = null;
+
         return _playback.StopAsync(cancellationToken);
     }
 
@@ -329,6 +348,8 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             return;
         }
 
+        NowPlayingItem = new PlayingItem(ContentKind.Live);
+
         await _playback.PlayChannelAsync(source, item.Channel, item.Name, cancellationToken)
             .ConfigureAwait(true);
     }
@@ -339,23 +360,81 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     }
 
     /// <summary>
-    /// Moves to the next channel and plays it.
+    /// Plays the next thing of whatever kind is playing.
     /// </summary>
     /// <remarks>
     /// Concurrent execution allowed for the same reason <see cref="PlaySelectedAsync"/> allows it: holding
     /// the command closed while a stream opens is what makes zapping past a slow channel impossible, and
     /// the session's supersession handling exists precisely so that repeated presses are safe.
     /// </remarks>
-    [RelayCommand(AllowConcurrentExecutions = true)]
-    private Task ZapNextAsync(CancellationToken cancellationToken)
+    [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(CanPlayAdjacent))]
+    private Task PlayNextAsync(CancellationToken cancellationToken)
     {
-        return ZapAsync(offset: 1, cancellationToken);
+        return PlayAdjacentAsync(offset: 1, cancellationToken);
     }
 
-    [RelayCommand(AllowConcurrentExecutions = true)]
-    private Task ZapPreviousAsync(CancellationToken cancellationToken)
+    [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(CanPlayAdjacent))]
+    private Task PlayPreviousAsync(CancellationToken cancellationToken)
     {
-        return ZapAsync(offset: -1, cancellationToken);
+        return PlayAdjacentAsync(offset: -1, cancellationToken);
+    }
+
+    /// <summary>
+    /// Whether the thing playing has a next and a previous at all.
+    /// </summary>
+    /// <remarks>
+    /// A film does not: it is one item, and the film catalogue's order is a search result rather than a
+    /// sequence anybody watches through. So the buttons grey out for a film instead of doing something the
+    /// viewer did not ask for — which is how this whole pair came to be looked at.
+    /// </remarks>
+    private bool CanPlayAdjacent()
+    {
+        return NowPlayingItem?.Kind != ContentKind.Movie;
+    }
+
+    /// <summary>
+    /// Sends previous and next to whichever sequence the viewer is actually in.
+    /// </summary>
+    /// <remarks>
+    /// The bug this exists to fix: these were wired straight to channel zapping, so pressing next during an
+    /// episode switched the section to Live and tuned a channel. Next means the next *of the same kind* —
+    /// the next episode of the series being watched, the next channel when watching live.
+    /// </remarks>
+    private Task PlayAdjacentAsync(int offset, CancellationToken cancellationToken)
+    {
+        return NowPlayingItem switch
+        {
+            { Kind: ContentKind.Series, Episode: { } episode } =>
+                PlayAdjacentEpisodeAsync(episode, offset, cancellationToken),
+            { Kind: ContentKind.Movie } => Task.CompletedTask,
+            _ => ZapAsync(offset, cancellationToken),
+        };
+    }
+
+    /// <remarks>
+    /// The section does the looking up, because it owns the store access for series. Silent at the ends of a
+    /// series in the picture but not in the status line: running out of episodes is worth saying, where
+    /// running out of channels is not — the channel list shows its own ends.
+    /// </remarks>
+    private async Task PlayAdjacentEpisodeAsync(
+        Episode current,
+        int offset,
+        CancellationToken cancellationToken)
+    {
+        var adjacent = await SeriesCatalogue
+            .FindAdjacentEpisodeAsync(current.Id, offset, cancellationToken)
+            .ConfigureAwait(true);
+
+        if (adjacent is null)
+        {
+            Status.Text = offset > 0
+                ? "That was the last episode of the series."
+                : "That was the first episode of the series.";
+
+            return;
+        }
+
+        await PlayEpisodeAsync(adjacent, cancellationToken).ConfigureAwait(true);
     }
 
     /// <remarks>
@@ -408,12 +487,14 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             return;
         }
 
+        NowPlayingItem = new PlayingItem(ContentKind.Series, episode.Episode);
+
         await _playback
             .PlayEpisodeAsync(
                 source,
                 episode.Episode,
                 ResumeFrom(episode.Episode.ResumePositionSeconds),
-                $"{OpenSeriesName()}{episode.Label} · {episode.Title}",
+                episode.NowPlaying,
                 cancellationToken)
             .ConfigureAwait(true);
     }
@@ -446,6 +527,8 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
                 return;
             }
 
+            NowPlayingItem = new PlayingItem(ContentKind.Movie);
+
             await _playback.PlayMovieAsync(source, movie, startAt, movie.Name, cancellationToken)
                 .ConfigureAwait(true);
 
@@ -460,6 +543,8 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
             Status.Text = "That episode is no longer in the catalogue.";
             return;
         }
+
+        NowPlayingItem = new PlayingItem(ContentKind.Series, episode);
 
         await _playback
             .PlayEpisodeAsync(source, episode, startAt, $"{entry.Title} · {entry.Subtitle}", cancellationToken)
@@ -505,6 +590,9 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     [RelayCommand]
     private Task StopAsync(CancellationToken cancellationToken)
     {
+        // Cleared so that next means the next channel again, which is what it means with nothing playing.
+        NowPlayingItem = null;
+
         return _playback.StopAsync(cancellationToken);
     }
 
@@ -590,6 +678,8 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
 
         var startAt = fromStart ? null : ResumeFrom(row.Movie.ResumePositionSeconds);
 
+        NowPlayingItem = new PlayingItem(ContentKind.Movie);
+
         await _playback.PlayMovieAsync(source, row.Movie, startAt, row.Name, cancellationToken)
             .ConfigureAwait(true);
     }
@@ -600,11 +690,6 @@ public sealed partial class MainViewModel : ObservableObject, ISourceCoordinator
     private MovieItemViewModel? CurrentMovie()
     {
         return Movies.DetailedMovie ?? Movies.SelectedMovie;
-    }
-
-    private string OpenSeriesName()
-    {
-        return SeriesCatalogue.OpenSeries is { } series ? $"{series.Name} · " : string.Empty;
     }
 
     private static TimeSpan? ResumeFrom(int? resumePositionSeconds)

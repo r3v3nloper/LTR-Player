@@ -27,7 +27,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
 
         // Act
-        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         viewModel.Channels.SelectedChannel.ShouldNotBeNull();
@@ -45,7 +45,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 2);
 
         // Act
-        await viewModel.PerformAsync(PlayerAction.ZapPrevious, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayPrevious, TestContext.Current.CancellationToken);
 
         // Assert
         context.Session.Started.ShouldHaveSingleItem().DisplayName.ShouldBe("Zweite");
@@ -61,7 +61,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = null;
 
         // Act
-        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         context.Session.Started.ShouldHaveSingleItem().DisplayName.ShouldBe("Erste");
@@ -82,7 +82,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 2);
 
         // Act
-        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         context.Session.Started.ShouldBeEmpty("there is nothing after the last channel");
@@ -108,7 +108,7 @@ public sealed class PlayerControlTests
         viewModel.Channels.SelectedChannel.Name.ShouldBe("Erste");
 
         // Act
-        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         viewModel.Channels.SelectedChannel.ShouldNotBeNull();
@@ -131,7 +131,7 @@ public sealed class PlayerControlTests
         viewModel.SelectedSection = CatalogueSection.ContinueWatching;
 
         // Act
-        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         viewModel.SelectedSection.ShouldBe(CatalogueSection.Live);
@@ -155,7 +155,7 @@ public sealed class PlayerControlTests
 
         // Act: from the only admitted channel, so a walk over the unfiltered list would show up here.
         viewModel.Channels.SelectedChannel = Row(viewModel, index: 0);
-        await viewModel.PerformAsync(PlayerAction.ZapNext, TestContext.Current.CancellationToken);
+        await viewModel.PerformAsync(PlayerAction.PlayNext, TestContext.Current.CancellationToken);
 
         // Assert
         context.Session.Started.ShouldBeEmpty();

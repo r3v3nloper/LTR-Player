@@ -53,4 +53,16 @@ public interface IVodCatalogue
     /// be loaded to play it.
     /// </remarks>
     Task<Episode?> GetEpisodeAsync(int episodeId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The series one episode belongs to, with its seasons and episodes, or <see langword="null"/> when the
+    /// episode is no longer in the catalogue.
+    /// </summary>
+    /// <remarks>
+    /// What "the next episode" is answered from. It starts at the episode rather than at the series because
+    /// the episode is all that is known while one plays: a continue-watching row resumes an episode without
+    /// its series ever being opened, which is exactly the case where moving on to the next one used to change
+    /// the live channel instead.
+    /// </remarks>
+    Task<Series?> GetSeriesForEpisodeAsync(int episodeId, CancellationToken cancellationToken);
 }

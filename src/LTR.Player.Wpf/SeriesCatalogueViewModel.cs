@@ -140,6 +140,45 @@ public sealed partial class SeriesCatalogueViewModel : CatalogueSectionViewModel
     }
 
     /// <summary>
+    /// The episode <paramref name="offset"/> places from the given one, or <see langword="null"/> at either
+    /// end of the series.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asks the store rather than reading <see cref="Episodes"/>, and that is the whole point of it. The rows
+    /// hold one season of one series and only while it is open, so a walk over them could not answer across a
+    /// season boundary and could not answer at all for an episode resumed from the continue-watching list —
+    /// which is the case the viewer reported, and where next-episode used to change the live channel.
+    /// </para>
+    /// <para>
+    /// Here rather than in the shell because this section owns the store access for series, in the same way it
+    /// owns the detail fetch. The order itself is <see cref="EpisodeSequence"/>'s, in Core, because it is a
+    /// fact about a series and not about this window.
+    /// </para>
+    /// <para>
+    /// Answers only within the selected source. Switching subscription does not stop what is playing, so an
+    /// episode of the source just left is still what next refers to — and an address built from its identifier
+    /// against the newly selected account is one that cannot work and would be reported as a dead stream.
+    /// </para>
+    /// </remarks>
+    public async Task<EpisodeItemViewModel?> FindAdjacentEpisodeAsync(
+        int episodeId,
+        int offset,
+        CancellationToken cancellationToken)
+    {
+        var series = await Catalogue.GetSeriesForEpisodeAsync(episodeId, cancellationToken).ConfigureAwait(true);
+
+        if (series is null
+            || series.SourceId != Source?.Id
+            || EpisodeSequence.Neighbour(series, episodeId, offset) is not { } found)
+        {
+            return null;
+        }
+
+        return new EpisodeItemViewModel(found.Episode, found.SeasonNumber, series.Name);
+    }
+
+    /// <summary>
     /// Goes back to the series list from an open series.
     /// </summary>
     /// <remarks>
@@ -220,7 +259,7 @@ public sealed partial class SeriesCatalogueViewModel : CatalogueSectionViewModel
 
         foreach (var episode in value.Season.Episodes)
         {
-            Episodes.Add(new EpisodeItemViewModel(episode, value.Number));
+            Episodes.Add(new EpisodeItemViewModel(episode, value.Number, OpenSeries?.Name));
         }
     }
 }

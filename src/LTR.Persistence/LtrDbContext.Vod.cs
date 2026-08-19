@@ -347,6 +347,28 @@ public sealed partial class LtrDbContext
     }
 
     /// <summary>
+    /// Loads the series one episode belongs to, with its seasons and episodes in order.
+    /// </summary>
+    /// <remarks>
+    /// Two queries rather than one, and deliberately so: the identifier is looked up on its own and the
+    /// series then loaded by <see cref="GetSeriesDetailAsync"/>, which already states how a series is loaded
+    /// whole. Reaching the seasons through the episode's own navigation would be a third spelling of that.
+    /// </remarks>
+    public async Task<Series?> GetSeriesForEpisodeAsync(int episodeId, CancellationToken cancellationToken)
+    {
+        var seriesId = await Episodes
+            .AsNoTracking()
+            .Where(episode => episode.Id == episodeId)
+            .Select(episode => (int?)episode.Season!.SeriesId)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return seriesId is { } id
+            ? await GetSeriesDetailAsync(id, cancellationToken).ConfigureAwait(false)
+            : null;
+    }
+
+    /// <summary>
     /// Lists what the viewer is part-way through, most recently watched first.
     /// </summary>
     /// <remarks>

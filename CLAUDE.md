@@ -29,6 +29,10 @@ Since 0.7.0, and not from the plan: the on-screen controls can be woken by the p
 could not, in fullscreen not at all — and a category can be pinned to the top of its picker. `Docs/player.md`
 and `Docs/categories.md` carry both.
 
+Since then, from a bug report: **previous and next follow what is playing.** They were wired straight to channel
+zapping, so ⏭ during an episode tuned a live channel. They now move through the series' episodes, across the
+season boundary, and are unavailable for a film. `Docs/player.md` has the design and `Docs/vod.md` the ordering.
+
 Both of M3's stated limits are gone: the timeline's channel names used to scroll away with the programme
 blocks, and it drew only the first 200 channels. It now pins the names and **pages** along the channel axis,
 200 at a time, by command — the same way it has always moved along the time axis, and for the same reason.
@@ -77,6 +81,15 @@ them:
 - **A film reaching its own end is flagged, not acted on.** `PlaybackCoordinator` sets a flag from the engine
   thread and `SampleAsync` closes the stream off on the next tick, because what follows is a database write
   and three lists rereading themselves.
+- **Previous and next mean "the next thing of the kind that is playing".** `MainViewModel.NowPlayingItem`
+  records what the last request was for, assigned as the request is made and never read back from the engine —
+  an engine asked what is playing answers with the *previous* item until the next stream arrives, so three quick
+  presses would all land on the same episode. The neighbour is looked up in the store
+  (`GetSeriesForEpisodeAsync` → `EpisodeSequence.Neighbour`) and not in the episode rows on screen, because
+  those hold one season of one series and only while it is open. That is not a nicety: resuming from Continue
+  has an episode identifier and nothing else, and is where the bug was reported from. The lookup is scoped to
+  the selected source, because switching subscription does *not* stop what is playing — unscoped, the next
+  episode's identifier would be built into an address against the other account's credentials.
 - **Keys are resolved by `PlayerKeyMap` and carried out by `PlayerActions`.** Not `KeyBinding`s in markup:
   an input binding is offered the key before the focused element sees it, so declaring one for `A` would mean
   the search box could never contain that letter. `MainWindow` checks what has focus, which is the whole
@@ -85,9 +98,11 @@ them:
   because they decide *what* plays, and the rest go to the overlay because they act on an open stream.
 - **`MainViewModel` regrows, every milestone, by the same mechanism** — it is the only place that can reach
   everything. 395 lines at the M4 merge, 483 after M5, 439 after extracting the key dispatch, 466 by the end
-  of M6, 438 after the notification forwarding moved into a table. Check it at the start of a milestone, not
-  the end — and note how little that last extraction bought: a declarative registration costs nearly what the
-  handler it replaces did, so size is the wrong reason to reach for one.
+  of M6, 438 after the notification forwarding moved into a table, 475 after previous and next were made to
+  follow what plays. (Code lines: comments and blanks excluded, which is why `wc -l` reads nearly twice that.)
+  Check it at the start of a milestone, not the end — and note how little that last extraction bought: a
+  declarative registration costs nearly what the handler it replaces did, so size is the wrong reason to reach
+  for one.
 - **`LiveNetworkCachingMilliseconds` defaults to 600 ms and is a guess, not a measurement.** It is the only
   part of a zap that can be shortened; the stop that precedes it is required by the connection limit. Raise
   it if channels stutter in their first seconds — that symptom is this value being too low. `PlaybackSession`
@@ -375,7 +390,7 @@ subscription.
   writes to a second file and the first one looks like the app stopped logging.
 - Migrations need explicit approval before being created (§3.3.1). `MigrationTests` fails when the
   model drifts from them, which is how drift gets noticed.
-- **739 tests pass on `main`.** A refactor should not move that number.
+- **757 tests pass on this branch; 739 on `main` before it.** A refactor should not move that number.
 - **`LTR.Providers.Tests` composes the real container** — `AddProviderRegistry` plus both protocol packages —
   and is the only test that would catch a component registered for one protocol and forgotten for the other.
   Add a case there when a new per-protocol component appears.

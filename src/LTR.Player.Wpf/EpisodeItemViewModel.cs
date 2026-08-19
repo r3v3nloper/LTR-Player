@@ -7,12 +7,17 @@ namespace LTR.Player.Wpf;
 /// </summary>
 public sealed class EpisodeItemViewModel
 {
-    public EpisodeItemViewModel(Episode episode, int seasonNumber)
+    /// <param name="seriesName">
+    /// The series this belongs to, which the on-screen display leads with. Optional because one caller has an
+    /// episode and no series: a continue-watching row is resumed without its series being opened.
+    /// </param>
+    public EpisodeItemViewModel(Episode episode, int seasonNumber, string? seriesName = null)
     {
         ArgumentNullException.ThrowIfNull(episode);
 
         Episode = episode;
         Label = EpisodeNaming.Label(seasonNumber, episode.Number);
+        NowPlaying = EpisodeNaming.Describe(seriesName, seasonNumber, episode.Number, episode.Title);
     }
 
     public Episode Episode { get; }
@@ -21,6 +26,9 @@ public sealed class EpisodeItemViewModel
 
     /// <summary>The conventional short form, such as <c>S02E05</c>.</summary>
     public string Label { get; }
+
+    /// <summary>How the on-screen display names this episode while it plays.</summary>
+    public string NowPlaying { get; }
 
     public string Title => Episode.Title;
 

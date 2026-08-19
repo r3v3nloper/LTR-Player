@@ -176,14 +176,14 @@ declarative. Neither half of the decision is in the handler: `PlayerKeyMap` says
 `PlayerActions` says what each action does. Both are testable without a window, which is the other reason for
 the split.
 
-`PlayerActions` splits again along the line this document opened with. Four actions — stop, the two zaps and
+`PlayerActions` splits again along the line this document opened with. Four actions — stop, previous, next and
 the guide — come back to the shell as delegates, because they decide *what* plays or what the window shows.
 Every other action works on a stream already open, so it goes to the overlay.
 
 | Key | Action |
 |---|---|
 | Space | pause or resume |
-| Page Up / Page Down | previous / next channel |
+| Page Up / Page Down | previous / next — see below |
 | `+` / `−` | volume |
 | `M` | mute |
 | Left / Right | back / forward ten seconds |
@@ -200,6 +200,45 @@ from the list's own paging, which is a smaller loss — the list still has arrow
 Zapping stops at the ends of the list rather than wrapping. A wrap is indistinguishable from a zap that did
 nothing except by watching the picture, and an unwanted one costs a stream open, which costs the
 subscription's one connection.
+
+## Previous and next follow what is playing
+
+Reported as a bug, and it was one: ⏭ and Page Down were wired straight to channel zapping, so pressing next
+during an episode switched the left pane to Live and tuned a channel. They now mean *the next thing of the same
+kind*.
+
+| Playing | What next does |
+|---|---|
+| A live channel, or nothing yet | the next channel in the list, as before |
+| An episode | the next episode of that series, across the season boundary |
+| A film | nothing — the buttons grey out |
+
+A film has no neighbour worth having. It is one item, and the film list's order is a search result rather than a
+sequence anybody watches through, so `CanPlayAdjacent` closes the commands instead of guessing.
+
+Three pieces, in three places, and the division is the point:
+
+- **`MainViewModel.NowPlayingItem`** records what the last playback request was for — the kind, and the episode
+  itself when it is one. Recorded by the shell as it starts something rather than read back from the engine, for
+  two reasons: a stream opens asynchronously, so an engine asked what is playing answers with the *previous*
+  item until the next one arrives, and three quick presses of next would then all land on the same episode; and
+  a film that has run to its end is still what the buttons refer to. It is cleared by a stop, which is what
+  makes next mean the next channel again.
+- **`SeriesCatalogueViewModel.FindAdjacentEpisodeAsync`** asks the store, not the episode rows on screen. The
+  rows hold one season of one series and only while it is open, so a walk over them could answer neither across
+  a season boundary nor at all for an episode resumed from the continue-watching list — and the second is the
+  case the bug was reported from. `IVodCatalogue.GetSeriesForEpisodeAsync` starts at the episode, because while
+  one plays the episode is all that is known. The answer is scoped to the **selected source**: switching
+  subscription does not stop what is playing, so unscoped it would build the next episode's identifier into an
+  address against the other account's credentials — which comes back as a dead stream and reads as a broken
+  episode.
+- **`EpisodeSequence`** in Core states the order: seasons by number, episodes by number within a season, and
+  nothing at either end rather than a wrap. The order is imposed rather than assumed — a panel appends a season
+  fetched later instead of inserting it, so a walk that trusted the stored order would call season three's
+  opener the successor of season one's last.
+
+Running out of episodes says so in the status line, where running out of channels does not: the channel list
+shows its own ends, and an episode list showing one season cannot.
 
 ## Fullscreen is stated by the view model and applied by the window
 

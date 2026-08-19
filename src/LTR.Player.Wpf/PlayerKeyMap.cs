@@ -38,8 +38,8 @@ public static class PlayerKeyMap
             // Page keys rather than the arrows. Arrow keys move the channel list's selection without
             // playing anything, and taking them for zapping would leave no way to look down a list of
             // seventeen thousand channels without opening every one on the way.
-            Key.PageDown or Key.MediaNextTrack => PlayerAction.ZapNext,
-            Key.PageUp or Key.MediaPreviousTrack => PlayerAction.ZapPrevious,
+            Key.PageDown or Key.MediaNextTrack => PlayerAction.PlayNext,
+            Key.PageUp or Key.MediaPreviousTrack => PlayerAction.PlayPrevious,
 
             // Plus and minus, from either the main row or the numeric keypad, for the same reason.
             Key.OemPlus or Key.Add or Key.VolumeUp => PlayerAction.VolumeUp,
